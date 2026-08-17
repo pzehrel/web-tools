@@ -10,5 +10,3 @@ allowBuilds:
 # （rolldown 等项目同样排除，见 https://github.com/rolldown/rolldown/pull/7302 ）
 trustPolicyExclude:
   - semver@6.3.1
-  # workbox-build@7.4.1 的官方依赖（workbox 团队选用的 fork，替代停更的原包）
-  - '@trickfilm400/rollup-plugin-off-main-thread@3.0.0-pre1'
