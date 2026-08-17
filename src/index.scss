@@ -2,75 +2,84 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/**
+ * Web Tools 设计主题：新粗野主义（Neo-Brutalism）
+ * 详见 docs/DESIGN.md
+ *
+ * 换肤只需修改 :root / .dark 中的色板变量，
+ * 组件全部通过 shadcn 语义令牌（bg-primary、border-border 等）取色。
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --background: oklch(0.985 0.01 95); /* 纸白 */
+  --foreground: oklch(0.24 0.01 60); /* 墨黑 */
+  --card: oklch(1 0 0); /* 纯白卡片，浮于纸面之上 */
+  --card-foreground: oklch(0.24 0.01 60);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.24 0.01 60);
+  --primary: oklch(0.58 0.23 275); /* 主色：亮紫 */
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.92 0.13 100); /* 点缀：明黄 */
+  --secondary-foreground: oklch(0.24 0.01 60);
+  --muted: oklch(0.95 0.02 95);
+  --muted-foreground: oklch(0.45 0.02 60);
+  --accent: oklch(0.9 0.15 160); /* 点缀：翠绿 */
+  --accent-foreground: oklch(0.24 0.01 60);
+  --destructive: oklch(0.6 0.24 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.24 0.01 60); /* 与墨色一致的粗描边 */
+  --input: oklch(0.24 0.01 60);
+  --ring: oklch(0.58 0.23 275);
+  --chart-1: oklch(0.58 0.23 275);
+  --chart-2: oklch(0.85 0.15 100);
+  --chart-3: oklch(0.75 0.16 160);
+  --chart-4: oklch(0.7 0.18 40);
+  --chart-5: oklch(0.72 0.15 210);
+  --radius: 0.375rem; /* 小圆角：锐利但不割手 */
+  --shadow-color: oklch(0.24 0.01 60); /* 硬阴影颜色 */
+  --sidebar: oklch(0.985 0.01 95);
+  --sidebar-foreground: oklch(0.24 0.01 60);
+  --sidebar-primary: oklch(0.58 0.23 275);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.9 0.15 160);
+  --sidebar-accent-foreground: oklch(0.24 0.01 60);
+  --sidebar-border: oklch(0.24 0.01 60);
+  --sidebar-ring: oklch(0.58 0.23 275);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.2 0.01 60);
+  --foreground: oklch(0.95 0.01 95);
+  --card: oklch(0.26 0.01 60);
+  --card-foreground: oklch(0.95 0.01 95);
+  --popover: oklch(0.26 0.01 60);
+  --popover-foreground: oklch(0.95 0.01 95);
+  --primary: oklch(0.68 0.2 275);
+  --primary-foreground: oklch(0.2 0.01 60);
+  --secondary: oklch(0.85 0.15 100);
+  --secondary-foreground: oklch(0.2 0.01 60);
+  --muted: oklch(0.3 0.01 60);
+  --muted-foreground: oklch(0.7 0.02 95);
+  --accent: oklch(0.75 0.15 160);
+  --accent-foreground: oklch(0.2 0.01 60);
+  --destructive: oklch(0.65 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.95 0.01 95);
+  --input: oklch(0.95 0.01 95);
+  --ring: oklch(0.68 0.2 275);
+  --chart-1: oklch(0.68 0.2 275);
+  --chart-2: oklch(0.85 0.15 100);
+  --chart-3: oklch(0.75 0.16 160);
+  --chart-4: oklch(0.7 0.18 40);
+  --chart-5: oklch(0.72 0.15 210);
+  --shadow-color: oklch(0.95 0.01 95);
+  --sidebar: oklch(0.26 0.01 60);
+  --sidebar-foreground: oklch(0.95 0.01 95);
+  --sidebar-primary: oklch(0.68 0.2 275);
+  --sidebar-primary-foreground: oklch(0.2 0.01 60);
+  --sidebar-accent: oklch(0.32 0.01 60);
+  --sidebar-accent-foreground: oklch(0.95 0.01 95);
+  --sidebar-border: oklch(0.95 0.01 95);
+  --sidebar-ring: oklch(0.68 0.2 275);
 }
 
 @theme inline {
@@ -110,6 +119,12 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* 新粗野主义硬阴影：无模糊、纯色、固定偏移 */
+  --shadow-hard-xs: 2px 2px 0 0 var(--shadow-color);
+  --shadow-hard-sm: 3px 3px 0 0 var(--shadow-color);
+  --shadow-hard: 5px 5px 0 0 var(--shadow-color);
+  --shadow-hard-lg: 8px 8px 0 0 var(--shadow-color);
 }
 
 @layer base {
@@ -122,5 +137,10 @@
     margin: 0;
     min-height: 100vh;
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  ::selection {
+    background: var(--secondary);
+    color: var(--secondary-foreground);
   }
 }
