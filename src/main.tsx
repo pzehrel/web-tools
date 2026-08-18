@@ -1,4 +1,4 @@
-import type { DataRouteObject, DOMRouterOpts, HydrationState } from 'react-router'
+import type { DataRouteObject, DOMRouterOpts } from 'react-router'
 import { createBrowserRouter } from 'react-router'
 import { ViteReactSSG } from 'vite-react-ssg'
 import App from './App.tsx'
@@ -7,22 +7,36 @@ import QrCodeTool from './tools/qrcode-generator'
 import UrlParserTool from './tools/url-parser'
 import './index.scss'
 
+/**
+ * 路由 id 显式固定，供 hydrationData.loaderData 对齐使用。
+ *
+ * 背景：vite-react-ssg 会给每个路由包一层静态数据 loader，
+ * 而 SSG 写入的 window.__staticRouterHydrationData.loaderData 是空对象，
+ * React Router 据此认为「loader 还没跑完」→ 首渲染 HydrateFallback →
+ * 与 SSR HTML 不一致 → React 放弃水合整树重渲染 → 页面上出现两份内容。
+ * 这里显式声明每个路由的 loader 已有数据（null），让路由初始化即 hydrated。
+ */
+const ROUTE_IDS = ['root', 'home', 'qrcode-generator', 'url-parser', 'fallback'] as const
+
 export const createRoot = ViteReactSSG({
   routes: [
     {
+      id: 'root',
       element: <RootLayout />,
       children: [
-        { path: '/', element: <App /> },
-        { path: '/tools/qrcode-generator', element: <QrCodeTool /> },
-        { path: '/tools/url-parser', element: <UrlParserTool /> },
-        { path: '*', element: <App /> },
+        { id: 'home', path: '/', element: <App /> },
+        { id: 'qrcode-generator', path: '/tools/qrcode-generator', element: <QrCodeTool /> },
+        { id: 'url-parser', path: '/tools/url-parser', element: <UrlParserTool /> },
+        { id: 'fallback', path: '*', element: <App /> },
       ],
     },
   ],
-  // vite-react-ssg 默认不带 hydrationData 建 router，水合时客户端首渲与 SSR HTML 不一致，
-  // 导致页面上出现第二份内容。这里把 SSG 写入 window 的水合数据传给路由。
   customCreateRouter: (routes: DataRouteObject[], opts?: DOMRouterOpts) => createBrowserRouter(routes, {
     ...opts,
-    hydrationData: (window as unknown as Record<string, unknown>).__staticRouterHydrationData as HydrationState,
+    hydrationData: {
+      loaderData: Object.fromEntries(ROUTE_IDS.map(id => [id, null])),
+      actionData: null,
+      errors: null,
+    },
   }),
 })
