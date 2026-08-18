@@ -7,6 +7,7 @@ import { ClientOnly } from 'vite-react-ssg'
 import { Seo } from '@/components/seo'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { readHashParam, writeHashParam } from '@/lib/hash-param'
 import { cn } from '@/lib/utils'
 import { encodeQr } from '../qrcode-generator/qr-codec'
 import { useUrlHistory } from './url-history'
@@ -298,6 +299,22 @@ function UrlParserTool() {
   const found = hasParams(tree)
   // 根节点只展示 base（协议 + 主机 + 路径），参数和 # 已在树里展开
   const baseUrl = useMemo(() => baseOfTree(tree), [tree])
+
+  // 挂载时从 URL hash 读入初始内容（#url=...，支持分享链接直达）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const initial = readHashParam('url')
+      if (initial)
+        setInput(initial)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // 内容变动 → 同步到 URL hash（防抖，replaceState 不产生历史记录）
+  useEffect(() => {
+    const timer = setTimeout(writeHashParam, 400, 'url', input)
+    return () => clearTimeout(timer)
+  }, [input])
 
   const handleEdit = useCallback((id: string, patch: Partial<Pick<UrlNode, 'label' | 'value'>>) => {
     setInput(prev => serializeUrl(updateNode(parseUrl(prev), id, patch)))

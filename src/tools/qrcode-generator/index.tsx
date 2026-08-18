@@ -15,6 +15,7 @@ import { ClientOnly } from 'vite-react-ssg'
 import { Seo } from '@/components/seo'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { readHashParam, writeHashParam } from '@/lib/hash-param'
 import { cn } from '@/lib/utils'
 import { decodeQr, encodeQr } from './qr-codec'
 import { useQrHistory } from './qr-history'
@@ -32,6 +33,22 @@ function QrCodeTool() {
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 挂载时从 URL hash 读入初始内容（#text=...，支持分享链接直达）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const initial = readHashParam('text')
+      if (initial)
+        setText(initial)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // 内容变动 → 同步到 URL hash（防抖，replaceState 不产生历史记录）
+  useEffect(() => {
+    const timer = setTimeout(writeHashParam, 400, 'text', text)
+    return () => clearTimeout(timer)
+  }, [text])
 
   // 文字变动 → 重新生成二维码（防抖）
   useEffect(() => {
