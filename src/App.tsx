@@ -1,4 +1,4 @@
-import { Wrench, Zap } from 'lucide-react'
+import { ExternalLink, Wrench, Zap } from 'lucide-react'
 
 import { Seo } from '@/components/seo'
 import { ToolCard } from '@/components/tool-card'
@@ -43,8 +43,17 @@ function App() {
         ))}
       </section>
 
-      <footer className="border-t-2 border-border py-6 text-sm text-muted-foreground">
-        Web Tools — 趁手的网页小工具集合
+      <footer className="flex items-center justify-between border-t-2 border-border py-6 text-sm text-muted-foreground">
+        <span>Web Tools — 趁手的网页小工具集合</span>
+        <a
+          href="https://github.com/pzehrel/web-tools"
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1.5 font-bold text-foreground hover:underline"
+        >
+          <ExternalLink className="size-4" />
+          GitHub · pzehrel/web-tools
+        </a>
       </footer>
     </div>
   )
