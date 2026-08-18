@@ -58,7 +58,9 @@ function EditableText({
 
   if (draft !== null) {
     const commit = () => {
-      onCommit(draft)
+      // 内容没变不提交：避免序列化规范化改写 input（会触发历史记录误增）
+      if (draft !== text)
+        onCommit(draft)
       setDraft(null)
     }
     return (
