@@ -384,6 +384,19 @@ function UrlParserTool() {
   }, [input, addHistory])
 
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // 二维码放大弹层：点击缩略图打开，Esc / 点击遮罩关闭
+  const [qrEnlarged, setQrEnlarged] = useState(false)
+  useEffect(() => {
+    if (!qrEnlarged)
+      return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape')
+        setQrEnlarged(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [qrEnlarged])
   const copyHistory = useCallback((id: string, text: string) => {
     void navigator.clipboard.writeText(text).then(() => {
       setCopiedId(id)
@@ -425,15 +438,22 @@ function UrlParserTool() {
               rows={6}
               className="w-full flex-1 resize-y rounded-md border-2 border-border bg-background px-3 py-2 font-mono text-sm outline-none placeholder:font-sans placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
-            {/* 二维码区域常驻展示，无内容时占位 */}
+            {/* 二维码区域常驻展示，无内容时占位；点击放大便于扫描密集二维码 */}
             {qr
               ? (
-                  <img
-                    src={qr}
-                    alt="当前内容的二维码"
-                    title="当前内容的二维码"
-                    className="size-36 shrink-0 self-start rounded-md border-2 border-border bg-white object-contain shadow-hard-xs"
-                  />
+                  <button
+                    type="button"
+                    title="点击放大二维码"
+                    aria-label="放大二维码"
+                    onClick={() => setQrEnlarged(true)}
+                    className="shrink-0 cursor-zoom-in self-start rounded-md transition-transform hover:-translate-y-0.5"
+                  >
+                    <img
+                      src={qr}
+                      alt="当前内容的二维码"
+                      className="size-36 rounded-md border-2 border-border bg-white object-contain shadow-hard-xs"
+                    />
+                  </button>
                 )
               : (
                   <div className="flex size-36 shrink-0 self-start items-center justify-center rounded-md border-2 border-dashed border-border/50 text-muted-foreground/40">
@@ -570,6 +590,24 @@ function UrlParserTool() {
           </Card>
         )}
       </ClientOnly>
+
+      {/* 二维码放大弹层：放大到接近满屏，密集二维码也能扫 */}
+      {qrEnlarged && qr && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="二维码大图"
+          onClick={() => setQrEnlarged(false)}
+          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-foreground/60 p-4"
+        >
+          <img
+            src={qr}
+            alt="当前内容的二维码（放大）"
+            style={{ imageRendering: 'pixelated' }}
+            className="w-[min(88vw,30rem)] rounded-md border-2 border-border bg-white object-contain shadow-hard-lg"
+          />
+        </div>
+      )}
     </div>
   )
 }
