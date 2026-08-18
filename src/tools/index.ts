@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Link2, QrCode } from 'lucide-react'
+import { Film, Link2, QrCode } from 'lucide-react'
 
 export interface ToolMeta {
   /** 路由/锚点 id，kebab-case */
@@ -36,5 +36,13 @@ export const tools: ToolMeta[] = [
     icon: Link2,
     status: 'ready',
     accentClass: 'bg-chart-3',
+  },
+  {
+    id: 'frame-animation',
+    name: '帧动画预览',
+    description: '导入多张图片逐帧播放，帧率 / 方向 / 循环 / 缩放可调',
+    icon: Film,
+    status: 'ready',
+    accentClass: 'bg-chart-1',
   },
 ]
