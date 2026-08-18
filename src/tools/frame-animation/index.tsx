@@ -18,6 +18,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  TriangleAlert,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router'
@@ -47,8 +48,8 @@ interface SpriteDims {
   cols: number
   rows: number
 }
-/** fit = 适应舞台；数字 = 按原始尺寸的百分比缩放 */
-type Zoom = 'fit' | 50 | 100 | 200 | 400
+/** 数字 = 按原始尺寸的百分比缩放 */
+type Zoom = 50 | 75 | 100 | 150 | 200
 
 /** 文件名自然排序（数字按数值比较，frame2 < frame10） */
 const collator = new Intl.Collator('zh', { numeric: true, sensitivity: 'base' })
@@ -141,8 +142,8 @@ async function extractZip(file: File): Promise<IncomingImage[]> {
     }))
 }
 
-/** alpha 阈值：低于此值视为透明，避免抗锯齿边缘的半透明噪点撑大包围盒 */
-const ALPHA_THRESHOLD = 10
+/** alpha 阈值默认值：低于此值视为透明，避免抗锯齿边缘的半透明噪点撑大包围盒 */
+const DEFAULT_ALPHA_THRESHOLD = 10
 
 interface OpaqueBox {
   left: number
@@ -161,8 +162,8 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   })
 }
 
-/** 扫描图片的非透明包围盒；全透明返回 null */
-function scanOpaqueBox(img: HTMLImageElement): OpaqueBox | null {
+/** 读取图片像素数据；取不到 2d 上下文返回 null */
+function readImageData(img: HTMLImageElement): ImageData | null {
   const canvas = document.createElement('canvas')
   canvas.width = img.naturalWidth
   canvas.height = img.naturalHeight
@@ -170,18 +171,21 @@ function scanOpaqueBox(img: HTMLImageElement): OpaqueBox | null {
   if (!ctx)
     return null
   ctx.drawImage(img, 0, 0)
-  const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  return ctx.getImageData(0, 0, canvas.width, canvas.height)
+}
 
+/** 扫描像素的非透明包围盒（alpha 大于 threshold 视为非透明）；全透明返回 null */
+function scanOpaqueBox({ data, width, height }: ImageData, threshold: number): OpaqueBox | null {
   const colHasOpaque = (x: number) => {
     for (let y = 0; y < height; y++) {
-      if (data[(y * width + x) * 4 + 3] > ALPHA_THRESHOLD)
+      if (data[(y * width + x) * 4 + 3] > threshold)
         return true
     }
     return false
   }
   const rowHasOpaque = (y: number) => {
     for (let x = 0; x < width; x++) {
-      if (data[(y * width + x) * 4 + 3] > ALPHA_THRESHOLD)
+      if (data[(y * width + x) * 4 + 3] > threshold)
         return true
     }
     return false
@@ -198,6 +202,25 @@ function scanOpaqueBox(img: HTMLImageElement): OpaqueBox | null {
   let bottom = height - 1
   while (!rowHasOpaque(bottom)) bottom--
   return { left, top, right: right + 1, bottom: bottom + 1 }
+}
+
+/** 由缓存像素按阈值计算所有帧的并集包围盒；全部全透明返回 null */
+function computeUnionBox(scan: ImageData[], threshold: number): OpaqueBox | null {
+  let union: OpaqueBox | null = null
+  for (const d of scan) {
+    const box = scanOpaqueBox(d, threshold)
+    if (!box)
+      continue
+    union = union
+      ? {
+          left: Math.min(union.left, box.left),
+          top: Math.min(union.top, box.top),
+          right: Math.max(union.right, box.right),
+          bottom: Math.max(union.bottom, box.bottom),
+        }
+      : box
+  }
+  return union
 }
 
 /** 把图片按 rect 裁剪成 PNG，返回新的 objectURL 等信息 */
@@ -671,10 +694,10 @@ export default function FrameAnimationTool() {
   const resolvedCheckerA = checkerBase ?? themeCardHex
   const resolvedCheckerB = resolvedCheckerA ? checkerMate(resolvedCheckerA) : ''
   const resolvedSolid = solidBase ?? themeCardHex
-  const [zoom, setZoom] = useState<Zoom>('fit')
+  const [zoom, setZoom] = useState<Zoom>(75)
   const [pixelated, setPixelated] = useState(false)
   /** 显示帧边界：给当前帧画出单张精灵图格子的描边 */
-  const [showBounds, setShowBounds] = useState(false)
+  const [showBounds, setShowBounds] = useState(true)
   /** 舞台平移：帧画面相对居中的偏移（px） */
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [panning, setPanning] = useState(false)
@@ -697,8 +720,20 @@ export default function FrameAnimationTool() {
   /** 批处理裁剪状态与结果反馈 */
   const [cropping, setCropping] = useState(false)
   const [cropResult, setCropResult] = useState<string | null>(null)
+  /** 透明阈值：alpha 低于此值视为透明（弹窗内可调，实时重算并集） */
+  const [alphaThreshold, setAlphaThreshold] = useState(DEFAULT_ALPHA_THRESHOLD)
+  /** 弹窗打开期间缓存的帧像素：调阈值时无需重新解码图片 */
+  const cropScanRef = useRef<ImageData[] | null>(null)
   /** 裁剪确认弹窗：叠放预览图 + 并集裁剪矩形 */
-  const [cropPreview, setCropPreview] = useState<{ url: string, union: OpaqueBox, fullW: number, fullH: number } | null>(null)
+  const [cropPreview, setCropPreview] = useState<{
+    url: string
+    /** 当前阈值下的并集保留区域；null = 该阈值下全部透明 */
+    union: OpaqueBox | null
+    fullW: number
+    fullH: number
+    /** 帧宽 / 高不一致：弹窗内给出提示 */
+    mixedSize: boolean
+  } | null>(null)
   /** 样式导出：复制反馈与精灵图生成中状态 */
   const [copiedCss, setCopiedCss] = useState(false)
   const [spriting, setSpriting] = useState(false)
@@ -856,22 +891,19 @@ export default function FrameAnimationTool() {
     setCropping(true)
     setCropResult(null)
     try {
-      const boxes: OpaqueBox[] = []
+      // 解码并缓存像素：弹窗内调阈值时直接重扫，不用重新解码
+      const scan: ImageData[] = []
       for (const f of frames) {
         const img = await loadImage(f.url)
-        const box = scanOpaqueBox(img)
-        if (box)
-          boxes.push(box)
+        const data = readImageData(img)
+        if (!data)
+          throw new Error('unreadable')
+        scan.push(data)
       }
-      if (boxes.length === 0) {
+      const union = computeUnionBox(scan, alphaThreshold)
+      if (!union) {
         setCropResult('所有帧都是全透明图片，没有可保留的内容')
         return
-      }
-      const union: OpaqueBox = {
-        left: Math.min(...boxes.map(b => b.left)),
-        top: Math.min(...boxes.map(b => b.top)),
-        right: Math.max(...boxes.map(b => b.right)),
-        bottom: Math.max(...boxes.map(b => b.bottom)),
       }
       // 并集已覆盖整张图 = 没有公共透明边可裁
       const coversAll = frames.every(
@@ -888,6 +920,8 @@ export default function FrameAnimationTool() {
         return
       }
       const url = URL.createObjectURL(blob)
+      cropScanRef.current = scan
+      const { width: w0, height: h0 } = frames[0]
       setCropPreview((prev) => {
         if (prev)
           URL.revokeObjectURL(prev.url)
@@ -896,6 +930,7 @@ export default function FrameAnimationTool() {
           union,
           fullW: Math.max(...frames.map(f => f.width)),
           fullH: Math.max(...frames.map(f => f.height)),
+          mixedSize: frames.some(f => f.width !== w0 || f.height !== h0),
         }
       })
     }
@@ -905,9 +940,22 @@ export default function FrameAnimationTool() {
     finally {
       setCropping(false)
     }
-  }, [frames, cropping])
+  }, [frames, cropping, alphaThreshold])
+
+  /** 弹窗内调整阈值：用缓存像素实时重算并集（null = 该阈值下全部透明） */
+  useEffect(() => {
+    const scan = cropScanRef.current
+    if (!scan)
+      return
+    setCropPreview((prev) => {
+      if (!prev)
+        return prev
+      return { ...prev, union: computeUnionBox(scan, alphaThreshold) }
+    })
+  }, [alphaThreshold])
 
   const closeCropPreview = useCallback(() => {
+    cropScanRef.current = null
     setCropPreview((prev) => {
       if (prev)
         URL.revokeObjectURL(prev.url)
@@ -917,7 +965,7 @@ export default function FrameAnimationTool() {
 
   /** 确认裁剪：按预览的并集矩形裁掉所有帧 */
   const applyCrop = useCallback(async () => {
-    if (!cropPreview || cropping)
+    if (!cropPreview || !cropPreview.union || cropping)
       return
     setCropping(true)
     const { union } = cropPreview
@@ -1188,7 +1236,7 @@ export default function FrameAnimationTool() {
         path="/tools/frame-animation"
       />
       {/* 顶栏 */}
-      <header className="flex items-center gap-3 py-6">
+      <header className="flex h-24 items-center gap-3">
         <Button asChild variant="outline" size="icon">
           <Link to="/" aria-label="返回首页">
             <ArrowLeft className="size-5" />
@@ -1256,12 +1304,11 @@ export default function FrameAnimationTool() {
                         draggable={false}
                         className={cn(
                           'select-none',
-                          zoom === 'fit' && 'max-h-full max-w-full object-contain',
                           // 帧边界：勾出单张精灵图格子的范围
                           showBounds && 'outline-2 outline-dashed outline-primary -outline-offset-2',
                         )}
                         style={{
-                          ...(zoom !== 'fit' ? { width: frame.width * (zoom / 100) } : {}),
+                          width: frame.width * (zoom / 100),
                           transform: `translate(${offset.x}px, ${offset.y}px)`,
                           imageRendering: pixelated ? 'pixelated' : 'auto',
                         }}
@@ -1402,54 +1449,66 @@ export default function FrameAnimationTool() {
               onChange={onFileChange}
               {...{ webkitdirectory: '' } as Record<string, string>}
             />
-            {/* 播放控制 */}
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                disabled={activeCount === 0}
-                onClick={() => stepFrame(-1)}
-                aria-label="上一帧"
-              >
-                <ChevronLeft className="size-5" />
-              </Button>
-              <Button
-                type="button"
-                size="icon-lg"
-                disabled={activeCount === 0}
-                onClick={togglePlay}
-                aria-label={playing ? '暂停' : '播放'}
-              >
-                {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                disabled={activeCount === 0}
-                onClick={() => stepFrame(1)}
-                aria-label="下一帧"
-              >
-                <ChevronRight className="size-5" />
-              </Button>
-              <div className="ml-2 min-w-0 text-sm text-muted-foreground">
-                {frame
-                  ? (
-                      <>
-                        <span className="font-mono font-bold text-foreground">{safeIndex + 1}</span>
-                        {' / '}
-                        {activeCount}
-                        <span className="mx-2">·</span>
-                        <span className="break-all">{frame.name}</span>
-                        <span className="mx-2">·</span>
-                        {'一轮约 '}
-                        {duration}
-                        {' 秒'}
-                      </>
-                    )
-                  : '—'}
+            {/* 播放控制：左侧三个按钮 + 帧信息，右侧下载精灵图 */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={activeCount === 0}
+                  onClick={() => stepFrame(-1)}
+                  aria-label="上一帧"
+                >
+                  <ChevronLeft className="size-5" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-lg"
+                  disabled={activeCount === 0}
+                  onClick={togglePlay}
+                  aria-label={playing ? '暂停' : '播放'}
+                >
+                  {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={activeCount === 0}
+                  onClick={() => stepFrame(1)}
+                  aria-label="下一帧"
+                >
+                  <ChevronRight className="size-5" />
+                </Button>
+                <div className="ml-2 min-w-0 text-sm text-muted-foreground">
+                  {frame
+                    ? (
+                        <>
+                          <span className="font-mono font-bold text-foreground">{safeIndex + 1}</span>
+                          {' / '}
+                          {activeCount}
+                          <span className="mx-2">·</span>
+                          <span className="break-all">{frame.name}</span>
+                          <span className="mx-2">·</span>
+                          {'一轮约 '}
+                          {duration}
+                          {' 秒'}
+                        </>
+                      )
+                    : '—'}
+                </div>
               </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={spriting || exportFrames.length === 0}
+                onClick={() => void downloadSprite()}
+              >
+                {spriting ? <LoaderCircle className="animate-spin" /> : <FileImage />}
+                下载精灵图
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -1618,11 +1677,11 @@ export default function FrameAnimationTool() {
                 value={zoom}
                 onChange={setZoom}
                 options={[
-                  { value: 'fit', label: '适应' },
                   { value: 50, label: '50%' },
+                  { value: 75, label: '75%' },
                   { value: 100, label: '100%' },
+                  { value: 150, label: '150%' },
                   { value: 200, label: '200%' },
-                  { value: 400, label: '400%' },
                 ]}
               />
             </div>
@@ -1722,7 +1781,7 @@ export default function FrameAnimationTool() {
       {/* 样式导出（常驻；无入选帧时按钮禁用、代码区占位） */}
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle className="col-span-full sm:col-span-1">样式导出</CardTitle>
+          <CardTitle className="col-span-full sm:col-span-1">样式</CardTitle>
           <CardDescription className="col-span-full sm:col-span-1">
             动画参数实时映射到样式代码；下载精灵图后把 url() 换成项目里的实际路径
           </CardDescription>
@@ -1732,23 +1791,14 @@ export default function FrameAnimationTool() {
                 {copiedCss ? <Check /> : <Copy />}
                 {copiedCss ? '已复制' : '复制'}
               </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={spriting || exportFrames.length === 0}
-                onClick={() => void downloadSprite()}
-              >
-                {spriting ? <LoaderCircle className="animate-spin" /> : <FileImage />}
-                下载精灵图
-              </Button>
             </div>
           </CardAction>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 pb-6">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <CardContent className="flex flex-col gap-3 pb-6 sm:flex-row sm:items-start">
+          <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 sm:flex-col sm:items-start sm:gap-3">
             <OptionGroup<ExportFormat>
               label="导出格式"
+              className="w-fit flex-col"
               value={exportFormat}
               onChange={setExportFormat}
               options={[
@@ -1774,7 +1824,7 @@ export default function FrameAnimationTool() {
             tabIndex={0}
             aria-label="导出样式代码"
             onKeyDown={selectCodeOnShortcut}
-            className="overflow-x-auto rounded-md border-2 border-border bg-background px-4 py-3 font-mono text-sm leading-relaxed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="max-h-96 min-w-0 flex-1 overflow-auto rounded-md border-2 border-border bg-background px-4 py-3 font-mono text-sm leading-relaxed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             {exportText || '// 导入帧后生成样式代码'}
           </pre>
@@ -1919,48 +1969,94 @@ export default function FrameAnimationTool() {
             onClick={e => e.stopPropagation()}
           >
             <h2 className="text-lg font-black tracking-tight">裁剪公共透明边</h2>
+            {cropPreview.mixedSize && (
+              <p className="mt-2 flex items-start gap-1.5 rounded-md border-2 border-border bg-secondary px-2 py-1.5 text-xs text-muted-foreground">
+                <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                <span>
+                  图片宽高不一致：框线以最大画布
+                  {cropPreview.fullW}
+                  {' × '}
+                  {cropPreview.fullH}
+                  为基准，小图按左上角对齐，超出部分自动忽略。
+                </span>
+              </p>
+            )}
             <p className="mt-1 text-sm text-muted-foreground">
-              虚线内为保留区域：
-              {cropPreview.fullW}
-              {' × '}
-              {cropPreview.fullH}
-              {' → '}
-              {cropPreview.union.right - cropPreview.union.left}
-              {' × '}
-              {cropPreview.union.bottom - cropPreview.union.top}
+              {cropPreview.union
+                ? (
+                    <>
+                      实线框为原图尺寸，虚线框内为保留区域：
+                      {cropPreview.fullW}
+                      {' × '}
+                      {cropPreview.fullH}
+                      {' → '}
+                      {cropPreview.union.right - cropPreview.union.left}
+                      {' × '}
+                      {cropPreview.union.bottom - cropPreview.union.top}
+                    </>
+                  )
+                : '当前阈值下所有帧均为透明，无法裁剪'}
             </p>
+            <div className="mt-3 flex items-center gap-2">
+              <label htmlFor="alpha-threshold" className="shrink-0 text-sm font-bold">透明阈值</label>
+              <input
+                id="alpha-threshold"
+                type="range"
+                min={0}
+                max={128}
+                value={alphaThreshold}
+                onChange={e => setAlphaThreshold(Number(e.target.value))}
+                className="min-w-0 flex-1 accent-primary"
+              />
+              <input
+                type="number"
+                min={0}
+                max={254}
+                value={alphaThreshold}
+                aria-label="透明阈值"
+                title="alpha 低于此值视为透明"
+                onChange={e => setAlphaThreshold(Math.min(254, Math.max(0, Number(e.target.value) || 0)))}
+                className={NUM_INPUT_CLASS}
+              />
+            </div>
             <div className="mt-4 flex justify-center">
               <div
-                className="relative inline-block overflow-hidden rounded-md border-2 border-border"
+                className="rounded-md border-2 border-border p-2"
                 style={{
                   background: resolvedCheckerA
                     ? `conic-gradient(${resolvedCheckerB} 25%, ${resolvedCheckerA} 0 50%, ${resolvedCheckerB} 0 75%, ${resolvedCheckerA} 0) 0 0 / 12px 12px`
                     : 'transparent',
                 }}
               >
-                <img
-                  src={cropPreview.url}
-                  alt="所有帧叠放预览"
-                  draggable={false}
-                  className="block max-h-80 max-w-full"
-                />
-                {/* 裁剪保留区域：百分比定位，随预览图缩放 */}
-                <div
-                  className="absolute border-2 border-dashed border-primary bg-primary/10"
-                  style={{
-                    left: `${(cropPreview.union.left / cropPreview.fullW) * 100}%`,
-                    top: `${(cropPreview.union.top / cropPreview.fullH) * 100}%`,
-                    width: `${((cropPreview.union.right - cropPreview.union.left) / cropPreview.fullW) * 100}%`,
-                    height: `${((cropPreview.union.bottom - cropPreview.union.top) / cropPreview.fullH) * 100}%`,
-                  }}
-                />
+                <div className="relative w-fit">
+                  <img
+                    src={cropPreview.url}
+                    alt="所有帧叠放预览"
+                    draggable={false}
+                    className="block max-h-80 max-w-full"
+                  />
+                  {/* 原图尺寸描边（实线） */}
+                  <div className="pointer-events-none absolute inset-0 border border-border" />
+                  {/* 裁剪保留区域（虚线）：百分比定位，随预览图缩放 */}
+                  {cropPreview.union && (
+                    <div
+                      className="pointer-events-none absolute border border-dashed border-primary bg-primary/10"
+                      style={{
+                        left: `${(cropPreview.union.left / cropPreview.fullW) * 100}%`,
+                        top: `${(cropPreview.union.top / cropPreview.fullH) * 100}%`,
+                        width: `${((cropPreview.union.right - cropPreview.union.left) / cropPreview.fullW) * 100}%`,
+                        height: `${((cropPreview.union.bottom - cropPreview.union.top) / cropPreview.fullH) * 100}%`,
+                      }}
+                    />
+                  )}
+                </div>
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={closeCropPreview}>
                 取消
               </Button>
-              <Button type="button" disabled={cropping} onClick={() => void applyCrop()}>
+              <Button type="button" disabled={cropping || !cropPreview.union} onClick={() => void applyCrop()}>
                 {cropping ? <LoaderCircle className="animate-spin" /> : <Crop />}
                 应用裁剪
               </Button>

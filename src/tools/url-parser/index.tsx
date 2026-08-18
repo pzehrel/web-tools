@@ -414,7 +414,7 @@ function UrlParserTool() {
         path="/tools/url-parser"
       />
       {/* 顶栏 */}
-      <header className="flex items-center gap-3 py-6">
+      <header className="flex h-24 items-center gap-3">
         <Button asChild variant="outline" size="icon">
           <Link to="/" aria-label="返回首页">
             <ArrowLeft className="size-5" />

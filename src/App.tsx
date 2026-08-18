@@ -12,7 +12,7 @@ function App() {
         description="纯前端实现的 Web 工具集合：二维码互转、URL 参数解析。所有工具在浏览器本地运行，不上传任何数据。"
       />
       {/* 顶栏：印章式 logo + 字标 */}
-      <header className="flex items-center gap-3 py-6">
+      <header className="flex h-24 items-center gap-3">
         <div className="flex size-10 items-center justify-center rounded-md border-2 border-border bg-primary shadow-hard-xs">
           <Wrench className="size-5 text-primary-foreground" />
         </div>
