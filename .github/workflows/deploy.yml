@@ -36,6 +36,19 @@ jobs:
 
       - run: pnpm build
 
+      # wrangler versions upload 要求 Worker 已存在，首次部署先初始化
+      - name: Ensure Worker exists
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if ! pnpm exec wrangler deployments list > /dev/null 2>&1; then
+            echo "Worker 尚不存在，先执行初始化 deploy"
+            pnpm exec wrangler deploy
+          else
+            echo "Worker 已存在"
+          fi
+
       # Workers 语义：tag 发版 → wrangler deploy 上生产（web-tools.pzehrel.workers.dev）；
       # main push / PR → wrangler versions upload，只生成预览 URL，不碰生产
       - name: Determine deploy target
