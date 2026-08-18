@@ -1,3 +1,5 @@
+// 载入 ssgOptions 的类型增强
+import type {} from 'vite-react-ssg'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/postcss'
 import react from '@vitejs/plugin-react'
@@ -17,6 +19,10 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+  },
+  ssgOptions: {
+    // 嵌套目录输出：/tools/url-parser -> /tools/url-parser/index.html，静态托管直出
+    dirStyle: 'nested',
   },
   server: {
     port: 1420,

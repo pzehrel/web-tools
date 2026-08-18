@@ -1,0 +1,17 @@
+{
+  "name": "react-router-dom",
+  "type": "module",
+  "version": "8.0.0",
+  "description": "vite-react-ssg 兼容垫片：react-router v8 已合并 react-router-dom，这里按 v6 的包结构转发到 react-router",
+  "exports": {
+    ".": "./index.js",
+    "./server": "./server.js",
+    "./server.js": "./server.js",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "react-router": ">=7"
+  }
+}

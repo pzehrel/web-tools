@@ -1,0 +1,98 @@
+name: Deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+# 同一分支/PR 的新 push 取消正在进行的部署
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write # PR 预览链接评论
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 读取 package.json 的 packageManager 字段，自动装对应版本 pnpm
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # CI 再挡一道（husky 只管本地提交）
+      - run: pnpm lint && pnpm typecheck
+
+      - run: pnpm build
+
+      # Workers 语义：tag 发版 → wrangler deploy 上生产（web-tools.pzehrel.workers.dev）；
+      # main push / PR → wrangler versions upload，只生成预览 URL，不碰生产
+      - name: Determine deploy target
+        id: target
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            echo "prod=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prod=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy production (tag)
+        if: steps.target.outputs.prod == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - name: Upload preview version (main / PR)
+        if: steps.target.outputs.prod == 'false'
+        id: preview
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: versions upload
+
+      - name: Comment preview URL on PR
+        if: github.event_name == 'pull_request'
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.version-preview-url }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = process.env.PREVIEW_URL
+            const marker = '<!-- workers-preview -->'
+            const body = `${marker}\n🚀 预览部署：${url}`
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            })
+            const existing = comments.find(c => c.body?.includes(marker))
+            if (existing) {
+              await github.rest.issues.updateComment({
+                comment_id: existing.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              })
+            }
+            else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              })
+            }

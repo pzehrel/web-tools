@@ -16,15 +16,15 @@
 
 所有颜色一律走 shadcn/ui 语义令牌，**禁止在组件里写死颜色值**（如 `bg-purple-500`、`#7c3aed`）。
 
-| 场景 | 令牌 |
-| --- | --- |
-| 页面底色 / 正文 | `bg-background` / `text-foreground` |
+| 场景                   | 令牌                                     |
+| ---------------------- | ---------------------------------------- |
+| 页面底色 / 正文        | `bg-background` / `text-foreground`      |
 | 主行动色（按钮、强调） | `bg-primary` / `text-primary-foreground` |
-| 点缀色（徽章、贴纸） | `bg-secondary`、`bg-accent` |
-| 卡片底色 | `bg-card` |
-| 描边 / 硬阴影 | `border-border`（联动 `--shadow-color`） |
-| 弱化文本 | `text-muted-foreground` |
-| 装饰性色块（如图标底） | `bg-chart-1` ~ `bg-chart-5` |
+| 点缀色（徽章、贴纸）   | `bg-secondary`、`bg-accent`              |
+| 卡片底色               | `bg-card`                                |
+| 描边 / 硬阴影          | `border-border`（联动 `--shadow-color`） |
+| 弱化文本               | `text-muted-foreground`                  |
+| 装饰性色块（如图标底） | `bg-chart-1` ~ `bg-chart-5`              |
 
 换肤 = 只改 `src/index.scss` 中 `:root` / `.dark` 两张色板，组件零改动。
 

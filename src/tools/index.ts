@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Binary, Braces, Clock, Palette, QrCode, Regex } from 'lucide-react'
+import { Link2, QrCode } from 'lucide-react'
 
 export interface ToolMeta {
   /** 路由/锚点 id，kebab-case */
@@ -22,51 +22,19 @@ export interface ToolMeta {
  */
 export const tools: ToolMeta[] = [
   {
-    id: 'json-formatter',
-    name: 'JSON 格式化',
-    description: '格式化、校验、压缩 JSON 数据',
-    icon: Braces,
-    status: 'planned',
-    accentClass: 'bg-chart-1',
-  },
-  {
     id: 'qrcode-generator',
-    name: '二维码生成',
-    description: '文本、链接一键生成二维码',
+    name: '二维码工具',
+    description: '文字与二维码互转，支持历史记录',
     icon: QrCode,
-    status: 'planned',
+    status: 'ready',
     accentClass: 'bg-chart-2',
   },
   {
-    id: 'timestamp-converter',
-    name: '时间戳转换',
-    description: 'Unix 时间戳与日期时间互转',
-    icon: Clock,
-    status: 'planned',
+    id: 'url-parser',
+    name: 'URL 解析',
+    description: '任意协议 URL / 路径拆成树，嵌套参数递归展开、可编辑',
+    icon: Link2,
+    status: 'ready',
     accentClass: 'bg-chart-3',
-  },
-  {
-    id: 'color-converter',
-    name: '颜色转换',
-    description: 'HEX、RGB、HSL、OKLCH 互转',
-    icon: Palette,
-    status: 'planned',
-    accentClass: 'bg-chart-4',
-  },
-  {
-    id: 'regex-tester',
-    name: '正则测试',
-    description: '实时匹配、高亮、替换正则表达式',
-    icon: Regex,
-    status: 'planned',
-    accentClass: 'bg-chart-5',
-  },
-  {
-    id: 'base64-codec',
-    name: 'Base64 编解码',
-    description: '文本与文件的 Base64 编码解码',
-    icon: Binary,
-    status: 'planned',
-    accentClass: 'bg-chart-1',
   },
 ]

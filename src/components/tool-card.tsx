@@ -1,5 +1,6 @@
 import type { ToolMeta } from '@/tools'
 import { ArrowRight } from 'lucide-react'
+import { Link } from 'react-router'
 
 import { cn } from '@/lib/utils'
 
@@ -16,8 +17,9 @@ export function ToolCard({ tool }: ToolCardProps) {
   const ready = tool.status === 'ready'
 
   return (
-    <a
-      href={ready ? `/tools/${tool.id}` : undefined}
+    <Link
+      to={ready ? `/tools/${tool.id}` : '#'}
+      onClick={ready ? undefined : e => e.preventDefault()}
       aria-disabled={!ready}
       className={cn(
         'group flex flex-col gap-4 rounded-lg border-2 border-border bg-card p-5 transition-all',
@@ -51,6 +53,6 @@ export function ToolCard({ tool }: ToolCardProps) {
           <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
         </div>
       )}
-    </a>
+    </Link>
   )
 }
