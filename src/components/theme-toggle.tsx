@@ -10,7 +10,7 @@ const OPTIONS: { value: ThemePreference, label: string, icon: typeof Sun }[] = [
   { value: 'dark', label: '深色', icon: Moon },
 ]
 
-/** 全局主题切换：跟随系统 / 浅色 / 深色，固定在右上角 */
+/** 全局主题切换：跟随系统 / 浅色 / 深色，位于页面右上角并随页面滚动 */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
   return (
@@ -20,7 +20,7 @@ export function ThemeToggle() {
         <div
           role="radiogroup"
           aria-label="主题"
-          className="fixed top-4 right-4 z-50 flex overflow-hidden rounded-md border-2 border-border bg-card shadow-hard-sm"
+          className="absolute top-4 right-4 z-50 flex overflow-hidden rounded-md border-2 border-border bg-card shadow-hard-sm"
         >
           {OPTIONS.map(({ value, label, icon: Icon }) => (
             <button
