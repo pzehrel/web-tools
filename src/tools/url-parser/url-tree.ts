@@ -261,7 +261,8 @@ export function setNodeValue(tree: UrlTree, id: string, value: string): UrlTree 
   return {
     ...tree,
     nodes: tree.nodes.map(n => (n.id === id
-      ? { ...n, value, children: looksLikeUrl(value) ? parseAny(value, 0) : null }
+      // param 原来可能没有 `=`（flag: false），一旦编辑值就进入 key=value 形态
+      ? { ...n, value, flag: n.kind === 'param' ? true : n.flag, children: looksLikeUrl(value) ? parseAny(value, 0) : null }
       : { ...n, children: n.children ? setNodeValue(n.children, id, value) : null })),
   }
 }
