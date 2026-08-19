@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Download,
   Frame,
   ImagePlus,
   Link2,
@@ -298,6 +299,15 @@ const CHECKER_STYLE = {
   backgroundSize: '16px 16px',
 } as const
 
+/** 裁剪遮罩：前景 / 背景色交叉斜纹——图片内容色不可控，双向条纹保证任意图上至少一组可辨 */
+const CROP_MASK_STYLE = {
+  backgroundColor: 'color-mix(in srgb, var(--foreground) 12%, transparent)',
+  backgroundImage: [
+    'repeating-linear-gradient(45deg, color-mix(in srgb, var(--foreground) 45%, transparent) 0 4px, transparent 4px 8px)',
+    'repeating-linear-gradient(-45deg, color-mix(in srgb, var(--background) 60%, transparent) 0 4px, transparent 4px 8px)',
+  ].join(', '),
+} as const
+
 /** 预览框的缩边方向：四边各管宽或高，四角同时管两个 */
 type ResizeEdge = 'left' | 'right' | 'top' | 'bottom'
 type ResizeCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
@@ -338,6 +348,10 @@ export default function NinePatchTool() {
   const [codeFormat, setCodeFormat] = useState<CodeFormat>('scss')
   const [codeStyle, setCodeStyle] = useState<CodeStyle>('longhand')
   const [copied, setCopied] = useState(false)
+  /** 中心裁剪：删除中心可拉伸区域的多余行列，导出时生效，CSS 无需修改 */
+  const [cropEnabled, setCropEnabled] = useState(false)
+  /** 中心保留尺寸（图像 px）：默认 1×1 即最小图 */
+  const [cropKeep, setCropKeep] = useState({ w: 1, h: 1 })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editorStageRef = useRef<HTMLDivElement>(null)
@@ -368,6 +382,9 @@ export default function NinePatchTool() {
     setImageWidth(s)
     setOutset(0)
     setImportError(null)
+    // 裁剪与上一张图的中心尺寸绑定，换图后回到默认
+    setCropEnabled(false)
+    setCropKeep({ w: 1, h: 1 })
     // 小图默认放大，切线更好拖
     setZoom(fitZoom(img.width, img.height))
     /* eslint-enable react/set-state-in-effect */
@@ -499,6 +516,69 @@ export default function NinePatchTool() {
     setSlice(defaultSlice(image.width, image.height))
   }, [image])
 
+  /* ---------- 中心裁剪：删行列得到最小图，导出时生效 ---------- */
+
+  /** 中心区域尺寸（图像 px）：四条切线围出的可拉伸区 */
+  const centerW = image ? Math.max(0, image.width - slice.left - slice.right) : 0
+  const centerH = image ? Math.max(0, image.height - slice.top - slice.bottom) : 0
+  /** 实际保留尺寸：不超过当前中心区 */
+  const keepW = Math.min(cropKeep.w, Math.max(1, centerW))
+  const keepH = Math.min(cropKeep.h, Math.max(1, centerH))
+  /** 裁剪后的图片尺寸：边距不动，只缩中心 */
+  const croppedW = slice.left + keepW + slice.right
+  const croppedH = slice.top + keepH + slice.bottom
+  /** 启用且有像素可裁才算激活（中心小于等于保留尺寸时无事可做） */
+  const cropActive = cropEnabled && image !== null && centerW > 0 && centerH > 0 && (keepW < centerW || keepH < centerH)
+
+  const setCropKeepValue = useCallback((axis: 'w' | 'h', value: number) => {
+    setCropKeep(prev => ({ ...prev, [axis]: Math.max(1, Math.round(value) || 1) }))
+  }, [])
+
+  /** 下载裁剪后的 PNG：三列 × 三行 1:1 拷贝，角不动、边带与中心只保留中间行列 */
+  const downloadCropped = useCallback(() => {
+    if (!image || !cropActive)
+      return
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = croppedW
+      canvas.height = croppedH
+      const ctx = canvas.getContext('2d')
+      if (!ctx)
+        return
+      const kx = slice.left + Math.floor((centerW - keepW) / 2)
+      const ky = slice.top + Math.floor((centerH - keepH) / 2)
+      // [源起点, 源尺寸, 目标起点]
+      const cols: [number, number, number][] = [
+        [0, slice.left, 0],
+        [kx, keepW, slice.left],
+        [image.width - slice.right, slice.right, slice.left + keepW],
+      ]
+      const rows: [number, number, number][] = [
+        [0, slice.top, 0],
+        [ky, keepH, slice.top],
+        [image.height - slice.bottom, slice.bottom, slice.top + keepH],
+      ]
+      for (const [sx, sw, dx] of cols) {
+        for (const [sy, sh, dy] of rows) {
+          if (sw > 0 && sh > 0)
+            ctx.drawImage(img, sx, sy, sw, sh, dx, dy, sw, sh)
+        }
+      }
+      canvas.toBlob((blob) => {
+        if (!blob)
+          return
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${image.name.replace(/\.[^.]+$/, '') || 'nine-patch'}-cropped.png`
+        a.click()
+        URL.revokeObjectURL(url)
+      }, 'image/png')
+    }
+    img.src = image.url
+  }, [image, cropActive, slice, centerW, centerH, keepW, keepH, croppedW, croppedH])
+
   /* ---------- 预览框缩边：拖四边改宽 / 高，拖四角同时改 ---------- */
 
   const onResizePointerDown = useCallback((edge: ResizeEdge | ResizeCorner) => (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -570,6 +650,25 @@ export default function NinePatchTool() {
 
   /* ---------- 渲染 ---------- */
 
+  /** 裁剪遮罩（图像 px）：裁剪删的是整行整列——横向条带贯通全宽、纵向条带贯通全高；keepRect 为保留框 */
+  let cropMask: { x: number, y: number, w: number, h: number }[] | null = null
+  let keepRect: { x: number, y: number, w: number, h: number } | null = null
+  if (cropActive && image) {
+    const cx0 = slice.left
+    const cy0 = slice.top
+    const cx1 = image.width - slice.right
+    const cy1 = image.height - slice.bottom
+    const kx0 = cx0 + Math.floor((centerW - keepW) / 2)
+    const ky0 = cy0 + Math.floor((centerH - keepH) / 2)
+    keepRect = { x: kx0, y: ky0, w: keepW, h: keepH }
+    cropMask = [
+      { x: 0, y: cy0, w: image.width, h: ky0 - cy0 },
+      { x: 0, y: ky0 + keepH, w: image.width, h: cy1 - ky0 - keepH },
+      { x: cx0, y: 0, w: kx0 - cx0, h: image.height },
+      { x: kx0 + keepW, y: 0, w: cx1 - kx0 - keepW, h: image.height },
+    ].filter(r => r.w > 0 && r.h > 0)
+  }
+
   /** 单条切线：水平线改上 / 下边距，垂直线改左 / 右边距 */
   const renderLine = (side: Side) => {
     if (!image)
@@ -631,7 +730,7 @@ export default function NinePatchTool() {
     <div className="mx-auto max-w-5xl px-4 pb-16">
       <Seo
         title="点九图工具"
-        description="上传图片并拖动四条切线定义九宫格切片，实时预览 border-image 的拉伸 / 平铺效果，一键复制 CSS / SCSS / Less 代码，全部在浏览器本地完成。"
+        description="上传图片并拖动四条切线定义九宫格切片，实时预览 border-image 的拉伸 / 平铺效果，一键复制 CSS / SCSS / Less 代码，并可裁剪中心区域导出最小体积的 PNG，全部在浏览器本地完成。"
         path="/tools/nine-patch"
       />
       {/* 顶栏 */}
@@ -646,7 +745,7 @@ export default function NinePatchTool() {
         </div>
         <div>
           <h1 className="text-lg font-black tracking-tight">点九图工具</h1>
-          <p className="text-sm text-muted-foreground">拖动四条切线定义九宫格，实时预览 border-image 效果并导出 CSS / SCSS / Less</p>
+          <p className="text-sm text-muted-foreground">拖动四条切线定义九宫格，实时预览 border-image 效果，导出 CSS 与裁剪后的最小 PNG</p>
         </div>
       </header>
 
@@ -695,6 +794,22 @@ export default function NinePatchTool() {
                           draggable={false}
                           className="block"
                         />
+                        {/* 裁剪预览：被裁行列盖斜纹遮罩，保留框描边；不拦截指针，切线照常可拖 */}
+                        {cropMask && keepRect && (
+                          <>
+                            {cropMask.map(r => (
+                              <div
+                                key={`${r.x}-${r.y}`}
+                                className="pointer-events-none absolute"
+                                style={{ left: r.x * scale, top: r.y * scale, width: r.w * scale, height: r.h * scale, ...CROP_MASK_STYLE }}
+                              />
+                            ))}
+                            <div
+                              className="pointer-events-none absolute border-2 border-primary"
+                              style={{ left: keepRect.x * scale, top: keepRect.y * scale, width: keepRect.w * scale, height: keepRect.h * scale }}
+                            />
+                          </>
+                        )}
                         {SIDES.map(s => renderLine(s.side))}
                       </div>
                     )
@@ -983,6 +1098,72 @@ export default function NinePatchTool() {
                 onChange={setRepeatV}
                 options={(['stretch', 'repeat', 'round', 'space'] as RepeatMode[]).map(m => ({ value: m, label: m }))}
               />
+            </div>
+            {/* 中心裁剪：导出更小体积的 PNG，不改任何 CSS 值 */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="text-xs font-bold text-muted-foreground">中心裁剪</p>
+                <BrutalCheckbox
+                  checked={cropEnabled}
+                  onChange={setCropEnabled}
+                  title="删除中心可拉伸区域的多余行列，导出更小体积的 PNG，CSS 无需修改"
+                />
+              </div>
+              {cropEnabled
+                ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-end gap-2">
+                        <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
+                          保留宽（px）
+                          <input
+                            type="number"
+                            min={1}
+                            max={Math.max(1, centerW)}
+                            value={keepW}
+                            disabled={!image}
+                            onChange={e => setCropKeepValue('w', Number(e.target.value))}
+                            aria-label="中心保留宽"
+                            className={NUM_INPUT_CLASS}
+                          />
+                        </label>
+                        <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
+                          保留高（px）
+                          <input
+                            type="number"
+                            min={1}
+                            max={Math.max(1, centerH)}
+                            value={keepH}
+                            disabled={!image}
+                            onChange={e => setCropKeepValue('h', Number(e.target.value))}
+                            aria-label="中心保留高"
+                            className={NUM_INPUT_CLASS}
+                          />
+                        </label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!image || (keepW === 1 && keepH === 1)}
+                          onClick={() => setCropKeep({ w: 1, h: 1 })}
+                        >
+                          裁到最小
+                        </Button>
+                      </div>
+                      {(repeatH !== 'stretch' || repeatV !== 'stretch') && (
+                        <p className="flex items-start gap-1.5 text-xs text-destructive">
+                          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                          平铺模式下裁剪会改变平铺单元，渲染效果将发生变化
+                        </p>
+                      )}
+                      <Button type="button" variant="outline" size="sm" disabled={!cropActive} onClick={downloadCropped}>
+                        <Download />
+                        {cropActive ? `下载裁剪图（${croppedW} × ${croppedH}）` : '下载裁剪图'}
+                      </Button>
+                    </div>
+                  )
+                : (
+                    <p className="text-xs text-muted-foreground">删除中心多余行列得到最小图，CSS 代码无需修改</p>
+                  )}
             </div>
           </CardContent>
         </Card>

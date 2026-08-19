@@ -48,7 +48,7 @@ export const tools: ToolMeta[] = [
   {
     id: 'nine-patch',
     name: '点九图工具',
-    description: '拖动四条切线定义九宫格，预览 border-image 并导出 CSS',
+    description: '拖动四条切线定义九宫格，导出 CSS 与裁剪后的最小 PNG',
     icon: Frame,
     status: 'ready',
     accentClass: 'bg-chart-4',
