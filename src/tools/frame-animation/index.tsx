@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import type { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, PointerEvent as ReactPointerEvent } from 'react'
+import type { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { unzipSync } from 'fflate'
 import {
   ArrowDownAZ,
@@ -26,6 +26,7 @@ import { Link } from 'react-router'
 import { Seo } from '@/components/seo'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 
 /** 一帧：本地图片的 objectURL，绝不离开浏览器 */
@@ -48,9 +49,6 @@ interface SpriteDims {
   cols: number
   rows: number
 }
-/** 数字 = 按原始尺寸的百分比缩放 */
-type Zoom = 50 | 75 | 100 | 150 | 200
-
 /** 文件名自然排序（数字按数值比较，frame2 < frame10） */
 const collator = new Intl.Collator('zh', { numeric: true, sensitivity: 'base' })
 
@@ -694,15 +692,14 @@ export default function FrameAnimationTool() {
   const resolvedCheckerA = checkerBase ?? themeCardHex
   const resolvedCheckerB = resolvedCheckerA ? checkerMate(resolvedCheckerA) : ''
   const resolvedSolid = solidBase ?? themeCardHex
-  const [zoom, setZoom] = useState<Zoom>(75)
+  /** 舞台视图缩放（1 = 100%）：滚轮或双指调整，不影响导出 */
+  const [zoom, setZoom] = useState(0.75)
   const [pixelated, setPixelated] = useState(false)
   /** 显示帧边界：给当前帧画出单张精灵图格子的描边 */
   const [showBounds, setShowBounds] = useState(true)
-  /** 舞台平移：帧画面相对居中的偏移（px） */
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const [panning, setPanning] = useState(false)
-  /** 拖拽中的起点快照（指针 id + 起始坐标 + 起始偏移） */
-  const panRef = useRef<{ pointerId: number, startX: number, startY: number, baseX: number, baseY: number } | null>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  useStageZoom(stageRef, zoom, setZoom)
+  const stagePan = useStagePan(stageRef, () => false)
   /** 入选的帧（按 id）：勾选 = 参与预览 / 播放 / 导出；不提供删除，防误操作 */
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
 
@@ -820,31 +817,6 @@ export default function FrameAnimationTool() {
     setDragOver(false)
     void addFiles(e.dataTransfer.files)
   }, [addFiles])
-
-  /* ---------- 舞台平移：pointer capture 拖拽帧画面 ---------- */
-
-  const onPanStart = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    // 只响应主键，且要有可拖的画面
-    if (e.button !== 0)
-      return
-    panRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseX: offset.x, baseY: offset.y }
-    e.currentTarget.setPointerCapture(e.pointerId)
-    setPanning(true)
-  }, [offset])
-
-  const onPanMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    const pan = panRef.current
-    if (!pan || pan.pointerId !== e.pointerId)
-      return
-    setOffset({ x: pan.baseX + e.clientX - pan.startX, y: pan.baseY + e.clientY - pan.startY })
-  }, [])
-
-  const onPanEnd = useCallback(() => {
-    panRef.current = null
-    setPanning(false)
-  }, [])
-
-  const resetPan = useCallback(() => setOffset({ x: 0, y: 0 }), [])
 
   /** 跳到指定帧：同步 rAF 游标并打断往返方向 / 循环计数 */
   const jumpTo = useCallback((index: number) => {
@@ -1211,6 +1183,11 @@ export default function FrameAnimationTool() {
   // 导出代码：单元格 = 播放范围内各帧最大宽 / 高（与精灵图一致）；尺寸走容器 + 百分比
   const cellW = exportFrames.length > 0 ? Math.max(...exportFrames.map(f => f.width)) : 0
   const cellH = exportFrames.length > 0 ? Math.max(...exportFrames.map(f => f.height)) : 0
+  /** 单帧宽高：仅当入选帧尺寸全部一致时展示，否则省略（单元格取最大值，单帧尺寸不唯一） */
+  const uniformFrameSize = exportFrames.length > 0
+    && exportFrames.every(f => f.width === exportFrames[0].width && f.height === exportFrames[0].height)
+    ? { w: exportFrames[0].width, h: exportFrames[0].height }
+    : null
   const exportParams: ExportParams = {
     frames: exportFrames.length,
     duration,
@@ -1263,38 +1240,32 @@ export default function FrameAnimationTool() {
             )}
           </CardHeader>
           <CardContent className="min-w-0 flex flex-1 flex-col gap-4 pb-6">
-            {/* 舞台：本身就是拖放区；画面层绝对定位脱离文档流，否则放大倍率会撑高容器 */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault()
-                setDragOver(true)
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop}
-              className={cn(
-                'relative min-h-64 flex-1 overflow-hidden rounded-md border-2 transition-colors',
-                frameCount === 0 && 'border-dashed',
-                dragOver ? 'border-primary' : 'border-border',
-              )}
-              style={{
-                background: stageBg === 'checker'
-                  // 棋盘格：conic-gradient 四象限拼格；格 B 由底色算法派生
-                  ? (resolvedCheckerA
-                      ? `conic-gradient(${resolvedCheckerB} 25%, ${resolvedCheckerA} 0 50%, ${resolvedCheckerB} 0 75%, ${resolvedCheckerA} 0) 0 0 / 16px 16px`
-                      : 'transparent')
-                  : (resolvedSolid || 'transparent'),
-              }}
-            >
-              {/* 画面层：不参与舞台尺寸计算；有帧时可拖拽平移 */}
+            {/* 舞台：本身就是拖放区；滚轮 / 双指缩放，按住拖动平移（与点九图工具同一套手势） */}
+            {/* 相对定位容器：舞台绝对定位脱离文档流（高度由卡片剩余空间决定），悬浮按钮不随内容滚动 */}
+            <div className="relative min-h-64 flex-1">
               <div
+                ref={stageRef}
+                {...stagePan.panHandlers}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setDragOver(true)
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
                 className={cn(
-                  'absolute inset-0 flex items-center justify-center overflow-hidden',
-                  frame && (panning ? 'cursor-grabbing' : 'cursor-grab'),
+                  'absolute inset-0 flex touch-none overflow-hidden rounded-md border-2 p-4 transition-colors select-none',
+                  frame && (stagePan.panning ? 'cursor-grabbing' : 'cursor-grab'),
+                  frameCount === 0 && 'border-dashed',
+                  dragOver ? 'border-primary' : 'border-border',
                 )}
-                onPointerDown={frame ? onPanStart : undefined}
-                onPointerMove={frame ? onPanMove : undefined}
-                onPointerUp={frame ? onPanEnd : undefined}
-                onPointerCancel={frame ? onPanEnd : undefined}
+                style={{
+                  background: stageBg === 'checker'
+                    // 棋盘格：conic-gradient 四象限拼格；格 B 由底色算法派生
+                    ? (resolvedCheckerA
+                        ? `conic-gradient(${resolvedCheckerB} 25%, ${resolvedCheckerA} 0 50%, ${resolvedCheckerB} 0 75%, ${resolvedCheckerA} 0) 0 0 / 16px 16px`
+                        : 'transparent')
+                    : (resolvedSolid || 'transparent'),
+                }}
               >
                 {frame
                   ? (
@@ -1303,13 +1274,13 @@ export default function FrameAnimationTool() {
                         alt={frame.name}
                         draggable={false}
                         className={cn(
-                          'select-none',
+                          'm-auto shrink-0',
                           // 帧边界：勾出单张精灵图格子的范围
                           showBounds && 'outline-2 outline-dashed outline-primary -outline-offset-2',
                         )}
                         style={{
-                          width: frame.width * (zoom / 100),
-                          transform: `translate(${offset.x}px, ${offset.y}px)`,
+                          width: frame.width * zoom,
+                          transform: `translate(${stagePan.offset.x}px, ${stagePan.offset.y}px)`,
                           imageRendering: pixelated ? 'pixelated' : 'auto',
                         }}
                       />
@@ -1318,13 +1289,13 @@ export default function FrameAnimationTool() {
                       frameCount > 0
                         // 有上传但全部未勾选
                         ? (
-                            <div className="flex flex-col items-center gap-2 px-6 text-center text-muted-foreground/60">
+                            <div className="m-auto flex flex-col items-center gap-2 px-6 text-center text-muted-foreground/60">
                               <Images className="size-8" />
                               <p className="text-sm">没有入选的帧：在下方帧序列里勾选后参与预览</p>
                             </div>
                           )
                         : (
-                            <div className="flex flex-col items-center gap-3 px-6 text-center">
+                            <div className="m-auto flex flex-col items-center gap-3 px-6 text-center">
                               <div className="flex size-12 items-center justify-center rounded-md border-2 border-border bg-chart-1 shadow-hard-xs -rotate-2">
                                 <Images className="size-6 text-foreground" />
                               </div>
@@ -1348,17 +1319,20 @@ export default function FrameAnimationTool() {
                           )
                     )}
               </div>
-              {/* 有帧时：添加按钮悬浮在舞台右上角；平移后出现居中重置按钮 */}
+              {/* 有帧时：添加按钮悬浮在舞台右上角；平移后出现「回到居中」 */}
               {frame && (
                 <div className="absolute top-2 right-2 flex gap-1.5">
-                  {(offset.x !== 0 || offset.y !== 0) && (
+                  {(stagePan.offset.x !== 0 || stagePan.offset.y !== 0 || zoom !== 0.75) && (
                     <Button
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      title="回到居中"
-                      aria-label="回到居中"
-                      onClick={resetPan}
+                      title="重置视图（居中并恢复默认缩放）"
+                      aria-label="重置视图"
+                      onClick={() => {
+                        stagePan.resetPan()
+                        setZoom(0.75)
+                      }}
                     >
                       <RotateCcw />
                     </Button>
@@ -1391,7 +1365,9 @@ export default function FrameAnimationTool() {
               <span className="text-xs text-muted-foreground">
                 精灵图预览（
                 {exportFrames.length}
-                {' 帧 · '}
+                {' 帧'}
+                {uniformFrameSize && ` · 单张 ${uniformFrameSize.w} × ${uniformFrameSize.h}`}
+                {' · '}
                 {spriteDims.cols}
                 {' 列 × '}
                 {spriteDims.rows}
@@ -1522,7 +1498,7 @@ export default function FrameAnimationTool() {
             {/* 帧率 + 一轮时长（双向换算） */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between">
-                <label htmlFor="fps" className="text-sm font-bold">帧率</label>
+                <label htmlFor="fps" className="text-xs font-bold text-muted-foreground">帧率</label>
                 <span className="text-xs text-muted-foreground">
                   {Number(fps.toFixed(2))}
                   {' fps · 每帧 '}
@@ -1573,7 +1549,7 @@ export default function FrameAnimationTool() {
             {/* 帧范围：双头滑块，播放与导出都按范围截断 */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between">
-                <span className="text-sm font-bold">帧范围</span>
+                <span className="text-xs font-bold text-muted-foreground">帧范围</span>
                 <span className="flex items-center gap-2 text-xs text-muted-foreground">
                   {activeCount > 0 ? `第 ${rangeStart + 1} → ${rangeEnd + 1} 帧` : '—'}
                   {rangeRaw !== null && (
@@ -1627,11 +1603,10 @@ export default function FrameAnimationTool() {
             </div>
 
             {/* 方向 / 循环 / 缩放：左标签单行 */}
-            <div className="flex items-center gap-3">
-              <span className="w-8 shrink-0 text-sm font-bold">方向</span>
+            <div>
+              <p className="mb-1.5 text-xs font-bold text-muted-foreground">方向</p>
               <OptionGroup<Direction>
                 label="播放方向"
-                className="flex-1"
                 value={direction}
                 onChange={setDirection}
                 options={[
@@ -1641,53 +1616,39 @@ export default function FrameAnimationTool() {
                 ]}
               />
             </div>
-            <div className="flex items-center gap-3">
-              <span className="w-8 shrink-0 text-sm font-bold">循环</span>
-              <OptionGroup<string>
-                label="循环方式"
-                className="flex-1"
-                value={loopInfinite ? 'infinite' : 'count'}
-                onChange={v => setLoopInfinite(v === 'infinite')}
-                options={[
-                  { value: 'infinite', label: '无限' },
-                  { value: 'count', label: '次数' },
-                ]}
-              />
-              {!loopInfinite && (
-                <>
-                  <input
-                    type="number"
-                    min={1}
-                    max={999}
-                    value={loopCount}
-                    aria-label="循环次数"
-                    title="循环次数，播完停在最后一帧"
-                    onChange={e => setLoopCount(Math.min(999, Math.max(1, Number(e.target.value) || 1)))}
-                    className={NUM_INPUT_CLASS}
-                  />
-                  <span className="text-xs text-muted-foreground">次</span>
-                </>
-              )}
+            <div>
+              <p className="mb-1.5 text-xs font-bold text-muted-foreground">循环</p>
+              <div className="flex items-center gap-2">
+                <OptionGroup<string>
+                  label="循环方式"
+                  className="flex-1"
+                  value={loopInfinite ? 'infinite' : 'count'}
+                  onChange={v => setLoopInfinite(v === 'infinite')}
+                  options={[
+                    { value: 'infinite', label: '无限' },
+                    { value: 'count', label: '次数' },
+                  ]}
+                />
+                {!loopInfinite && (
+                  <>
+                    <input
+                      type="number"
+                      min={1}
+                      max={999}
+                      value={loopCount}
+                      aria-label="循环次数"
+                      title="循环次数，播完停在最后一帧"
+                      onChange={e => setLoopCount(Math.min(999, Math.max(1, Number(e.target.value) || 1)))}
+                      className={NUM_INPUT_CLASS}
+                    />
+                    <span className="text-xs text-muted-foreground">次</span>
+                  </>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="w-8 shrink-0 text-sm font-bold">缩放</span>
-              <OptionGroup<Zoom>
-                label="缩放"
-                className="flex-1"
-                value={zoom}
-                onChange={setZoom}
-                options={[
-                  { value: 50, label: '50%' },
-                  { value: 75, label: '75%' },
-                  { value: 100, label: '100%' },
-                  { value: 150, label: '150%' },
-                  { value: 200, label: '200%' },
-                ]}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-8 shrink-0 text-sm font-bold">排列</span>
-              <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+            <div>
+              <p className="mb-1.5 text-xs font-bold text-muted-foreground">排列</p>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                 <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                   <input
                     type="number"
@@ -1733,11 +1694,10 @@ export default function FrameAnimationTool() {
             </div>
 
             {/* 舞台背景 */}
-            <div className="flex items-center gap-3">
-              <span className="w-8 shrink-0 text-sm font-bold">背景</span>
+            <div>
+              <p className="mb-1.5 text-xs font-bold text-muted-foreground">背景</p>
               <OptionGroup<StageBg>
                 label="舞台背景"
-                className="flex-1"
                 value={stageBg}
                 onChange={setStageBg}
                 options={[
@@ -1781,7 +1741,7 @@ export default function FrameAnimationTool() {
       {/* 样式导出（常驻；无入选帧时按钮禁用、代码区占位） */}
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle className="col-span-full sm:col-span-1">样式</CardTitle>
+          <CardTitle className="col-span-full sm:col-span-1">样式代码</CardTitle>
           <CardDescription className="col-span-full sm:col-span-1">
             动画参数实时映射到样式代码；下载精灵图后把 url() 换成项目里的实际路径
           </CardDescription>

@@ -65,6 +65,44 @@ shadow-hard-lg  8px 8px 0 0   弹窗等需要「浮起」的层级
 - 分隔用 `border-t-2 border-border` 的实线，不用 1px 灰线
 - 不做侧边栏导航；工具页之间通过首页和面包屑往返
 
+## 表单排版
+
+参数面板的字段统一「标签在上、控件在下」，不做左标签右控件的密排行：
+
+- 字段标签：`mb-1.5 text-xs font-bold text-muted-foreground`（弱化小字，不做主色大标题）
+- 单选 / 枚举：用描边分段控件（`OptionGroup` 模式：`role="radiogroup"` + `role="radio"`，
+  选中项主色填充），默认占满整行宽度
+- 数字输入：等宽字体居中 + `border-2` + 聚焦 `ring-[3px] ring-ring/50`；
+  成组的四边值（上/右/下/左）用 `grid grid-cols-4` 平铺，输入在上、方位小字在下
+- 勾选：`BrutalCheckbox` 模式（sr-only 原生 input + 2px 描边方块 + 硬阴影抬起/压实）
+- 短行内组合（如「外扩 + 填充」）：底边对齐 `items-end`，较矮的控件包一层与输入框等高的
+  `items-center` 容器，保证视觉中心对齐
+
+## 画布舞台（图像类工具）
+
+涉及图片查看 / 编辑的工具（点九图、帧动画）共用一套舞台约定，手势实现收在
+`src/lib/stage.ts`（`useStageZoom` / `useStagePan`），新工具直接复用：
+
+- **缩放**：滚轮 / 触控板捏合 / 触屏双指，连续缩放 25% ~ 800%（指数曲线，手感均匀）。
+  视图缩放只影响查看，永远不写进导出参数；因此**不设缩放挡位选择器**
+- **平移**：按住拖动空白 / 画面区域，内容层做 `transform: translate` 偏移，
+  任何缩放级别都可拖（scroll 式平移在内容不溢出时滚动范围为 0，拖了没反应，不用）。
+  平移或缩放偏离默认时，舞台右上角出现「重置视图」按钮（居中 + 恢复默认缩放）。光标 `cursor-grab` / `cursor-grabbing`。
+  按下落在切线、拖拽手柄等其他交互元素上时不启动平移
+  （利用事件冒泡顺序由内层 guard 拦截）；落在按钮等可点元素上也不启动
+  （否则 pointer capture 会吞掉 click）
+- **舞台尺寸**：高度必须由外层确定（固定 `h-*` 或绝对定位 `inset-0`），内容 `m-auto`
+  居中、超出裁剪（`overflow-hidden`，靠拖拽平移查看）。两个坑：flex 链路的
+  max-content 计算会把内容尺寸传播到上层（`min-h-0` 也拦不住），所以舞台宁可
+  `absolute inset-0` 脱离文档流；若用 `overflow: auto` 方案，注意它只在有确定
+  高度上限时才裁剪，`min-h-*` + 高度 auto 会被放大后的内容撑高
+- **悬浮操作**：更换 / 添加图片等按钮用 `size="icon-sm"` 浮在舞台**右上角**，
+  挂在滚动容器外面的相对定位层（否则随内容一起滚走）
+- **底纹**：棋盘格用 conic-gradient 四象限拼格；颜色走语义令牌（如 `var(--muted)`），
+  允许用户自定义时提供「恢复跟随主题」入口
+- 实现细节：React 的 `onWheel` 是 passive 监听，缩放必须挂原生 `wheel` 监听
+  （`{ passive: false }`）；舞台配 `touch-none`，触屏双指才不会被浏览器页面缩放接管
+
 ## Do / Don't
 
 **Do**

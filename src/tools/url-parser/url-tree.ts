@@ -31,6 +31,19 @@ export interface UrlTree {
 
 const MAX_DEPTH = 8
 
+/** 变量标记：值写成 `$$name` 即声明一个变量（name 需是合法 JS 标识符） */
+const VAR_RE = /^\$\$([a-z_$]\w*)$/i
+
+/** 值是变量标记时返回变量名，否则返回 null */
+export function variableName(value: string): string | null {
+  return VAR_RE.exec(value)?.[1] ?? null
+}
+
+/** 编码普通值；变量标记原样保留（$ 是 query 合法字符，且保证解析/序列化往返稳定） */
+function encodeValue(value: string): string {
+  return variableName(value) !== null ? value : encodeURIComponent(value)
+}
+
 let seq = 0
 function nid() {
   return `n${seq++}`
@@ -198,7 +211,7 @@ function build(tree: UrlTree): string {
       out += `:${n.value}`
     }
     else if (n.kind === 'segment') {
-      segs.push(n.children ? encodeURIComponent(build(n.children)) : encodeURIComponent(n.value))
+      segs.push(n.children ? encodeURIComponent(build(n.children)) : encodeValue(n.value))
     }
     else if (n.kind === 'param') {
       params.push(n)
@@ -216,7 +229,7 @@ function build(tree: UrlTree): string {
       const key = encodeURIComponent(p.label)
       if (!p.flag)
         return key
-      const value = p.children ? encodeURIComponent(build(p.children)) : encodeURIComponent(p.value)
+      const value = p.children ? encodeURIComponent(build(p.children)) : encodeValue(p.value)
       return `${key}=${value}`
     }).join('&')}`
   }

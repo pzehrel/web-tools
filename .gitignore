@@ -204,3 +204,4 @@ dist
 *.sw?
 .vercel
 .env*
+.playwright-cli/

@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Film, Link2, QrCode } from 'lucide-react'
+import { Film, Frame, Link2, QrCode } from 'lucide-react'
 
 export interface ToolMeta {
   /** 路由/锚点 id，kebab-case */
@@ -44,5 +44,13 @@ export const tools: ToolMeta[] = [
     icon: Film,
     status: 'ready',
     accentClass: 'bg-chart-1',
+  },
+  {
+    id: 'nine-patch',
+    name: '点九图工具',
+    description: '拖动四条切线定义九宫格，预览 border-image 并导出 CSS',
+    icon: Frame,
+    status: 'ready',
+    accentClass: 'bg-chart-4',
   },
 ]
