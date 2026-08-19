@@ -8,7 +8,6 @@ import {
   ImagePlus,
   Link2,
   Link2Off,
-  MoveDiagonal2,
   RotateCcw,
   TriangleAlert,
 } from 'lucide-react'
@@ -299,15 +298,24 @@ const CHECKER_STYLE = {
   backgroundSize: '16px 16px',
 } as const
 
-/** 预览框的缩边方向：四边各管宽或高，角同时管两个 */
-type ResizeEdge = 'left' | 'right' | 'top' | 'bottom' | 'corner'
+/** 预览框的缩边方向：四边各管宽或高，四角同时管两个 */
+type ResizeEdge = 'left' | 'right' | 'top' | 'bottom'
+type ResizeCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
-/** 四边拖拽条：位置类 + 悬停时显示的指示条类 */
-const RESIZE_EDGES: { edge: Exclude<ResizeEdge, 'corner'>, strip: string, bar: string, label: string }[] = [
+/** 四边拖拽条：位置类 + 指示条类（悬停预览框时统一显示） */
+const RESIZE_EDGES: { edge: ResizeEdge, strip: string, bar: string, label: string }[] = [
   { edge: 'right', strip: 'top-0 bottom-0 -right-2 w-4 cursor-ew-resize', bar: 'top-1/2 right-1.5 h-8 w-1 -translate-y-1/2', label: '拖动调整宽度' },
   { edge: 'left', strip: 'top-0 bottom-0 -left-2 w-4 cursor-ew-resize', bar: 'top-1/2 left-1.5 h-8 w-1 -translate-y-1/2', label: '拖动调整宽度' },
   { edge: 'bottom', strip: 'left-0 right-0 -bottom-2 h-4 cursor-ns-resize', bar: 'bottom-1.5 left-1/2 h-1 w-8 -translate-x-1/2', label: '拖动调整高度' },
   { edge: 'top', strip: 'left-0 right-0 -top-2 h-4 cursor-ns-resize', bar: 'top-1.5 left-1/2 h-1 w-8 -translate-x-1/2', label: '拖动调整高度' },
+]
+
+/** 四角拖拽块：L 形指示块（与四边指示条同为 primary 色），悬停预览框时统一显示 */
+const RESIZE_CORNERS: { corner: ResizeCorner, hit: string, lShape: string, label: string }[] = [
+  { corner: 'top-left', hit: '-top-2 -left-2 size-5 cursor-nwse-resize', lShape: 'top-1.5 left-1.5 border-t-4 border-l-4 rounded-tl-sm', label: '拖动调整尺寸' },
+  { corner: 'top-right', hit: '-top-2 -right-2 size-5 cursor-nesw-resize', lShape: 'top-1.5 right-1.5 border-t-4 border-r-4 rounded-tr-sm', label: '拖动调整尺寸' },
+  { corner: 'bottom-left', hit: '-bottom-2 -left-2 size-5 cursor-nesw-resize', lShape: 'bottom-1.5 left-1.5 border-b-4 border-l-4 rounded-bl-sm', label: '拖动调整尺寸' },
+  { corner: 'bottom-right', hit: '-bottom-2 -right-2 size-5 cursor-nwse-resize', lShape: 'bottom-1.5 right-1.5 border-r-4 border-b-4 rounded-br-sm', label: '拖动调整尺寸' },
 ]
 
 export default function NinePatchTool() {
@@ -337,7 +345,7 @@ export default function NinePatchTool() {
   /** 切线拖拽快照：指针 id + 边 + 起始指针坐标 + 起始边距（图像 px） */
   const lineDragRef = useRef<{ pointerId: number, side: Side, startClient: number, startValue: number } | null>(null)
   /** 预览框缩边拖拽快照 */
-  const resizeDragRef = useRef<{ pointerId: number, edge: ResizeEdge, startX: number, startY: number, baseW: number, baseH: number } | null>(null)
+  const resizeDragRef = useRef<{ pointerId: number, edge: ResizeEdge | ResizeCorner, startX: number, startY: number, baseW: number, baseH: number } | null>(null)
   /** 卸载回收用：始终指向最新 image */
   const imageRef = useRef<SourceImage | null>(null)
   imageRef.current = image
@@ -491,9 +499,9 @@ export default function NinePatchTool() {
     setSlice(defaultSlice(image.width, image.height))
   }, [image])
 
-  /* ---------- 预览框缩边：拖四边改宽 / 高，拖右下角同时改 ---------- */
+  /* ---------- 预览框缩边：拖四边改宽 / 高，拖四角同时改 ---------- */
 
-  const onResizePointerDown = useCallback((edge: ResizeEdge) => (e: ReactPointerEvent<HTMLDivElement>) => {
+  const onResizePointerDown = useCallback((edge: ResizeEdge | ResizeCorner) => (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0)
       return
     e.preventDefault()
@@ -515,13 +523,13 @@ export default function NinePatchTool() {
     const dy = (e.clientY - drag.startY) / previewZoom
     let w = drag.baseW
     let h = drag.baseH
-    if (drag.edge === 'right' || drag.edge === 'corner')
+    if (drag.edge === 'right' || drag.edge === 'top-right' || drag.edge === 'bottom-right')
       w = drag.baseW + dx
-    else if (drag.edge === 'left')
+    else if (drag.edge === 'left' || drag.edge === 'top-left' || drag.edge === 'bottom-left')
       w = drag.baseW - dx
-    if (drag.edge === 'bottom' || drag.edge === 'corner')
+    if (drag.edge === 'bottom' || drag.edge === 'bottom-left' || drag.edge === 'bottom-right')
       h = drag.baseH + dy
-    else if (drag.edge === 'top')
+    else if (drag.edge === 'top' || drag.edge === 'top-left' || drag.edge === 'top-right')
       h = drag.baseH - dy
     setPreviewSize(clampPreview(w, h))
   }, [previewZoom])
@@ -782,7 +790,7 @@ export default function NinePatchTool() {
                             transformOrigin: '0 0',
                           }}
                         >
-                          <div className="relative m-3" style={{ width: previewSize.w, height: previewSize.h }}>
+                          <div className="group/preview relative m-3" style={{ width: previewSize.w, height: previewSize.h }}>
                             <div
                               className="flex size-full items-center justify-center"
                               style={{
@@ -801,36 +809,38 @@ export default function NinePatchTool() {
                                 {previewSize.h}
                               </span>
                             </div>
-                            {/* 四边拖拽条：悬停显示指示条 */}
+                            {/* 四边拖拽条 + 四角 L 形块：悬停预览框时一起显示 */}
                             {RESIZE_EDGES.map(({ edge, strip, bar, label }) => (
                               <div
                                 key={edge}
                                 title={label}
-                                className={cn('group absolute touch-none', strip)}
+                                className={cn('absolute touch-none', strip)}
                                 onPointerDown={onResizePointerDown(edge)}
                                 onPointerMove={onResizePointerMove}
                                 onPointerUp={onResizePointerEnd}
                                 onPointerCancel={onResizePointerEnd}
                               >
-                                <div className={cn('absolute rounded-full bg-primary opacity-0 transition-opacity group-hover:opacity-100', bar)} />
+                                <div className={cn('absolute rounded-full bg-primary opacity-0 transition-opacity group-hover/preview:opacity-100', bar)} />
                               </div>
                             ))}
-                            {/* 右下角：同时改宽高，键盘可达 */}
-                            <div
-                              role="slider"
-                              tabIndex={0}
-                              aria-label="调整预览框尺寸"
-                              aria-valuetext={`${previewSize.w} × ${previewSize.h}`}
-                              title="拖拽调整尺寸（方向键微调）"
-                              className="absolute -right-3 -bottom-3 flex size-7 cursor-nwse-resize touch-none items-center justify-center rounded-md border-2 border-border bg-primary text-primary-foreground shadow-hard-xs outline-none transition-all hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
-                              onPointerDown={onResizePointerDown('corner')}
-                              onPointerMove={onResizePointerMove}
-                              onPointerUp={onResizePointerEnd}
-                              onPointerCancel={onResizePointerEnd}
-                              onKeyDown={onResizeKeyDown}
-                            >
-                              <MoveDiagonal2 className="size-4" />
-                            </div>
+                            {RESIZE_CORNERS.map(({ corner, hit, lShape, label }) => (
+                              <div
+                                key={corner}
+                                role="slider"
+                                tabIndex={0}
+                                aria-label="调整预览框尺寸"
+                                aria-valuetext={`${previewSize.w} × ${previewSize.h}`}
+                                title={`${label}（方向键微调）`}
+                                className={cn('absolute touch-none outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50', hit)}
+                                onPointerDown={onResizePointerDown(corner)}
+                                onPointerMove={onResizePointerMove}
+                                onPointerUp={onResizePointerEnd}
+                                onPointerCancel={onResizePointerEnd}
+                                onKeyDown={onResizeKeyDown}
+                              >
+                                <div className={cn('absolute size-3 border-primary opacity-0 transition-opacity group-hover/preview:opacity-100', lShape)} />
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>

@@ -28,27 +28,28 @@ export function ToolCard({ tool }: ToolCardProps) {
           : 'cursor-not-allowed opacity-60',
       )}
     >
-      <div className="flex items-start justify-between">
+      {/* 图标居左，标题和描述在图标右边；筹备中徽章保持在右上角 */}
+      <div className="flex flex-1 items-start gap-4">
         <div
           className={cn(
-            'flex size-12 items-center justify-center rounded-md border-2 border-border',
+            'flex size-12 shrink-0 items-center justify-center rounded-md border-2 border-border',
             tool.accentClass,
           )}
         >
           <Icon className="size-6 text-foreground" />
         </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-bold">{tool.name}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{tool.description}</p>
+        </div>
         {!ready && (
-          <span className="rounded-full border-2 border-border bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">
+          <span className="shrink-0 rounded-full border-2 border-border bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">
             筹备中
           </span>
         )}
       </div>
-      <div className="flex-1">
-        <h3 className="font-bold">{tool.name}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{tool.description}</p>
-      </div>
       {ready && (
-        <div className="flex items-center gap-1 text-sm font-bold text-primary">
+        <div className="flex items-center gap-1 self-end text-sm font-bold text-primary">
           打开工具
           <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
         </div>

@@ -99,7 +99,9 @@ function EditableText({
       title={title}
       onClick={() => setDraft(text)}
       className={cn(
-        'min-w-0 cursor-text rounded-sm px-1 text-left break-all hover:bg-secondary',
+        // 悬停高亮用 muted：参数 key 按层级着色（chart-2 与 secondary 同色），
+        // 用 secondary 会在暗色模式下黄字叠黄底看不清
+        'min-w-0 cursor-text rounded-sm px-1 text-left break-all hover:bg-muted',
         mono && 'font-mono text-sm',
         className,
       )}

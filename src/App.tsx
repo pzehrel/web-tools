@@ -52,7 +52,7 @@ function App() {
           className="flex items-center gap-1.5 font-bold text-foreground hover:underline"
         >
           <ExternalLink className="size-4" />
-          GitHub · pzehrel/web-tools
+          GitHub
         </a>
       </footer>
     </div>
