@@ -1,21 +1,22 @@
 import type { ChangeEvent, DragEvent, ReactNode } from 'react'
 import type { UrlRecord } from './url-records'
 import type { UrlNode, UrlTree } from './url-tree'
-import { ArrowLeft, Bookmark, Check, Copy, Download, Link2, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Check, Copy, Download, Ellipsis, Link2, LoaderCircle, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ClientOnly } from 'vite-react-ssg'
 
 import { Seo } from '@/components/seo'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PopConfirm } from '@/components/ui/pop-confirm'
 import { readHashParam, writeHashParam } from '@/lib/hash-param'
 import { cn } from '@/lib/utils'
-import { ConfirmDialog } from './confirm-dialog'
 import { decodeQr, encodeQr } from './qr-codec'
+import { renderQrParameterPreview } from './qr-preview-image'
 import { generateCode } from './url-code'
 import { useUrlRecords } from './url-records'
-import { addParam, deleteNode, insertParamBelow, looksLikeUrl, parseUrl, serializeUrl, setNodeValue, updateNode, variableName } from './url-tree'
+import { addParam, canMoveNode, deleteNode, insertParamBelow, looksLikeUrl, moveNode, parseUrl, serializeUrl, setNodeValue, updateNode, variableName } from './url-tree'
 
 /** 层级文字颜色轮换：橙 → 黄 → 绿，暖色系相邻过渡（chart 令牌，随主题联动） */
 const DEPTH_COLORS = ['text-chart-4', 'text-chart-2', 'text-chart-3'] as const
@@ -153,6 +154,13 @@ function ParamRow({
   onEditBase,
   onAddBelow,
   onDelete,
+  dragSourceId,
+  dropTargetId,
+  onDragStart,
+  onDragEnd,
+  onDragOverUrl,
+  onDragLeaveUrl,
+  onDropOnUrl,
 }: {
   node: UrlNode
   depth: number
@@ -167,6 +175,13 @@ function ParamRow({
   /** 在该行所在层级、该行下方插入 key=value */
   onAddBelow: (node: UrlNode) => void
   onDelete: (id: string) => void
+  dragSourceId: string | null
+  dropTargetId: string | null | undefined
+  onDragStart: (event: DragEvent<HTMLElement>, id: string) => void
+  onDragEnd: () => void
+  onDragOverUrl: (event: DragEvent<HTMLElement>, targetId: string) => void
+  onDragLeaveUrl: () => void
+  onDropOnUrl: (event: DragEvent<HTMLElement>, targetId: string) => void
 }) {
   const color = DEPTH_COLORS[depth % DEPTH_COLORS.length]
   // 嵌套 URL 的颜色与它下面的子级字段一致
@@ -198,15 +213,50 @@ function ParamRow({
         {/* key：param 可编辑，hash 固定为 # */}
         {node.kind === 'param'
           ? (
-              <EditableText
-                text={node.label}
-                autoSize
-                className={cn('shrink-0 text-sm font-bold', keyClass)}
-                onCommit={next => onEdit(node.id, { label: next })}
-              />
+              <span
+                draggable
+                title={node.children ? '拖拽该 URL 及其所有参数；放到这里会移入该 URL' : '拖拽字段；放到这里会移动到同一层'}
+                data-drag-key={node.id}
+                onDragStart={event => onDragStart(event, node.id)}
+                onDragEnd={onDragEnd}
+                onDragOver={event => onDragOverUrl(event, node.id)}
+                onDragLeave={onDragLeaveUrl}
+                onDrop={event => onDropOnUrl(event, node.id)}
+                className={cn(
+                  'shrink-0 cursor-grab rounded-sm transition-all active:cursor-grabbing',
+                  'hover:ring-2 hover:ring-border',
+                  dragSourceId === node.id && 'opacity-40',
+                  dropTargetId === node.id && 'bg-primary/15 ring-2 ring-primary',
+                )}
+              >
+                <EditableText
+                  text={node.label}
+                  autoSize
+                  className={cn('text-sm font-bold', keyClass)}
+                  onCommit={next => onEdit(node.id, { label: next })}
+                />
+              </span>
             )
           : (
-              <span className={cn('shrink-0 px-1 text-sm font-bold', keyClass)}>#</span>
+              <span
+                draggable
+                title={node.children ? '拖拽 hash；放到这里会移入该 URL' : '拖拽 hash；放到这里会移动到同一层'}
+                data-drag-key={node.id}
+                onDragStart={event => onDragStart(event, node.id)}
+                onDragEnd={onDragEnd}
+                onDragOver={event => onDragOverUrl(event, node.id)}
+                onDragLeave={onDragLeaveUrl}
+                onDrop={event => onDropOnUrl(event, node.id)}
+                className={cn(
+                  'shrink-0 cursor-grab rounded-sm px-1 text-sm font-bold transition-all active:cursor-grabbing',
+                  'hover:ring-2 hover:ring-border',
+                  keyClass,
+                  dragSourceId === node.id && 'opacity-40',
+                  dropTargetId === node.id && 'bg-primary/15 ring-2 ring-primary',
+                )}
+              >
+                #
+              </span>
             )}
 
         {/* 值：有子参数时可编辑嵌套 URL 的 base（不含参数/hash），颜色与子级一致 */}
@@ -257,14 +307,14 @@ function ParamRow({
         >
           <Plus className="size-3" />
         </button>
-        <button
-          type="button"
-          aria-label="删除"
-          onClick={() => onDelete(node.id)}
-          className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-destructive"
-        >
-          <X className="size-3" />
-        </button>
+        <PopConfirm
+          trigger={<X className="size-3" />}
+          triggerAriaLabel="删除"
+          triggerClassName="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-destructive"
+          title={node.children ? '删除这个 URL？' : '删除这个字段？'}
+          description={node.children ? '该 URL 及其所有下级参数都会被删除。' : '删除后无法恢复。'}
+          onConfirm={() => onDelete(node.id)}
+        />
       </div>
 
       {expandable && (
@@ -277,6 +327,13 @@ function ParamRow({
           onEditBase={onEditBase}
           onAddBelow={onAddBelow}
           onDelete={onDelete}
+          dragSourceId={dragSourceId}
+          dropTargetId={dropTargetId}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onDragOverUrl={onDragOverUrl}
+          onDragLeaveUrl={onDragLeaveUrl}
+          onDropOnUrl={onDropOnUrl}
         />
       )}
     </div>
@@ -292,6 +349,13 @@ function ParamTree({
   onEditBase,
   onAddBelow,
   onDelete,
+  dragSourceId,
+  dropTargetId,
+  onDragStart,
+  onDragEnd,
+  onDragOverUrl,
+  onDragLeaveUrl,
+  onDropOnUrl,
 }: {
   tree: UrlTree
   depth: number
@@ -301,6 +365,13 @@ function ParamTree({
   onEditBase: (node: UrlNode, nextBase: string) => void
   onAddBelow: (node: UrlNode) => void
   onDelete: (id: string) => void
+  dragSourceId: string | null
+  dropTargetId: string | null | undefined
+  onDragStart: (event: DragEvent<HTMLElement>, id: string) => void
+  onDragEnd: () => void
+  onDragOverUrl: (event: DragEvent<HTMLElement>, targetId: string) => void
+  onDragLeaveUrl: () => void
+  onDropOnUrl: (event: DragEvent<HTMLElement>, targetId: string) => void
 }) {
   const nodes = paramNodes(tree)
   return (
@@ -317,6 +388,13 @@ function ParamTree({
           onEditBase={onEditBase}
           onAddBelow={onAddBelow}
           onDelete={onDelete}
+          dragSourceId={dragSourceId}
+          dropTargetId={dropTargetId}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onDragOverUrl={onDragOverUrl}
+          onDragLeaveUrl={onDragLeaveUrl}
+          onDropOnUrl={onDropOnUrl}
         />
       ))}
     </div>
@@ -415,6 +493,131 @@ function StaticTree({ tree, depth, lastFlags }: { tree: UrlTree, depth: number, 
   )
 }
 
+function StaticUrlTree({ tree }: { tree: UrlTree }) {
+  return (
+    <>
+      <div className="flex items-center gap-1 leading-5">
+        <Link2 className={cn('size-3.5 shrink-0', DEPTH_COLORS[0])} />
+        <span className={cn('flex-1 font-mono text-sm break-all', DEPTH_COLORS[0])}>{baseOfTree(tree)}</span>
+      </div>
+      {hasParams(tree)
+        ? <StaticTree tree={tree} depth={0} lastFlags={[]} />
+        : <p className="py-1 pl-6 text-sm text-muted-foreground">没有解析到参数</p>}
+    </>
+  )
+}
+
+/** 分段下载按钮：主区域执行默认下载，右侧 ··· 展开全部下载选项。 */
+function QrDownloadButton({
+  available,
+  previewAvailable,
+  renderingPreview,
+  onDownload,
+  onDownloadPreview,
+  className,
+}: {
+  available: boolean
+  previewAvailable: boolean
+  renderingPreview: boolean
+  onDownload: () => void
+  onDownloadPreview: () => void
+  className?: string
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen)
+      return
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target))
+        setMenuOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape')
+        setMenuOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [menuOpen])
+
+  return (
+    <div ref={containerRef} className={cn('relative inline-flex', className)}>
+      <div
+        role="group"
+        aria-label="下载二维码"
+        className={cn(
+          'inline-flex h-8 w-full overflow-hidden rounded-md border-2 border-border bg-background shadow-hard-xs transition-all',
+          'hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm',
+          'has-[:active]:translate-x-0.5 has-[:active]:translate-y-0.5 has-[:active]:shadow-none',
+          !available && 'opacity-50',
+        )}
+      >
+        <button
+          type="button"
+          disabled={!available}
+          onClick={onDownload}
+          className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2.5 text-sm font-bold whitespace-nowrap outline-none hover:bg-secondary hover:text-secondary-foreground focus-visible:bg-secondary disabled:pointer-events-none"
+        >
+          <Download className="size-4 shrink-0" />
+          下载二维码
+        </button>
+        <button
+          type="button"
+          disabled={!available}
+          title="更多下载选项"
+          aria-label="更多下载选项"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(open => !open)}
+          className="flex w-9 shrink-0 items-center justify-center border-l-2 border-border outline-none hover:bg-secondary hover:text-secondary-foreground focus-visible:bg-secondary disabled:pointer-events-none disabled:opacity-50"
+        >
+          <Ellipsis className="size-4" />
+        </button>
+      </div>
+      {menuOpen && (
+        <div
+          role="menu"
+          aria-label="二维码下载选项"
+          className="absolute top-full right-0 z-20 mt-2 min-w-52 overflow-hidden rounded-md border-2 border-border bg-popover p-1 text-popover-foreground shadow-hard-sm"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            autoFocus
+            onClick={() => {
+              setMenuOpen(false)
+              onDownload()
+            }}
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm font-bold outline-none hover:bg-secondary hover:text-secondary-foreground focus-visible:bg-secondary"
+          >
+            <Download className="size-4" />
+            下载纯二维码
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!previewAvailable || renderingPreview}
+            title={!previewAvailable ? '只有 URL 内容可以生成参数预览图' : undefined}
+            onClick={() => {
+              setMenuOpen(false)
+              onDownloadPreview()
+            }}
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm font-bold outline-none hover:bg-secondary hover:text-secondary-foreground focus-visible:bg-secondary disabled:pointer-events-none disabled:opacity-50"
+          >
+            {renderingPreview ? <LoaderCircle className="size-4 animate-spin" /> : <Download className="size-4" />}
+            下载二维码 + 参数预览
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** 记录预览：二维码 + 只读参数树（与参数板块同样样式）；非 URL 内容原样展示 */
 function RecordPreviewContent({ text }: { text: string }) {
   const tree = useMemo(() => parseUrl(text), [text])
@@ -425,16 +628,7 @@ function RecordPreviewContent({ text }: { text: string }) {
         {!looksLikeUrl(text)
           ? <p className="text-sm break-all text-popover-foreground">{text}</p>
           : (
-              <>
-                {/* 根节点：顶层 URL 的 base，颜色与参数字段一致 */}
-                <div className="flex items-center gap-1 leading-5">
-                  <Link2 className={cn('size-3.5 shrink-0', DEPTH_COLORS[0])} />
-                  <span className={cn('flex-1 font-mono text-sm break-all', DEPTH_COLORS[0])}>{baseOfTree(tree)}</span>
-                </div>
-                {hasParams(tree)
-                  ? <StaticTree tree={tree} depth={0} lastFlags={[]} />
-                  : <p className="py-1 pl-6 text-sm text-muted-foreground">没有解析到参数</p>}
-              </>
+              <StaticUrlTree tree={tree} />
             )}
       </div>
     </div>
@@ -657,6 +851,54 @@ function UrlParserTool() {
     ))
   }, [])
 
+  // 参数树拖拽：所有 key 都是目标；URL value 接收为子级，普通 value 接收到同一层。
+  const [dragSourceId, setDragSourceId] = useState<string | null>(null)
+  // undefined 表示没有目标，null 表示顶部根 URL，string 表示嵌套 URL 节点。
+  const [dropTargetId, setDropTargetId] = useState<string | null | undefined>(undefined)
+
+  const handleTreeDragStart = useCallback((event: DragEvent<HTMLElement>, id: string) => {
+    event.stopPropagation()
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('application/x-url-tree-node', id)
+    // Safari 对自定义 MIME 的拖拽数据支持不稳定，同时写入标准类型作为兜底。
+    event.dataTransfer.setData('text/plain', id)
+    setDragSourceId(id)
+    setDropTargetId(undefined)
+  }, [])
+
+  const clearTreeDrag = useCallback(() => {
+    setDragSourceId(null)
+    setDropTargetId(undefined)
+  }, [])
+
+  const draggedId = useCallback((event: DragEvent<HTMLElement>) => (
+    dragSourceId
+    ?? (event.dataTransfer.getData('application/x-url-tree-node') || event.dataTransfer.getData('text/plain'))
+  ), [dragSourceId])
+
+  const handleTreeDragOver = useCallback((event: DragEvent<HTMLElement>, targetId: string | null) => {
+    const sourceId = draggedId(event)
+    if (!sourceId || !canMoveNode(tree, sourceId, targetId))
+      return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    setDropTargetId(targetId)
+  }, [draggedId, tree])
+
+  const handleTreeDrop = useCallback((event: DragEvent<HTMLElement>, targetId: string | null) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const sourceId = draggedId(event)
+    if (sourceId) {
+      setInput((prev) => {
+        const current = parseUrl(prev)
+        return serializeUrl(moveNode(current, sourceId, targetId))
+      })
+    }
+    clearTreeDrag()
+  }, [clearTreeDrag, draggedId])
+
   const [copied, setCopied] = useState(false)
 
   // 输入内容的二维码预览（防抖 400ms）
@@ -744,6 +986,29 @@ function UrlParserTool() {
     a.click()
   }, [qr])
 
+  const [renderingQrPreview, setRenderingQrPreview] = useState(false)
+  const downloadQrPreview = useCallback(async () => {
+    if (!qr || !isUrl)
+      return
+    setRenderingQrPreview(true)
+    setQrError('')
+    try {
+      const blob = await renderQrParameterPreview(qr, tree)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'qrcode-with-parameters.png'
+      a.click()
+      setTimeout(URL.revokeObjectURL, 10_000, url)
+    }
+    catch {
+      setQrError('参数预览图片生成失败，请重试')
+    }
+    finally {
+      setRenderingQrPreview(false)
+    }
+  }, [isUrl, qr, tree])
+
   const copy = useCallback(() => {
     void navigator.clipboard.writeText(input).then(() => {
       setCopied(true)
@@ -814,22 +1079,6 @@ function UrlParserTool() {
     setRenamingId(null)
   }, [renamingId, nameDraft, updateRecord])
 
-  // 删除 / 清空记录需二次确认
-  const [confirmState, setConfirmState] = useState<{ kind: 'remove', id: string } | { kind: 'clear' } | null>(null)
-  const handleConfirm = useCallback(() => {
-    if (!confirmState)
-      return
-    if (confirmState.kind === 'remove') {
-      if (selectedId === confirmState.id)
-        setSelectedId(null)
-      removeRecord(confirmState.id)
-    }
-    else {
-      setSelectedId(null)
-      clearRecords()
-    }
-  }, [confirmState, selectedId, removeRecord, clearRecords])
-
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   // 二维码放大弹层：点击缩略图打开，Esc / 点击遮罩关闭
@@ -854,9 +1103,9 @@ function UrlParserTool() {
   return (
     <div className="mx-auto max-w-5xl px-4 pb-16">
       <Seo
-        title="URL 解析"
-        description="把任意协议 URL / 路径的参数拆成文件树，嵌套参数递归展开、可编辑；内容实时生成二维码，也可上传二维码图片识别；支持 $$变量 声明与代码预览、记录保存。"
-        path="/tools/url-parser"
+        title="URL 与二维码"
+        description="解析任意协议的 URL 与路径，递归展开嵌套参数，并与二维码双向转换；支持编辑、拖拽、变量代码预览和本地记录。"
+        path="/tools/url-qrcode"
       />
       {/* 顶栏 */}
       <header className="flex h-24 items-center gap-3">
@@ -869,8 +1118,8 @@ function UrlParserTool() {
           <Link2 className="size-5 text-foreground" />
         </div>
         <div>
-          <h1 className="text-lg font-black tracking-tight">URL 解析</h1>
-          <p className="text-sm text-muted-foreground">URL ⇄ 二维码双向互转，参数拆成文件树、嵌套递归展开、可编辑</p>
+          <h1 className="text-lg font-black tracking-tight">URL 与二维码</h1>
+          <p className="text-sm text-muted-foreground">URL 参数解析与二维码双向转换，支持嵌套参数递归展开、编辑和拖拽</p>
         </div>
       </header>
 
@@ -926,7 +1175,7 @@ function UrlParserTool() {
           </CardContent>
         </Card>
 
-        {/* 二维码板块：与输入框左右布局、等高；二维码填满剩余高度，下载按钮与输入区按钮同一水平线 */}
+        {/* 二维码板块：与输入框左右布局、等高；二维码填满剩余高度 */}
         <Card className="flex shrink-0 flex-col md:w-56">
           <CardContent className="flex h-full flex-col gap-3 px-6 py-6">
             <div
@@ -976,10 +1225,14 @@ function UrlParserTool() {
                 onChange={onFileChange}
               />
             </div>
-            <Button variant="outline" size="sm" disabled={!qr} onClick={downloadQr} className="shrink-0">
-              <Download />
-              下载
-            </Button>
+            <QrDownloadButton
+              available={qr !== null}
+              previewAvailable={isUrl}
+              renderingPreview={renderingQrPreview}
+              onDownload={downloadQr}
+              onDownloadPreview={() => void downloadQrPreview()}
+              className="w-full shrink-0"
+            />
           </CardContent>
         </Card>
       </div>
@@ -989,7 +1242,7 @@ function UrlParserTool() {
         <CardHeader>
           <CardTitle>参数</CardTitle>
           <CardDescription>
-            点击 key 或 value 即可编辑，改动会同步回上面的完整字符串；值写成
+            点击 key 或 value 即可编辑；任意 key / # 都可拖放：value 是 URL 时移入该 URL，否则移动到目标同一层；URL 会携带其全部参数，拖到顶部 URL 可整体替换；值写成
             {' '}
             <code className="rounded-sm bg-secondary px-1 font-mono">$$变量名</code>
             {' '}
@@ -1018,12 +1271,24 @@ function UrlParserTool() {
                     {/* 根节点：顶层 URL 的 base（可编辑），颜色与下面的参数字段一致 */}
                     <div className="group flex items-center gap-1 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
                       <Link2 className={cn('size-3.5 shrink-0', DEPTH_COLORS[0])} />
-                      <EditableText
-                        text={baseUrl}
-                        mono
-                        className={cn('flex-1 break-all', DEPTH_COLORS[0])}
-                        onCommit={next => setInput(next.split(/[?#]/)[0] + suffixOfTree(tree))}
-                      />
+                      <span
+                        data-drop-url="root"
+                        title="把字段拖到这里；URL 字段会整体替换当前根 URL"
+                        onDragOver={event => handleTreeDragOver(event, null)}
+                        onDragLeave={() => setDropTargetId(undefined)}
+                        onDrop={event => handleTreeDrop(event, null)}
+                        className={cn(
+                          'min-w-0 flex-1 rounded-sm transition-all',
+                          dropTargetId === null && 'bg-primary/15 ring-2 ring-primary',
+                        )}
+                      >
+                        <EditableText
+                          text={baseUrl}
+                          mono
+                          className={cn('w-full break-all', DEPTH_COLORS[0])}
+                          onCommit={next => setInput(next.split(/[?#]/)[0] + suffixOfTree(tree))}
+                        />
+                      </span>
                       <button
                         type="button"
                         aria-label="复制该 URL 及其所有参数"
@@ -1044,7 +1309,23 @@ function UrlParserTool() {
                     </div>
                     {found
                       ? (
-                          <ParamTree tree={tree} depth={0} lastFlags={[]} onEdit={handleEdit} onEditValue={handleEditValue} onEditBase={handleEditBase} onAddBelow={handleAddBelow} onDelete={handleDelete} />
+                          <ParamTree
+                            tree={tree}
+                            depth={0}
+                            lastFlags={[]}
+                            onEdit={handleEdit}
+                            onEditValue={handleEditValue}
+                            onEditBase={handleEditBase}
+                            onAddBelow={handleAddBelow}
+                            onDelete={handleDelete}
+                            dragSourceId={dragSourceId}
+                            dropTargetId={dropTargetId}
+                            onDragStart={handleTreeDragStart}
+                            onDragEnd={clearTreeDrag}
+                            onDragOverUrl={(event, targetId) => handleTreeDragOver(event, targetId)}
+                            onDragLeaveUrl={() => setDropTargetId(undefined)}
+                            onDropOnUrl={(event, targetId) => handleTreeDrop(event, targetId)}
+                          />
                         )
                       : (
                           <p className="py-3 pl-6 text-sm text-muted-foreground">没有解析到参数</p>
@@ -1085,10 +1366,23 @@ function UrlParserTool() {
               <CardDescription>仅保存在浏览器本地；点击记录即可切换到该记录的内容</CardDescription>
               {records.length > 0 && (
                 <CardAction>
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmState({ kind: 'clear' })}>
-                    <Trash2 />
-                    清空
-                  </Button>
+                  <PopConfirm
+                    trigger={(
+                      <>
+                        <Trash2 />
+                        清空
+                      </>
+                    )}
+                    triggerAriaLabel="清空全部记录"
+                    triggerClassName={buttonVariants({ variant: 'ghost', size: 'sm' })}
+                    title="清空全部记录？"
+                    description="所有保存的记录都会被删除，且无法恢复。"
+                    confirmLabel="清空"
+                    onConfirm={() => {
+                      setSelectedId(null)
+                      clearRecords()
+                    }}
+                  />
                 </CardAction>
               )}
             </CardHeader>
@@ -1169,14 +1463,18 @@ function UrlParserTool() {
                               >
                                 {copiedId === item.id ? <Check /> : <Copy />}
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label="删除"
-                                onClick={() => setConfirmState({ kind: 'remove', id: item.id })}
-                              >
-                                <Trash2 />
-                              </Button>
+                              <PopConfirm
+                                trigger={<Trash2 />}
+                                triggerAriaLabel="删除"
+                                triggerClassName={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+                                title="删除这条记录？"
+                                description="这条记录会被删除，且无法恢复。"
+                                onConfirm={() => {
+                                  if (selectedId === item.id)
+                                    setSelectedId(null)
+                                  removeRecord(item.id)
+                                }}
+                              />
                             </div>
                           </div>
                         </li>
@@ -1188,33 +1486,61 @@ function UrlParserTool() {
         )}
       </ClientOnly>
 
-      {/* 二维码放大弹层：放大到接近满屏，密集二维码也能扫 */}
+      {/* 二维码详情弹层：二维码 + 当前 URL 的只读参数树 */}
       {qrEnlarged && qr && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="二维码大图"
+          aria-label="二维码与参数预览"
           onClick={() => setQrEnlarged(false)}
-          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-foreground/60 p-4"
+          className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-foreground/60 p-4"
         >
-          <img
-            src={qr}
-            alt="当前内容的二维码（放大）"
-            style={{ imageRendering: 'pixelated' }}
-            className="w-[min(88vw,30rem)] rounded-md border-2 border-border bg-white object-contain shadow-hard-lg"
-          />
+          <div
+            onClick={event => event.stopPropagation()}
+            className="flex max-h-[calc(100vh-2rem)] w-[min(64rem,calc(100vw-2rem))] flex-col rounded-lg border-2 border-border bg-popover p-5 text-popover-foreground shadow-hard-lg"
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-black tracking-tight">二维码与参数预览</h2>
+                <p className="text-sm text-muted-foreground">扫码打开当前内容，同时核对 URL 参数层级</p>
+              </div>
+              <Button variant="ghost" size="icon-sm" aria-label="关闭" onClick={() => setQrEnlarged(false)}>
+                <X />
+              </Button>
+            </div>
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto sm:grid-cols-[minmax(14rem,22rem)_minmax(0,1fr)]">
+              <div className="flex items-start justify-center">
+                <img
+                  src={qr}
+                  alt="当前内容的二维码（放大）"
+                  style={{ imageRendering: 'pixelated' }}
+                  className="aspect-square w-full max-w-[22rem] rounded-md border-2 border-border bg-white object-contain"
+                />
+              </div>
+              <div className="min-h-32 overflow-auto rounded-md border-2 border-border bg-background p-3 text-foreground">
+                <h3 className="mb-2 text-sm font-black">参数预览</h3>
+                {isUrl
+                  ? (
+                      <div className="min-w-[28rem] sm:min-w-0">
+                        <StaticUrlTree tree={tree} />
+                      </div>
+                    )
+                  : <p className="text-sm break-all text-muted-foreground">当前内容不是 URL，无法展示参数树。</p>}
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-end gap-2 border-t-2 border-border pt-4">
+              <QrDownloadButton
+                available
+                previewAvailable={isUrl}
+                renderingPreview={renderingQrPreview}
+                onDownload={downloadQr}
+                onDownloadPreview={() => void downloadQrPreview()}
+              />
+            </div>
+          </div>
         </div>
       )}
 
-      {/* 删除 / 清空记录的二次确认 */}
-      <ConfirmDialog
-        open={confirmState !== null}
-        title={confirmState?.kind === 'clear' ? '清空全部记录' : '删除这条记录'}
-        description={confirmState?.kind === 'clear' ? '所有保存的记录都会被删除，且无法恢复。' : '这条记录会被删除，且无法恢复。'}
-        confirmLabel={confirmState?.kind === 'clear' ? '清空' : '删除'}
-        onConfirm={handleConfirm}
-        onClose={() => setConfirmState(null)}
-      />
     </div>
   )
 }

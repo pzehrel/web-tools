@@ -22,9 +22,9 @@ export interface ToolMeta {
  */
 export const tools: ToolMeta[] = [
   {
-    id: 'url-parser',
-    name: 'URL 解析',
-    description: 'URL ⇄ 二维码双向互转；任意协议 URL / 路径拆成树，嵌套参数递归展开、可编辑',
+    id: 'url-qrcode',
+    name: 'URL 与二维码',
+    description: 'URL 参数解析与二维码双向转换；任意协议 URL / 路径拆成树，嵌套参数递归展开、可编辑',
     icon: Link2,
     status: 'ready',
     accentClass: 'bg-chart-3',

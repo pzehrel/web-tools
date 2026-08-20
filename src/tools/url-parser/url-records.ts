@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'web-tools:url-parser-history'
-/** 旧「二维码工具」的记录 key：工具已合并进 URL 解析，挂载时一次性迁入 */
+/** 旧「二维码工具」的记录 key：工具已合并进「URL 与二维码」，挂载时一次性迁入 */
 const LEGACY_QR_KEY = 'web-tools:qrcode-history'
 const MAX_ITEMS = 50
 
@@ -67,7 +67,7 @@ function load(): UrlRecord[] {
 if (typeof localStorage !== 'undefined')
   migrateLegacyQrRecords()
 
-/** URL 解析工具的记录：主动保存到 localStorage，选中后可同步更新 */
+/** 「URL 与二维码」工具的记录：主动保存到 localStorage，选中后可同步更新 */
 export function useUrlRecords() {
   const [items, setItems] = useState<UrlRecord[]>(load)
 

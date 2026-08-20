@@ -17,7 +17,7 @@ import './index.scss'
  * 与 SSR HTML 不一致 → React 放弃水合整树重渲染 → 页面上出现两份内容。
  * 这里显式声明每个路由的 loader 已有数据（null），让路由初始化即 hydrated。
  */
-const ROUTE_IDS = ['root', 'home', 'qrcode-generator', 'url-parser', 'frame-animation', 'nine-patch', 'fallback'] as const
+const ROUTE_IDS = ['root', 'home', 'qrcode-generator', 'url-parser', 'url-qrcode', 'frame-animation', 'nine-patch', 'fallback'] as const
 
 export const createRoot = ViteReactSSG({
   routes: [
@@ -26,9 +26,10 @@ export const createRoot = ViteReactSSG({
       element: <RootLayout />,
       children: [
         { id: 'home', path: '/', element: <App /> },
-        // 二维码工具已合并进 URL 解析：旧链接 301 式重定向（replace 不留历史记录）
-        { id: 'qrcode-generator', path: '/tools/qrcode-generator', element: <Navigate to="/tools/url-parser" replace /> },
-        { id: 'url-parser', path: '/tools/url-parser', element: <UrlParserTool /> },
+        // 旧 URL 解析和二维码工具均已合并进「URL 与二维码」，保留入口重定向以兼容已有链接。
+        { id: 'qrcode-generator', path: '/tools/qrcode-generator', element: <Navigate to="/tools/url-qrcode" replace /> },
+        { id: 'url-parser', path: '/tools/url-parser', element: <Navigate to="/tools/url-qrcode" replace /> },
+        { id: 'url-qrcode', path: '/tools/url-qrcode', element: <UrlParserTool /> },
         { id: 'frame-animation', path: '/tools/frame-animation', element: <FrameAnimationTool /> },
         { id: 'nine-patch', path: '/tools/nine-patch', element: <NinePatchTool /> },
         { id: 'fallback', path: '*', element: <App /> },

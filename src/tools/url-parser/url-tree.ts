@@ -352,3 +352,184 @@ export function addParam(tree: UrlTree, parentId: string | null, label: string, 
     }),
   }
 }
+
+function findNode(tree: UrlTree, id: string): UrlNode | null {
+  for (const node of tree.nodes) {
+    if (node.id === id)
+      return node
+    if (node.children) {
+      const found = findNode(node.children, id)
+      if (found)
+        return found
+    }
+  }
+  return null
+}
+
+/** 从树里摘下一个参数节点，并修正它原来所在层级的 query / hash 标志。 */
+function detachNode(tree: UrlTree, id: string): { node: UrlNode | null, tree: UrlTree } {
+  const direct = tree.nodes.find(node => node.id === id)
+  if (direct) {
+    const nodes = tree.nodes.filter(node => node.id !== id)
+    return {
+      node: direct,
+      tree: {
+        ...tree,
+        nodes,
+        hasQuery: tree.hasQuery && nodes.some(node => node.kind === 'param'),
+        hasHash: tree.hasHash && nodes.some(node => node.kind === 'hash'),
+      },
+    }
+  }
+
+  let detached: UrlNode | null = null
+  const nodes = tree.nodes.map((node) => {
+    if (!node.children || detached)
+      return node
+    const result = detachNode(node.children, id)
+    detached = result.node
+    return detached ? { ...node, children: result.tree } : node
+  })
+  return { node: detached, tree: detached ? { ...tree, nodes } : tree }
+}
+
+function replaceNode(tree: UrlTree, id: string, replacement: UrlNode): UrlTree {
+  return {
+    ...tree,
+    nodes: tree.nodes.map(node => (node.id === id
+      ? replacement
+      : { ...node, children: node.children ? replaceNode(node.children, id, replacement) : null })),
+  }
+}
+
+function appendNode(tree: UrlTree, source: UrlNode): UrlTree {
+  return {
+    ...tree,
+    nodes: [...tree.nodes, source],
+    hasQuery: source.kind === 'param' ? true : tree.hasQuery,
+    hasHash: source.kind === 'hash' ? true : tree.hasHash,
+  }
+}
+
+function appendNodeToUrl(tree: UrlTree, targetId: string, source: UrlNode): UrlTree {
+  return {
+    ...tree,
+    nodes: tree.nodes.map((node) => {
+      if (node.id === targetId && node.children) {
+        return {
+          ...node,
+          children: appendNode(node.children, source),
+        }
+      }
+      return { ...node, children: node.children ? appendNodeToUrl(node.children, targetId, source) : null }
+    }),
+  }
+}
+
+function findContainingTree(tree: UrlTree, id: string): UrlTree | null {
+  if (tree.nodes.some(node => node.id === id))
+    return tree
+  for (const node of tree.nodes) {
+    if (!node.children)
+      continue
+    const found = findContainingTree(node.children, id)
+    if (found)
+      return found
+  }
+  return null
+}
+
+function insertNodeAfter(tree: UrlTree, targetId: string, source: UrlNode): UrlTree {
+  const index = tree.nodes.findIndex(node => node.id === targetId)
+  if (index >= 0) {
+    return {
+      ...tree,
+      nodes: [...tree.nodes.slice(0, index + 1), source, ...tree.nodes.slice(index + 1)],
+      hasQuery: source.kind === 'param' ? true : tree.hasQuery,
+      hasHash: source.kind === 'hash' ? true : tree.hasHash,
+    }
+  }
+  return {
+    ...tree,
+    nodes: tree.nodes.map(node => ({
+      ...node,
+      children: node.children ? insertNodeAfter(node.children, targetId, source) : null,
+    })),
+  }
+}
+
+/**
+ * 判断字段能否拖到目标 key。targetId 为 null 表示顶部根 URL。
+ * URL value 是容器；普通 value 则表示移动到目标所在层级并排在目标后面。
+ */
+export function canMoveNode(tree: UrlTree, sourceId: string, targetId: string | null): boolean {
+  const source = findNode(tree, sourceId)
+  if (!source || (source.kind !== 'param' && source.kind !== 'hash'))
+    return false
+  if (source.id === targetId)
+    return false
+
+  const target = targetId === null ? null : findNode(tree, targetId)
+  if (targetId !== null && !target)
+    return false
+  const targetTree = targetId === null
+    ? tree
+    : target!.children ?? findContainingTree(tree, targetId)
+  if (!targetTree)
+    return false
+
+  const targetIsDescendant = source.children !== null
+    && targetId !== null
+    && findNode(source.children, targetId) !== null
+  if (targetIsDescendant && (!target!.children || source.kind === 'hash'))
+    return false
+
+  if (source.kind === 'hash') {
+    // 一个 URL 只能有一个 hash，目标已有另一个 hash 时不静默覆盖。
+    return !targetTree.nodes.some(node => node.kind === 'hash' && node.id !== sourceId)
+  }
+  return true
+}
+
+/**
+ * 把参数 / hash 字段拖到目标 key：目标 value 是 URL 时移入该 URL，
+ * 否则移动到目标所在层级并排在目标后面。URL 字段会连同全部子参数一起移动。
+ * URL 字段拖到顶部根 URL 时，子 URL 整体替换根树，不保留原根 URL 的其他参数。
+ */
+export function moveNode(tree: UrlTree, sourceId: string, targetId: string | null): UrlTree {
+  if (!canMoveNode(tree, sourceId, targetId))
+    return tree
+
+  const source = findNode(tree, sourceId)!
+  if (targetId === null && source.kind === 'param' && source.children)
+    return source.children
+
+  // URL 参数拖入自己子树里的 URL：先把目标从源 URL 摘下并提升到源的位置，
+  // 再把去掉目标后的源 URL 放进目标，等价于旋转父子关系，双方其他参数都保留。
+  if (targetId !== null && source.kind === 'param' && source.children) {
+    const target = findNode(source.children, targetId)
+    if (target?.children) {
+      const detachedTarget = detachNode(source.children, targetId)
+      const rotatedSource = { ...source, children: detachedTarget.tree }
+      const rotatedTarget = {
+        ...target,
+        children: {
+          ...target.children,
+          nodes: [...target.children.nodes, rotatedSource],
+          hasQuery: true,
+        },
+      }
+      return replaceNode(tree, sourceId, rotatedTarget)
+    }
+  }
+
+  const detached = detachNode(tree, sourceId)
+  if (!detached.node)
+    return tree
+  if (targetId === null)
+    return appendNode(detached.tree, detached.node)
+  const target = findNode(detached.tree, targetId)
+  return target?.children
+    ? appendNodeToUrl(detached.tree, targetId, detached.node)
+    : insertNodeAfter(detached.tree, targetId, detached.node)
+}

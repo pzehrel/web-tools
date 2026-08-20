@@ -21,7 +21,7 @@ export default defineConfig({
     },
   },
   ssgOptions: {
-    // 嵌套目录输出：/tools/url-parser -> /tools/url-parser/index.html，静态托管直出
+    // 嵌套目录输出：/tools/url-qrcode -> /tools/url-qrcode/index.html，静态托管直出
     dirStyle: 'nested',
   },
   server: {
