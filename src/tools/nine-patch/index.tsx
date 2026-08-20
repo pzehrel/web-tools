@@ -13,6 +13,7 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link } from 'react-router'
 
 import { Seo } from '@/components/seo'
@@ -343,8 +344,13 @@ export default function NinePatchTool() {
   const [previewZoom, setPreviewZoom] = useState(1)
   const [dragOver, setDragOver] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
-  /** 预览框尺寸（px）：拖拽四边 / 右下角调整 */
+  /** 预览框尺寸（px）：拖拽四边 / 四角调整 */
   const [previewSize, setPreviewSize] = useState({ w: 320, h: 180 })
+  /**
+   * 预览框的缩边补偿位移（屏幕 px）：拖拽时以渲染结果为准量出锚定边（对边 / 对角）的
+   * 实际位移并反向抵消，保证只有被拖的边在动——对居中、溢出裁切、平移缩放都成立。
+   */
+  const [resizeOffset, setResizeOffset] = useState({ x: 0, y: 0 })
   const [codeFormat, setCodeFormat] = useState<CodeFormat>('scss')
   const [codeStyle, setCodeStyle] = useState<CodeStyle>('longhand')
   const [copied, setCopied] = useState(false)
@@ -358,8 +364,19 @@ export default function NinePatchTool() {
   const previewStageRef = useRef<HTMLDivElement>(null)
   /** 切线拖拽快照：指针 id + 边 + 起始指针坐标 + 起始边距（图像 px） */
   const lineDragRef = useRef<{ pointerId: number, side: Side, startClient: number, startValue: number } | null>(null)
-  /** 预览框缩边拖拽快照 */
-  const resizeDragRef = useRef<{ pointerId: number, edge: ResizeEdge | ResizeCorner, startX: number, startY: number, baseW: number, baseH: number } | null>(null)
+  /** 预览框缩边拖拽快照：起始指针 / 尺寸 / 缩放 + 锚定边（对边或对角的屏幕坐标，拖拽全程保持不动） */
+  const resizeDragRef = useRef<{
+    pointerId: number
+    edge: ResizeEdge | ResizeCorner
+    startX: number
+    startY: number
+    baseW: number
+    baseH: number
+    startZoom: number
+    boxEl: HTMLElement
+    anchorX: { side: 'left' | 'right', pos: number } | null
+    anchorY: { side: 'top' | 'bottom', pos: number } | null
+  } | null>(null)
   /** 卸载回收用：始终指向最新 image */
   const imageRef = useRef<SourceImage | null>(null)
   imageRef.current = image
@@ -371,7 +388,6 @@ export default function NinePatchTool() {
 
   /** 换图：回收旧 objectURL，切片与边框宽度回到按图推导的默认值 */
   const applyImage = useCallback((img: SourceImage) => {
-    /* eslint-disable react/set-state-in-effect -- 挂载 effect 也走这里初始化内置示例图（canvas 只有客户端可用，无法放进 useState 初值，否则水合不一致） */
     setImage((prev) => {
       if (prev && prev.url.startsWith('blob:'))
         URL.revokeObjectURL(prev.url)
@@ -387,13 +403,10 @@ export default function NinePatchTool() {
     setCropKeep({ w: 1, h: 1 })
     // 小图默认放大，切线更好拖
     setZoom(fitZoom(img.width, img.height))
-    /* eslint-enable react/set-state-in-effect */
   }, [])
 
-  // 首次进入（客户端）自动生成内置示例图，打开即可玩；SSG 环境无 canvas，首渲保持空态
-  useEffect(() => {
-    if (imageRef.current)
-      return
+  /** 载入内置示例图（canvas 只有客户端可用，用户点「试试示例」时现场生成） */
+  const loadDemo = useCallback(() => {
     const demo = createDemoImage()
     if (demo)
       applyImage(demo)
@@ -579,15 +592,43 @@ export default function NinePatchTool() {
     img.src = image.url
   }, [image, cropActive, slice, centerW, centerH, keepW, keepH, croppedW, croppedH])
 
-  /* ---------- 预览框缩边：拖四边改宽 / 高，拖四角同时改 ---------- */
+  /* ---------- 预览框缩边：拖四边改宽 / 高，拖四角同时改；对边 / 对角锚定不动 ---------- */
+
+  /** 被拖的边 / 角 → 需要锚定的对边（屏幕坐标），纯横向或纯纵向拖动的轴返回 null */
+  const anchorFor = (edge: ResizeEdge | ResizeCorner, rect: DOMRect) => ({
+    anchorX: edge === 'right' || edge === 'top-right' || edge === 'bottom-right'
+      ? { side: 'left' as const, pos: rect.left }
+      : edge === 'left' || edge === 'top-left' || edge === 'bottom-left'
+        ? { side: 'right' as const, pos: rect.right }
+        : null,
+    anchorY: edge === 'bottom' || edge === 'bottom-left' || edge === 'bottom-right'
+      ? { side: 'top' as const, pos: rect.top }
+      : edge === 'top' || edge === 'top-left' || edge === 'top-right'
+        ? { side: 'bottom' as const, pos: rect.bottom }
+        : null,
+  })
 
   const onResizePointerDown = useCallback((edge: ResizeEdge | ResizeCorner) => (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0)
       return
     e.preventDefault()
-    resizeDragRef.current = { pointerId: e.pointerId, edge, startX: e.clientX, startY: e.clientY, baseW: previewSize.w, baseH: previewSize.h }
+    // 拖拽柄是预览框的子元素：锚定坐标量自预览框本身
+    const boxEl = e.currentTarget.parentElement as HTMLElement
+    const { anchorX, anchorY } = anchorFor(edge, boxEl.getBoundingClientRect())
+    resizeDragRef.current = {
+      pointerId: e.pointerId,
+      edge,
+      startX: e.clientX,
+      startY: e.clientY,
+      baseW: previewSize.w,
+      baseH: previewSize.h,
+      startZoom: previewZoom,
+      boxEl,
+      anchorX,
+      anchorY,
+    }
     e.currentTarget.setPointerCapture(e.pointerId)
-  }, [previewSize])
+  }, [previewSize, previewZoom])
 
   const clampPreview = (w: number, h: number) => ({
     w: Math.min(720, Math.max(96, Math.round(w))),
@@ -598,9 +639,9 @@ export default function NinePatchTool() {
     const drag = resizeDragRef.current
     if (!drag || drag.pointerId !== e.pointerId)
       return
-    // 预览有视图缩放：屏幕位移换算回盒子的逻辑像素
-    const dx = (e.clientX - drag.startX) / previewZoom
-    const dy = (e.clientY - drag.startY) / previewZoom
+    // 预览有视图缩放：屏幕位移换算回盒子的逻辑像素（用拖拽起始缩放，全程一致）
+    const dx = (e.clientX - drag.startX) / drag.startZoom
+    const dy = (e.clientY - drag.startY) / drag.startZoom
     let w = drag.baseW
     let h = drag.baseH
     if (drag.edge === 'right' || drag.edge === 'top-right' || drag.edge === 'bottom-right')
@@ -611,8 +652,20 @@ export default function NinePatchTool() {
       h = drag.baseH + dy
     else if (drag.edge === 'top' || drag.edge === 'top-left' || drag.edge === 'top-right')
       h = drag.baseH - dy
-    setPreviewSize(clampPreview(w, h))
-  }, [previewZoom])
+    // 先同步提交尺寸，再量出锚定边的实际位移并反向补偿：
+    // 直接以渲染结果为准，对居中布局 / 溢出裁切 / 平移缩放都成立。
+    // flushSync 是有意为之：必须在同一个 pointermove 里「提交 → 测量 → 校正」，
+    // 否则只能按假定的布局模型推算补偿量（居中 + m-auto 在盒子溢出舞台时会失效）；
+    // 作用域只有预览框小子树，每次移动的同步开销可忽略。
+    /* eslint-disable react/dom-no-flush-sync -- 拖拽测量-校正回路需要同步提交 */
+    flushSync(() => setPreviewSize(clampPreview(w, h)))
+    const rect = drag.boxEl.getBoundingClientRect()
+    const cx = drag.anchorX ? (drag.anchorX.side === 'left' ? rect.left : rect.right) - drag.anchorX.pos : 0
+    const cy = drag.anchorY ? (drag.anchorY.side === 'top' ? rect.top : rect.bottom) - drag.anchorY.pos : 0
+    if (cx !== 0 || cy !== 0)
+      flushSync(() => setResizeOffset(prev => ({ x: prev.x - cx, y: prev.y - cy })))
+    /* eslint-enable react/dom-no-flush-sync */
+  }, [])
 
   const onResizePointerEnd = useCallback(() => {
     resizeDragRef.current = null
@@ -822,10 +875,16 @@ export default function NinePatchTool() {
                           <p className="font-bold">拖拽图片到此处，或</p>
                           <p className="mt-1 text-sm text-muted-foreground">PNG / SVG / WebP 均可，图片不出浏览器</p>
                         </div>
-                        <Button type="button" onClick={() => fileInputRef.current?.click()}>
-                          <ImagePlus />
-                          选择图片
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button type="button" onClick={() => fileInputRef.current?.click()}>
+                            <ImagePlus />
+                            选择图片
+                          </Button>
+                          <Button type="button" variant="outline" onClick={loadDemo}>
+                            <Frame />
+                            试试示例
+                          </Button>
+                        </div>
                       </div>
                     )}
               </div>
@@ -893,7 +952,7 @@ export default function NinePatchTool() {
                         style={{
                           width: (previewSize.w + 24) * previewZoom,
                           height: (previewSize.h + 24) * previewZoom,
-                          transform: `translate(${previewPan.offset.x}px, ${previewPan.offset.y}px)`,
+                          transform: `translate(${previewPan.offset.x + resizeOffset.x}px, ${previewPan.offset.y + resizeOffset.y}px)`,
                         }}
                       >
                         <div
@@ -964,8 +1023,8 @@ export default function NinePatchTool() {
                       <p className="m-auto text-sm text-muted-foreground">先导入一张图片</p>
                     )}
               </div>
-              {/* 平移 / 缩放后：悬浮「重置视图」 */}
-              {(previewPan.offset.x !== 0 || previewPan.offset.y !== 0 || previewZoom !== 1) && (
+              {/* 平移 / 缩放 / 缩边补偿后：悬浮「重置视图」回到居中 */}
+              {(previewPan.offset.x !== 0 || previewPan.offset.y !== 0 || previewZoom !== 1 || resizeOffset.x !== 0 || resizeOffset.y !== 0) && (
                 <Button
                   type="button"
                   variant="outline"
@@ -976,6 +1035,7 @@ export default function NinePatchTool() {
                   onClick={() => {
                     previewPan.resetPan()
                     setPreviewZoom(1)
+                    setResizeOffset({ x: 0, y: 0 })
                   }}
                 >
                   <RotateCcw />

@@ -9,7 +9,7 @@ function App() {
     <div className="mx-auto max-w-5xl px-4">
       <Seo
         title={null}
-        description="纯前端实现的 Web 工具集合：二维码互转、URL 参数解析。所有工具在浏览器本地运行，不上传任何数据。"
+        description="纯前端实现的 Web 工具集合：URL 参数解析、二维码互转。所有工具在浏览器本地运行，不上传任何数据。"
       />
       {/* 顶栏：印章式 logo + 字标 */}
       <header className="flex h-24 items-center gap-3">

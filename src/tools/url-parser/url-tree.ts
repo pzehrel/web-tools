@@ -58,8 +58,8 @@ function safeDecode(s: string): string {
   }
 }
 
-/** 判断一段文本是否像另一个 URL 或路径（值得展开为子树） */
-export function looksLikeUrl(raw: string): boolean {
+/** 判断一段文本是否像另一个 URL 或路径（原始结构判断，不做解码） */
+function looksLikeUrlRaw(raw: string): boolean {
   const s = raw.trim()
   if (!s)
     return false
@@ -75,6 +75,41 @@ export function looksLikeUrl(raw: string): boolean {
   if (s.includes('&') && s.includes('=')) // 裸查询串 a=1&b=2
     return true
   return false
+}
+
+/**
+ * 判断一段文本是否像另一个 URL 或路径（值得展开为子树）。
+ * 文本可能整体被 percent-encode 过（粘贴自他处），逐层解码后再判。
+ */
+export function looksLikeUrl(raw: string): boolean {
+  let s = raw.trim()
+  for (let i = 0; i <= MAX_DEPTH; i++) {
+    if (looksLikeUrlRaw(s))
+      return true
+    const next = safeDecode(s)
+    if (next === s)
+      return false
+    s = next.trim()
+  }
+  return looksLikeUrlRaw(s)
+}
+
+/**
+ * 值可能叠了多层 percent-encode：逐层解码，返回第一个「像 URL」的结果；
+ * 一直不像则返回单层解码结果（与旧的展示行为一致，避免过度解码普通文本）
+ */
+function decodeToDisplay(raw: string): string {
+  const first = safeDecode(raw)
+  let s = first
+  for (let i = 0; i < MAX_DEPTH; i++) {
+    if (looksLikeUrlRaw(s))
+      return s
+    const next = safeDecode(s)
+    if (next === s)
+      break
+    s = next
+  }
+  return looksLikeUrlRaw(s) ? s : first
 }
 
 function parseAny(raw: string, depth: number): UrlTree {
@@ -126,13 +161,18 @@ function parseAny(raw: string, depth: number): UrlTree {
     queryStr = rest.slice(qi + 1)
     rest = rest.slice(0, qi)
   }
+  else if (!rest.includes('/') && rest.includes('&') && rest.includes('=')) {
+    // 裸查询串 a=1&b=2（无路径部分）：直接按 query 解析，避免整串当作路径段后值递归套娃
+    queryStr = rest
+    rest = ''
+  }
 
   // 路径段
   const leadingSlash = rest.startsWith('/')
   const trailingSlash = rest.length > 1 && rest.endsWith('/')
   const segments = rest.split('/').filter(Boolean)
   segments.forEach((seg, i) => {
-    const value = safeDecode(seg)
+    const value = decodeToDisplay(seg)
     nodes.push({
       id: nid(),
       kind: 'segment',
@@ -150,7 +190,7 @@ function parseAny(raw: string, depth: number): UrlTree {
         continue
       const eq = pair.indexOf('=')
       const key = eq >= 0 ? pair.slice(0, eq) : pair
-      const value = eq >= 0 ? safeDecode(pair.slice(eq + 1)) : ''
+      const value = eq >= 0 ? decodeToDisplay(pair.slice(eq + 1)) : ''
       nodes.push({
         id: nid(),
         kind: 'param',
@@ -165,7 +205,7 @@ function parseAny(raw: string, depth: number): UrlTree {
   // hash：可能是纯锚点，也可能是 SPA 的 hash 路由（#/path?a=1）
   let hashChildren: UrlTree | null = null
   if (hashStr !== null) {
-    const hashValue = safeDecode(hashStr)
+    const hashValue = decodeToDisplay(hashStr)
     if (depth < MAX_DEPTH
       && (hashValue.startsWith('/') || hashValue.includes('?') || hashValue.includes('='))) {
       hashChildren = parseAny(hashValue, depth + 1)
@@ -185,7 +225,16 @@ function parseAny(raw: string, depth: number): UrlTree {
 
 export function parseUrl(input: string): UrlTree {
   seq = 0
-  return parseAny(input, 0)
+  let s = input.trim()
+  // 整串被 percent-encode 过（本身解析不出结构）时逐层解码，直到能解析为止；
+  // 已具备 URL 结构的输入原样解析（其内部编码由组件级解码处理，不能整体解码，否则嵌套参数会泄漏到顶层）
+  for (let i = 0; i < MAX_DEPTH && !looksLikeUrlRaw(s); i++) {
+    const next = safeDecode(s)
+    if (next === s)
+      break
+    s = next.trim()
+  }
+  return parseAny(s, 0)
 }
 
 /**
@@ -275,6 +324,18 @@ export function deleteNode(tree: UrlTree, id: string): UrlTree {
   const hasQuery = tree.hasQuery && nodes.some(n => n.kind === 'param')
   const hasHash = tree.hasHash && nodes.some(n => n.kind === 'hash')
   return { ...tree, nodes, hasQuery, hasHash }
+}
+
+/** 在与某节点相同的层级、紧随其后插入 key=value（找不到时兜底追加到末尾） */
+export function insertParamBelow(tree: UrlTree, afterId: string, label: string, value: string): UrlTree {
+  const param: UrlNode = { id: nid(), kind: 'param', label, value, flag: true, children: null }
+  const insert = (nodes: UrlNode[]): UrlNode[] => {
+    const i = nodes.findIndex(n => n.id === afterId)
+    if (i >= 0)
+      return [...nodes.slice(0, i + 1), param, ...nodes.slice(i + 1)]
+    return nodes.map(n => (n.children ? { ...n, children: { ...n.children, nodes: insert(n.children.nodes) } } : n))
+  }
+  return { ...tree, nodes: insert(tree.nodes), hasQuery: true }
 }
 
 /** 在指定节点（parentId 为 null 表示顶层）下追加一个参数 */

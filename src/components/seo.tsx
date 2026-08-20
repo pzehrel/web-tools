@@ -1,8 +1,8 @@
 import { Head } from 'vite-react-ssg'
 
 const SITE_NAME = 'Web Tools'
-/** 站点正式域名（确定部署域名后替换，用于 canonical / og:url / sitemap / robots） */
-export const SITE_URL = 'https://web-tools.pzehrel.workers.dev'
+/** 站点正式域名，用于 canonical / og:url / sitemap / robots */
+export const SITE_URL = 'https://webtools.pzehrel.com'
 
 interface SeoProps {
   /** 页面名，会拼上站点名；首页传 null 直接用站点标语 */

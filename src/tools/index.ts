@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Film, Frame, Link2, QrCode } from 'lucide-react'
+import { Film, Frame, Link2 } from 'lucide-react'
 
 export interface ToolMeta {
   /** 路由/锚点 id，kebab-case */
@@ -22,17 +22,9 @@ export interface ToolMeta {
  */
 export const tools: ToolMeta[] = [
   {
-    id: 'qrcode-generator',
-    name: '二维码工具',
-    description: '文字与二维码互转，支持历史记录',
-    icon: QrCode,
-    status: 'ready',
-    accentClass: 'bg-chart-2',
-  },
-  {
     id: 'url-parser',
     name: 'URL 解析',
-    description: '任意协议 URL / 路径拆成树，嵌套参数递归展开、可编辑',
+    description: 'URL ⇄ 二维码双向互转；任意协议 URL / 路径拆成树，嵌套参数递归展开、可编辑',
     icon: Link2,
     status: 'ready',
     accentClass: 'bg-chart-3',

@@ -61,7 +61,7 @@ pnpm release    # 发版：生成 CalVer tag（v2026.08.18 格式）并推送，
     fire-and-forget，进程会静默退出不构建。`scripts/ssg-build.mjs` 直接 `await build()`。
 - `wrangler.jsonc`：assets-only Worker（无 Worker 代码），`dist/` 直接作为静态资产；
   `html_handling: 'drop-trailing-slash'`（与 canonical 的无尾斜杠 URL 对齐）。
-- 生产域名：`https://web-tools.pzehrel.workers.dev`
+- 生产域名：`https://webtools.pzehrel.com`（Cloudflare Workers 自定义域名）
   （写在 `src/components/seo.tsx` 的 `SITE_URL`、`public/sitemap.xml`、`public/robots.txt`，
   换域名时三处一起改）。
 

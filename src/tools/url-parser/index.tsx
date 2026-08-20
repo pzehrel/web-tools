@@ -1,7 +1,8 @@
+import type { ChangeEvent, DragEvent, ReactNode } from 'react'
 import type { UrlRecord } from './url-records'
 import type { UrlNode, UrlTree } from './url-tree'
-import { ArrowLeft, Bookmark, Check, CodeXml, Copy, Link2, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, Bookmark, Check, Copy, Download, Link2, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ClientOnly } from 'vite-react-ssg'
 
@@ -10,10 +11,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { readHashParam, writeHashParam } from '@/lib/hash-param'
 import { cn } from '@/lib/utils'
-import { encodeQr } from '../qrcode-generator/qr-codec'
+import { ConfirmDialog } from './confirm-dialog'
+import { decodeQr, encodeQr } from './qr-codec'
 import { generateCode } from './url-code'
 import { useUrlRecords } from './url-records'
-import { addParam, deleteNode, parseUrl, serializeUrl, setNodeValue, updateNode, variableName } from './url-tree'
+import { addParam, deleteNode, insertParamBelow, looksLikeUrl, parseUrl, serializeUrl, setNodeValue, updateNode, variableName } from './url-tree'
 
 /** 层级文字颜色轮换：橙 → 黄 → 绿，暖色系相邻过渡（chart 令牌，随主题联动） */
 const DEPTH_COLORS = ['text-chart-4', 'text-chart-2', 'text-chart-3'] as const
@@ -149,7 +151,7 @@ function ParamRow({
   onEdit,
   onEditValue,
   onEditBase,
-  onAdd,
+  onAddBelow,
   onDelete,
 }: {
   node: UrlNode
@@ -162,8 +164,8 @@ function ParamRow({
   onEditValue: (id: string, value: string) => void
   /** 编辑嵌套 URL 的 base 部分（协议/域名/路径），参数后缀保留 */
   onEditBase: (node: UrlNode, nextBase: string) => void
-  /** 在该 URL 下追加一个字段 */
-  onAdd: (id: string) => void
+  /** 在该行所在层级、该行下方插入 key=value */
+  onAddBelow: (node: UrlNode) => void
   onDelete: (id: string) => void
 }) {
   const color = DEPTH_COLORS[depth % DEPTH_COLORS.length]
@@ -176,6 +178,17 @@ function ParamRow({
   const keyClass = expandable
     ? cn('bg-gradient-to-r bg-clip-text text-transparent', KEY_GRADIENTS[depth % KEY_GRADIENTS.length])
     : color
+
+  // 值是嵌套 URL / 路径时，可复制「该 URL 及其下面所有参数」序列化后的完整串
+  const [copiedSubtree, setCopiedSubtree] = useState(false)
+  const copySubtree = () => {
+    if (!node.children)
+      return
+    void navigator.clipboard.writeText(serializeUrl(node.children)).then(() => {
+      setCopiedSubtree(true)
+      setTimeout(setCopiedSubtree, 1200, false)
+    })
+  }
 
   return (
     <div>
@@ -224,16 +237,26 @@ function ParamRow({
               </>
             )}
 
-        {expandable && (
+        {/* 复制（仅嵌套 URL 行）/ + / x 紧跟内容末尾（不再顶到最右侧），hover 显示 */}
+        {node.children !== null && (
           <button
             type="button"
-            aria-label="添加字段"
-            onClick={() => onAdd(node.id)}
-            className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground"
+            aria-label="复制该 URL 及其所有参数"
+            title="复制该 URL 及其所有参数"
+            onClick={copySubtree}
+            className="ml-1 flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground"
           >
-            <Plus className="size-3" />
+            {copiedSubtree ? <Check className="size-3" /> : <Copy className="size-3" />}
           </button>
         )}
+        <button
+          type="button"
+          aria-label="在下方插入字段"
+          onClick={() => onAddBelow(node)}
+          className={cn('flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground', node.children === null && 'ml-1')}
+        >
+          <Plus className="size-3" />
+        </button>
         <button
           type="button"
           aria-label="删除"
@@ -252,7 +275,7 @@ function ParamRow({
           onEdit={onEdit}
           onEditValue={onEditValue}
           onEditBase={onEditBase}
-          onAdd={onAdd}
+          onAddBelow={onAddBelow}
           onDelete={onDelete}
         />
       )}
@@ -267,7 +290,7 @@ function ParamTree({
   onEdit,
   onEditValue,
   onEditBase,
-  onAdd,
+  onAddBelow,
   onDelete,
 }: {
   tree: UrlTree
@@ -276,7 +299,7 @@ function ParamTree({
   onEdit: (id: string, patch: Partial<Pick<UrlNode, 'label' | 'value'>>) => void
   onEditValue: (id: string, value: string) => void
   onEditBase: (node: UrlNode, nextBase: string) => void
-  onAdd: (id: string) => void
+  onAddBelow: (node: UrlNode) => void
   onDelete: (id: string) => void
 }) {
   const nodes = paramNodes(tree)
@@ -292,7 +315,7 @@ function ParamTree({
           onEdit={onEdit}
           onEditValue={onEditValue}
           onEditBase={onEditBase}
-          onAdd={onAdd}
+          onAddBelow={onAddBelow}
           onDelete={onDelete}
         />
       ))}
@@ -300,8 +323,277 @@ function ParamTree({
   )
 }
 
-function formatTime(time: number) {
-  return new Date(time).toLocaleString('zh-CN', { hour12: false })
+/** 记录卡片里的二维码：按文本异步生成，空态占位 */
+function RecordQr({ text, size = 128 }: { text: string, size?: number }) {
+  const [url, setUrl] = useState('')
+  useEffect(() => {
+    let cancelled = false
+    encodeQr(text, 'L')
+      .then((u) => {
+        if (!cancelled)
+          setUrl(u)
+      })
+      .catch(() => {
+        if (!cancelled)
+          setUrl('')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [text])
+  if (!url) {
+    return (
+      <div className="flex items-center justify-center" style={{ width: size, height: size }}>
+        <QrCode className="size-8 text-muted-foreground" />
+      </div>
+    )
+  }
+  return <img src={url} alt="记录内容二维码" style={{ width: size, height: size }} className="shrink-0" />
+}
+
+/** 只读参数行：与参数板块同样的树形展示（连接符 / 层级着色 / 渐变 key），不可编辑 */
+function StaticRow({ node, depth, isLast, lastFlags }: { node: UrlNode, depth: number, isLast: boolean, lastFlags: boolean[] }) {
+  const color = DEPTH_COLORS[depth % DEPTH_COLORS.length]
+  // 嵌套 URL 的颜色与它下面的子级字段一致
+  const childColor = DEPTH_COLORS[(depth + 1) % DEPTH_COLORS.length]
+  const expandable = node.children !== null && hasParams(node.children)
+  // 值是变量标记（$$name）时高亮展示
+  const isVar = !expandable && variableName(node.value) !== null
+  // 值是嵌套 URL 时，key 用渐变色（本组 → 下一组）；否则纯色
+  const keyClass = expandable
+    ? cn('bg-gradient-to-r bg-clip-text text-transparent', KEY_GRADIENTS[depth % KEY_GRADIENTS.length])
+    : color
+
+  return (
+    <div>
+      <div className="flex items-center gap-0.5 rounded-sm pr-1 leading-5">
+        <TreePrefix lastFlags={lastFlags} isLast={isLast} />
+        {/* key：param 展示参数名，hash 固定为 # */}
+        <span className={cn('shrink-0 px-1 text-sm font-bold', keyClass)}>
+          {node.kind === 'param' ? (node.label || '（空）') : '#'}
+        </span>
+        {/* 值：嵌套 URL 只展示 base（参数已展开成子级），普通值原样展示 */}
+        {expandable
+          ? (
+              <>
+                <span className="shrink-0 font-mono text-muted-foreground select-none">=</span>
+                <span className={cn('flex-1 font-mono text-sm break-all', childColor)}>{baseOfTree(node.children!)}</span>
+              </>
+            )
+          : (
+              <>
+                {(node.kind !== 'param' || node.flag) && (
+                  <span className="shrink-0 font-mono text-muted-foreground select-none">=</span>
+                )}
+                <span className={cn('flex-1 font-mono text-sm break-all', isVar && 'font-bold text-chart-5')}>
+                  {node.value || '（空）'}
+                </span>
+              </>
+            )}
+      </div>
+      {expandable && (
+        <StaticTree tree={node.children!} depth={depth + 1} lastFlags={[...lastFlags, isLast]} />
+      )}
+    </div>
+  )
+}
+
+function StaticTree({ tree, depth, lastFlags }: { tree: UrlTree, depth: number, lastFlags: boolean[] }) {
+  const nodes = paramNodes(tree)
+  return (
+    <div>
+      {nodes.map((node, i) => (
+        <StaticRow
+          key={node.id}
+          node={node}
+          depth={depth}
+          isLast={i === nodes.length - 1}
+          lastFlags={lastFlags}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** 记录预览：二维码 + 只读参数树（与参数板块同样样式）；非 URL 内容原样展示 */
+function RecordPreviewContent({ text }: { text: string }) {
+  const tree = useMemo(() => parseUrl(text), [text])
+  return (
+    <div className="flex gap-3">
+      <RecordQr text={text} size={112} />
+      <div className="min-w-0 flex-1">
+        {!looksLikeUrl(text)
+          ? <p className="text-sm break-all text-popover-foreground">{text}</p>
+          : (
+              <>
+                {/* 根节点：顶层 URL 的 base，颜色与参数字段一致 */}
+                <div className="flex items-center gap-1 leading-5">
+                  <Link2 className={cn('size-3.5 shrink-0', DEPTH_COLORS[0])} />
+                  <span className={cn('flex-1 font-mono text-sm break-all', DEPTH_COLORS[0])}>{baseOfTree(tree)}</span>
+                </div>
+                {hasParams(tree)
+                  ? <StaticTree tree={tree} depth={0} lastFlags={[]} />
+                  : <p className="py-1 pl-6 text-sm text-muted-foreground">没有解析到参数</p>}
+              </>
+            )}
+      </div>
+    </div>
+  )
+}
+
+/** 是否小屏（移动端）：预览从悬停 tooltip 切换为点击弹窗 */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return isMobile
+}
+
+/**
+ * 记录预览的交互壳：
+ * - 桌面端：悬停时在光标上方弹出只读 tooltip（优先右上、放不下换左上、再放不下居中）
+ * - 移动端：点击同样的内容（二维码 / 名称）打开弹窗展示预览
+ */
+function RecordPreviewTip({ text, wide, onSelect, children }: { text: string, wide?: boolean, onSelect?: () => void, children: ReactNode }) {
+  const isMobile = useIsMobile()
+  const [anchor, setAnchor] = useState<{ x: number, y: number } | null>(null)
+  const [pos, setPos] = useState<{ left: number, top: number } | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const tipRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
+
+  // 弹窗开合（原生 <dialog>）
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog)
+      return
+    if (dialogOpen) {
+      if (!dialog.open)
+        dialog.showModal()
+    }
+    else if (dialog.open) {
+      dialog.close()
+    }
+  }, [dialogOpen])
+
+  // 内容渲染完成后按实际尺寸定位（树可能很高，必须先量再摆）
+
+  useLayoutEffect(() => {
+    if (!anchor || !tipRef.current)
+      return
+    const el = tipRef.current
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    // 优先右上：光标右上方留 14px 偏移
+    let left = anchor.x + 14
+    let top = anchor.y - h - 14
+    // 右侧放不下 → 左上
+    if (left + w > vw - 8)
+      left = anchor.x - w - 14
+    // 左侧也放不下 → 中上
+    if (left < 8)
+      left = anchor.x - w / 2
+    // 上方放不下 → 落到光标下方
+    if (top < 8)
+      top = anchor.y + 18
+    left = Math.max(8, Math.min(left, vw - w - 8))
+    top = Math.max(8, Math.min(top, vh - h - 8))
+    setPos(prev => (prev && prev.left === left && prev.top === top ? prev : { left, top }))
+  }, [anchor])
+
+  // 滚动 / Esc 时关闭（内容较高时跟随滚动会跑偏，直接收起更稳）
+  useEffect(() => {
+    if (!anchor)
+      return
+    const hide = () => setAnchor(null)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape')
+        hide()
+    }
+    window.addEventListener('scroll', hide, true)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('scroll', hide, true)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [anchor])
+
+  return (
+    <>
+      <span
+        title={isMobile ? '点击查看预览' : '悬停查看预览'}
+        {...(isMobile
+          ? {
+              // 移动端：点击打开弹窗；捕获阶段拦截，避免触发内部按钮（如二维码的切换选中）
+              onClickCapture: (e: { stopPropagation: () => void }) => {
+                e.stopPropagation()
+                setDialogOpen(true)
+              },
+            }
+          : {
+              onMouseEnter: (e: { clientX: number, clientY: number }) => setAnchor({ x: e.clientX, y: e.clientY }),
+              onMouseLeave: () => setAnchor(null),
+            })}
+        className={cn(
+          'flex min-w-0 cursor-pointer',
+          wide && 'max-w-full',
+        )}
+      >
+        {children}
+      </span>
+      {/* 桌面端悬停 tooltip */}
+      {anchor && !isMobile && (
+        <div
+          ref={tipRef}
+          role="tooltip"
+          style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? 'visible' : 'hidden' }}
+          className={cn(
+            'pointer-events-none fixed z-50 max-h-[60vh] overflow-auto rounded-md border-2 border-border bg-popover px-3 py-2 text-popover-foreground shadow-hard-sm',
+            wide ? 'w-[min(40rem,calc(100vw-1rem))]' : 'max-w-[min(28rem,calc(100vw-1rem))]',
+          )}
+        >
+          <RecordPreviewContent text={text} />
+        </div>
+      )}
+      {/* 移动端预览弹窗 */}
+      <dialog
+        ref={dialogRef}
+        onClose={() => setDialogOpen(false)}
+        // 点击描边 / 背板区域（事件目标是 dialog 本身）时关闭
+        onClick={e => e.target === dialogRef.current && setDialogOpen(false)}
+        className="m-auto w-[min(36rem,calc(100vw-2rem))] rounded-lg border-2 border-border bg-popover p-5 text-popover-foreground shadow-hard-lg backdrop:bg-black/50"
+      >
+        {dialogOpen && (
+          <div className="max-h-[70vh] overflow-auto">
+            <RecordPreviewContent text={text} />
+            <div className="mt-4 flex justify-end gap-2">
+              {onSelect && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    onSelect()
+                    setDialogOpen(false)
+                  }}
+                >
+                  切换到该记录
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
+                关闭
+              </Button>
+            </div>
+          </div>
+        )}
+      </dialog>
+    </>
+  )
 }
 
 /** 保存记录时的默认名：取去掉协议的 base，截断 24 字符 */
@@ -316,11 +608,14 @@ function UrlParserTool() {
   const found = hasParams(tree)
   // 根节点只展示 base（协议 + 主机 + 路径），参数和 # 已在树里展开
   const baseUrl = useMemo(() => baseOfTree(tree), [tree])
+  // 内容是否是 URL / 路径：不是时（如识别出的纯文本二维码）参数树和代码预览保持默认态
+  const isUrl = looksLikeUrl(input)
 
-  // 挂载时从 URL hash 读入初始内容（#url=...，支持分享链接直达）
+  // 挂载时从 URL hash 读入初始内容（#url=...；兼容旧二维码工具分享的 #text=...）
   useEffect(() => {
     const timer = setTimeout(() => {
-      const initial = readHashParam('url')
+      const hash = window.location.hash.slice(1)
+      const initial = hash.startsWith('text=') ? readHashParam('text') : readHashParam('url')
       if (initial)
         setInput(initial)
     }, 0)
@@ -353,9 +648,13 @@ function UrlParserTool() {
     setInput(prev => serializeUrl(deleteNode(parseUrl(prev), id)))
   }, [])
 
-  // 在某个 URL（parentId 为 null 表示顶层）下追加一个字段，默认 key=value 便于继续编辑
-  const handleAdd = useCallback((parentId: string | null) => {
-    setInput(prev => serializeUrl(addParam(parseUrl(prev), parentId, 'key', 'value')))
+  // 在某一行所在层级、其下方插入 key=value（默认值便于继续编辑）
+  const handleAddBelow = useCallback((node: UrlNode | null) => {
+    setInput(prev => serializeUrl(
+      node === null
+        ? addParam(parseUrl(prev), null, 'key', 'value')
+        : insertParamBelow(parseUrl(prev), node.id, 'key', 'value'),
+    ))
   }, [])
 
   const [copied, setCopied] = useState(false)
@@ -386,6 +685,65 @@ function UrlParserTool() {
     }
   }, [input])
 
+  // —— 二维码图片识别（原二维码工具能力）：点击选择 / 拖拽 / 粘贴图片 ——
+  const [qrError, setQrError] = useState('')
+  const [dragging, setDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFile = useCallback(async (file: File) => {
+    setQrError('')
+    try {
+      const result = await decodeQr(file)
+      if (result) {
+        setInput(result)
+      }
+      else {
+        setQrError('未在图片中识别到二维码，换一张更清晰的试试')
+      }
+    }
+    catch {
+      setQrError('图片读取失败，请确认是有效的图片文件')
+    }
+  }, [])
+
+  const onFileChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file)
+      void handleFile(file)
+    e.target.value = ''
+  }, [handleFile])
+
+  const onDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setDragging(false)
+    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
+    if (file)
+      void handleFile(file)
+  }, [handleFile])
+
+  // 全局粘贴：输入框聚焦时不拦截，其余情况粘贴图片即识别
+  useEffect(() => {
+    function onPaste(e: ClipboardEvent) {
+      const target = e.target
+      if (target instanceof HTMLElement && target.closest('textarea, input'))
+        return
+      const file = Array.from(e.clipboardData?.files ?? []).find(f => f.type.startsWith('image/'))
+      if (file)
+        void handleFile(file)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [handleFile])
+
+  const downloadQr = useCallback(() => {
+    if (!qr)
+      return
+    const a = document.createElement('a')
+    a.href = qr
+    a.download = 'qrcode.png'
+    a.click()
+  }, [qr])
+
   const copy = useCallback(() => {
     void navigator.clipboard.writeText(input).then(() => {
       setCopied(true)
@@ -393,8 +751,19 @@ function UrlParserTool() {
     })
   }, [input])
 
+  // 参数板块根节点行：复制序列化后的完整 URL（含下面所有参数，规范化编码）
+  const [copiedTree, setCopiedTree] = useState(false)
+  const copyTree = useCallback(() => {
+    void navigator.clipboard.writeText(serializeUrl(tree)).then(() => {
+      setCopiedTree(true)
+      setTimeout(setCopiedTree, 1200, false)
+    })
+  }, [tree])
+
   // 代码预览：变量原样插值，encodeURIComponent 只包变量本身（按嵌套层级叠加）
   const codeGen = useMemo(() => generateCode(tree), [tree])
+  // 是否声明了 $$变量：有变量才展示代码预览（右侧）
+  const hasVars = useMemo(() => codeGen.tokens.some(t => t.kind === 'var'), [codeGen])
   const [copiedCode, setCopiedCode] = useState(false)
   const copyCode = useCallback(() => {
     void navigator.clipboard.writeText(codeGen.code).then(() => {
@@ -403,20 +772,13 @@ function UrlParserTool() {
     })
   }, [codeGen.code])
 
-  // 记录：主动保存；选中一条后编辑内容会同步更新该记录
+  // 记录：主动保存；记录是稳定快照，点击切换内容，不再静默回写
   const { items: records, add: addRecord, update: updateRecord, remove: removeRecord, clear: clearRecords } = useUrlRecords()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState('')
 
-  // 选中记录后，编辑内容防抖同步回该记录（不再每次改动都新增历史）
-  useEffect(() => {
-    if (!selectedId)
-      return
-    const timer = setTimeout(updateRecord, 300, selectedId, { text: input })
-    return () => clearTimeout(timer)
-  }, [input, selectedId, updateRecord])
-
+  /** 保存为新记录：无论当前是否选中，都新增一条并选中进入重命名 */
   const handleSave = useCallback(() => {
     const name = defaultName(input)
     const id = addRecord(input, name)
@@ -428,12 +790,20 @@ function UrlParserTool() {
     }
   }, [input, addRecord])
 
+  /** 更新：把当前内容回写到选中的记录（名称保持不变） */
+  const handleUpdate = useCallback(() => {
+    if (selectedId)
+      updateRecord(selectedId, { text: input })
+  }, [input, selectedId, updateRecord])
+
   const toggleSelect = useCallback((item: UrlRecord) => {
+    // 再次点击取消选中；切换到另一条时不回写输入框当前内容
     if (selectedId === item.id) {
       setSelectedId(null)
       return
     }
     setSelectedId(item.id)
+    setRenamingId(null)
     setInput(item.text)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [selectedId])
@@ -444,16 +814,21 @@ function UrlParserTool() {
     setRenamingId(null)
   }, [renamingId, nameDraft, updateRecord])
 
-  const handleRemoveRecord = useCallback((id: string) => {
-    if (selectedId === id)
+  // 删除 / 清空记录需二次确认
+  const [confirmState, setConfirmState] = useState<{ kind: 'remove', id: string } | { kind: 'clear' } | null>(null)
+  const handleConfirm = useCallback(() => {
+    if (!confirmState)
+      return
+    if (confirmState.kind === 'remove') {
+      if (selectedId === confirmState.id)
+        setSelectedId(null)
+      removeRecord(confirmState.id)
+    }
+    else {
       setSelectedId(null)
-    removeRecord(id)
-  }, [selectedId, removeRecord])
-
-  const handleClearRecords = useCallback(() => {
-    setSelectedId(null)
-    clearRecords()
-  }, [clearRecords])
+      clearRecords()
+    }
+  }, [confirmState, selectedId, removeRecord, clearRecords])
 
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
@@ -480,7 +855,7 @@ function UrlParserTool() {
     <div className="mx-auto max-w-5xl px-4 pb-16">
       <Seo
         title="URL 解析"
-        description="把任意协议 URL / 路径的参数拆成文件树，嵌套参数递归展开、层级着色、可编辑；支持 $$变量 声明与代码预览、记录保存与二维码分享。"
+        description="把任意协议 URL / 路径的参数拆成文件树，嵌套参数递归展开、可编辑；内容实时生成二维码，也可上传二维码图片识别；支持 $$变量 声明与代码预览、记录保存。"
         path="/tools/url-parser"
       />
       {/* 顶栏 */}
@@ -495,151 +870,205 @@ function UrlParserTool() {
         </div>
         <div>
           <h1 className="text-lg font-black tracking-tight">URL 解析</h1>
-          <p className="text-sm text-muted-foreground">把 URL / 路径里的参数拆成文件树，嵌套参数递归展开、可编辑</p>
+          <p className="text-sm text-muted-foreground">URL ⇄ 二维码双向互转，参数拆成文件树、嵌套递归展开、可编辑</p>
         </div>
       </header>
 
-      {/* 输入 */}
-      <Card>
-        <CardContent className="flex flex-col gap-3 px-6 py-6">
-          <div className="flex items-stretch gap-3">
+      {/* 输入 + 二维码：左右两块布局，等高对齐 */}
+      <div className="flex flex-col gap-5 md:flex-row md:items-stretch">
+        {/* 输入板块 */}
+        <Card className="min-w-0 flex-1">
+          <CardContent className="flex h-full flex-col gap-3 px-6 py-6">
             <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="粘贴任意 URL 或路径，例如 https://a.com/p?x=1#/hash；参数值写成 $$变量名 可声明变量并在下方生成代码"
-              rows={6}
-              className="w-full flex-1 resize-y rounded-md border-2 border-border bg-background px-3 py-2 font-mono text-sm outline-none placeholder:font-sans placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="min-h-44 w-full flex-1 resize-y rounded-md border-2 border-border bg-background px-3 py-2 font-mono text-sm outline-none placeholder:font-sans placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
-            {/* 二维码区域常驻展示，无内容时占位；点击放大便于扫描密集二维码 */}
-            {qr
-              ? (
-                  <button
-                    type="button"
-                    title="点击放大二维码"
-                    aria-label="放大二维码"
-                    onClick={() => setQrEnlarged(true)}
-                    className="shrink-0 cursor-zoom-in self-start rounded-md transition-transform hover:-translate-y-0.5"
-                  >
+            {qrError && (
+              <p className="rounded-md border-2 border-border bg-destructive/10 px-3 py-2 text-sm font-bold text-destructive">
+                {qrError}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" disabled={!input} onClick={copy}>
+                {copied ? <Check /> : <Copy />}
+                复制
+              </Button>
+              {/* 选中记录时提供「更新」回写该记录；「保存」始终新增一条记录 */}
+              {selectedId && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  disabled={!input.trim()}
+                  title="把当前内容回写到选中的记录"
+                  onClick={handleUpdate}
+                >
+                  <Save />
+                  更新
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!input.trim()}
+                title="保存为新记录"
+                onClick={handleSave}
+              >
+                <Plus />
+                保存
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setInput(EXAMPLE)}>
+                <Sparkles />
+                试试示例
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 二维码板块：与输入框左右布局、等高；二维码填满剩余高度，下载按钮与输入区按钮同一水平线 */}
+        <Card className="flex shrink-0 flex-col md:w-56">
+          <CardContent className="flex h-full flex-col gap-3 px-6 py-6">
+            <div
+              role="button"
+              tabIndex={0}
+              title="点击选择 / 拖拽 / 粘贴二维码图片识别"
+              aria-label="上传二维码图片识别"
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={e => e.key === 'Enter' && fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setDragging(true)
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              className={cn(
+                'flex min-h-0 w-full flex-1 cursor-pointer items-center justify-center overflow-hidden rounded-md border-2 border-border bg-background p-1 transition-colors',
+                !qr && 'border-dashed',
+                dragging ? 'bg-secondary' : 'hover:bg-secondary/50',
+              )}
+            >
+              {qr
+                ? (
                     <img
                       src={qr}
-                      alt="当前内容的二维码"
-                      className="size-36 rounded-md border-2 border-border bg-white object-contain shadow-hard-xs"
+                      alt="当前内容的二维码，点击放大"
+                      title="点击放大二维码"
+                      onClick={(e) => {
+                        // 点图片本身 → 放大；点其余区域 → 上传识别
+                        e.stopPropagation()
+                        setQrEnlarged(true)
+                      }}
+                      className="size-full min-h-0 cursor-zoom-in rounded-sm bg-white object-contain"
                     />
-                  </button>
-                )
-              : (
-                  <div className="flex size-36 shrink-0 self-start items-center justify-center rounded-md border-2 border-dashed border-border/50 text-muted-foreground/40">
-                    <QrCode className="size-8" />
-                  </div>
-                )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" disabled={!input} onClick={copy}>
-              {copied ? <Check /> : <Copy />}
-              复制
+                  )
+                : (
+                    <div className="flex flex-col items-center gap-1 p-2 text-center text-muted-foreground">
+                      <QrCode className="size-8" />
+                      <span className="text-xs">上传二维码识别</span>
+                    </div>
+                  )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={onFileChange}
+              />
+            </div>
+            <Button variant="outline" size="sm" disabled={!qr} onClick={downloadQr} className="shrink-0">
+              <Download />
+              下载
             </Button>
-            <Button variant="default" size="sm" disabled={!input.trim()} onClick={handleSave}>
-              <Save />
-              保存
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setInput(EXAMPLE)}>
-              <Sparkles />
-              试试示例
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* 参数树 */}
+      {/* 参数 + 代码预览：左右融合为一个板块；代码预览仅在存在 $$变量 时出现 */}
       <Card className="mt-5">
         <CardHeader>
           <CardTitle>参数</CardTitle>
-          <CardDescription>点击 key 或 value 即可编辑，改动会同步回上面的完整字符串；值写成 $$变量名 即声明变量</CardDescription>
-        </CardHeader>
-        <CardContent className="pb-6">
-          {!input.trim()
-            ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  输入 URL 或路径后，这里会展示参数树
-                </p>
-              )
-            : (
-                <div>
-                  {/* 根节点：顶层 URL 的 base（可编辑），颜色与下面的参数字段一致 */}
-                  <div className="group flex items-center gap-1 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
-                    <Link2 className={cn('size-3.5 shrink-0', DEPTH_COLORS[0])} />
-                    <EditableText
-                      text={baseUrl}
-                      mono
-                      className={cn('flex-1 break-all', DEPTH_COLORS[0])}
-                      onCommit={next => setInput(next.split(/[?#]/)[0] + suffixOfTree(tree))}
-                    />
-                    <button
-                      type="button"
-                      aria-label="添加字段"
-                      onClick={() => handleAdd(null)}
-                      className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground"
-                    >
-                      <Plus className="size-3" />
-                    </button>
-                  </div>
-                  {found
-                    ? (
-                        <ParamTree tree={tree} depth={0} lastFlags={[]} onEdit={handleEdit} onEditValue={handleEditValue} onEditBase={handleEditBase} onAdd={handleAdd} onDelete={handleDelete} />
-                      )
-                    : (
-                        <p className="py-3 pl-6 text-sm text-muted-foreground">没有解析到参数</p>
-                      )}
-                </div>
-              )}
-        </CardContent>
-      </Card>
-
-      {/* 代码预览：变量生成模板字符串插值，按嵌套层级着色（与参数树一致） */}
-      <Card className="mt-5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CodeXml className="size-4" />
-            代码预览
-          </CardTitle>
           <CardDescription>
-            值写成
+            点击 key 或 value 即可编辑，改动会同步回上面的完整字符串；值写成
             {' '}
             <code className="rounded-sm bg-secondary px-1 font-mono">$$变量名</code>
             {' '}
-            即声明变量（原样插入）；嵌套 URL 里的变量按层级叠对应次数的 encodeURIComponent（只包变量）
+            即声明变量，声明后右侧会生成模板字符串代码（嵌套 URL 里的变量按层级叠对应次数的 encodeURIComponent）
           </CardDescription>
-          <CardAction>
-            <Button variant="ghost" size="sm" disabled={!input.trim()} onClick={copyCode}>
-              {copiedCode ? <Check /> : <Copy />}
-              复制
-            </Button>
-          </CardAction>
+          {hasVars && (
+            <CardAction>
+              <Button variant="ghost" size="sm" disabled={!isUrl} onClick={copyCode}>
+                {copiedCode ? <Check /> : <Copy />}
+                复制代码
+              </Button>
+            </CardAction>
+          )}
         </CardHeader>
         <CardContent className="pb-6">
-          {!input.trim()
+          {!isUrl
             ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  输入 URL 或路径后，这里会生成对应的模板字符串代码
+                  {input.trim() ? '当前内容不是 URL / 路径，参数树保持默认状态' : '输入 URL 或路径后，这里会展示参数树'}
                 </p>
               )
             : (
-                <pre className="overflow-x-auto rounded-md border-2 border-border bg-background p-3 font-mono text-sm leading-6 break-all whitespace-pre-wrap">
-                  {/* eslint-disable react/no-array-index-key -- token 无稳定 id，顺序固定 */}
-                  {codeGen.tokens.map((t, i) => (
-
-                    <span
-                      key={i}
-                      className={cn(
-                        t.kind !== 'static' && DEPTH_COLORS[t.depth % DEPTH_COLORS.length],
-                        t.kind === 'var' && 'font-bold underline',
-                      )}
-                    >
-                      {t.text}
-                    </span>
-                  ))}
-                  {/* eslint-enable react/no-array-index-key */}
-                </pre>
+                <div className="flex flex-col gap-4">
+                  {/* 参数树 */}
+                  <div className="w-full">
+                    {/* 根节点：顶层 URL 的 base（可编辑），颜色与下面的参数字段一致 */}
+                    <div className="group flex items-center gap-1 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
+                      <Link2 className={cn('size-3.5 shrink-0', DEPTH_COLORS[0])} />
+                      <EditableText
+                        text={baseUrl}
+                        mono
+                        className={cn('flex-1 break-all', DEPTH_COLORS[0])}
+                        onCommit={next => setInput(next.split(/[?#]/)[0] + suffixOfTree(tree))}
+                      />
+                      <button
+                        type="button"
+                        aria-label="复制该 URL 及其所有参数"
+                        title="复制该 URL 及其所有参数"
+                        onClick={copyTree}
+                        className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground"
+                      >
+                        {copiedTree ? <Check className="size-3" /> : <Copy className="size-3" />}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="添加字段"
+                        onClick={() => handleAddBelow(null)}
+                        className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground"
+                      >
+                        <Plus className="size-3" />
+                      </button>
+                    </div>
+                    {found
+                      ? (
+                          <ParamTree tree={tree} depth={0} lastFlags={[]} onEdit={handleEdit} onEditValue={handleEditValue} onEditBase={handleEditBase} onAddBelow={handleAddBelow} onDelete={handleDelete} />
+                        )
+                      : (
+                          <p className="py-3 pl-6 text-sm text-muted-foreground">没有解析到参数</p>
+                        )}
+                  </div>
+                  {/* 代码预览：变量生成模板字符串插值，按嵌套层级着色（与参数树一致）；仅在存在变量时展示在参数树下方 */}
+                  {hasVars && (
+                    <pre className="overflow-x-auto rounded-md border-2 border-border bg-background p-3 font-mono text-sm leading-6 break-all whitespace-pre-wrap">
+                      {/* eslint-disable react/no-array-index-key -- token 无稳定 id，顺序固定 */}
+                      {codeGen.tokens.map((t, i) => (
+                        <span
+                          key={i}
+                          className={cn(
+                            t.kind !== 'static' && DEPTH_COLORS[t.depth % DEPTH_COLORS.length],
+                            t.kind === 'var' && 'font-bold underline',
+                          )}
+                        >
+                          {t.text}
+                        </span>
+                      ))}
+                      {/* eslint-enable react/no-array-index-key */}
+                    </pre>
+                  )}
+                </div>
               )}
         </CardContent>
       </Card>
@@ -653,10 +1082,10 @@ function UrlParserTool() {
                 <Bookmark className="size-4" />
                 记录
               </CardTitle>
-              <CardDescription>仅保存在浏览器本地；选中一条后，编辑内容会同步更新该记录</CardDescription>
+              <CardDescription>仅保存在浏览器本地；点击记录即可切换到该记录的内容</CardDescription>
               {records.length > 0 && (
                 <CardAction>
-                  <Button variant="ghost" size="sm" onClick={handleClearRecords}>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmState({ kind: 'clear' })}>
                     <Trash2 />
                     清空
                   </Button>
@@ -671,78 +1100,85 @@ function UrlParserTool() {
                     </p>
                   )
                 : (
-                    <ul className="flex flex-col gap-2">
+                    <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                       {records.map(item => (
                         <li
                           key={item.id}
                           className={cn(
-                            'flex items-center gap-2 rounded-md border-2 bg-background px-3 py-2',
-                            selectedId === item.id ? 'border-primary shadow-hard-xs' : 'border-border',
+                            'flex min-w-0 items-stretch gap-2 rounded-md border-2 bg-background p-2 shadow-hard-xs',
+                            selectedId === item.id ? 'border-primary' : 'border-border',
                           )}
                         >
-                          {renamingId === item.id
-                            ? (
-                                <input
-                                  autoFocus
-                                  value={nameDraft}
-                                  placeholder="给记录起一个名字"
-                                  onChange={e => setNameDraft(e.target.value)}
-                                  onBlur={commitRename}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter')
-                                      commitRename()
-                                    if (e.key === 'Escape')
-                                      setRenamingId(null)
-                                  }}
-                                  className="min-w-0 flex-1 rounded-sm border-2 border-border bg-background px-1 py-0 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                />
-                              )
-                            : (
-                                <button
-                                  type="button"
-                                  title={selectedId === item.id ? '取消选中' : '选中并填入输入框，后续编辑同步更新该记录'}
-                                  onClick={() => toggleSelect(item)}
-                                  className="min-w-0 flex-1 cursor-pointer text-left"
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <span className="truncate text-sm font-bold hover:underline">{item.name || item.text}</span>
-                                    {selectedId === item.id && (
-                                      <span className="shrink-0 rounded-sm bg-primary px-1 text-xs font-bold text-primary-foreground">编辑中</span>
-                                    )}
-                                  </span>
-                                  <span className="block truncate font-mono text-xs text-muted-foreground">{item.text}</span>
-                                </button>
-                              )}
-                          <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-                            {formatTime(item.time)}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="重命名"
-                            onClick={() => {
-                              setRenamingId(item.id)
-                              setNameDraft(item.name)
-                            }}
-                          >
-                            <Pencil />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="复制"
-                            onClick={() => copyHistory(item.id, item.text)}
-                          >
-                            {copiedId === item.id ? <Check /> : <Copy />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="删除"
-                            onClick={() => handleRemoveRecord(item.id)}
-                          >
-                            <Trash2 />
-                          </Button>
+                          {/* 悬停二维码或名称弹出预览（移动端点击打开弹窗），点击切换到该记录 */}
+                          <RecordPreviewTip text={item.text} wide onSelect={() => toggleSelect(item)}>
+                            <button
+                              type="button"
+                              title={selectedId === item.id ? '点击取消选中' : '点击切换到该记录的内容'}
+                              aria-label={`切换到记录 ${item.name || item.text}`}
+                              onClick={() => toggleSelect(item)}
+                              className="flex cursor-pointer items-center"
+                            >
+                              <RecordQr text={item.text} size={64} />
+                            </button>
+                          </RecordPreviewTip>
+                          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-0.5">
+                            {renamingId === item.id
+                              ? (
+                                  <input
+                                    autoFocus
+                                    value={nameDraft}
+                                    placeholder="给记录起一个名字"
+                                    onChange={e => setNameDraft(e.target.value)}
+                                    onBlur={commitRename}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter')
+                                        commitRename()
+                                      if (e.key === 'Escape')
+                                        setRenamingId(null)
+                                    }}
+                                    className="min-w-0 w-full rounded-sm border-2 border-border bg-background px-1 py-0 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                  />
+                                )
+                              : (
+                                  <RecordPreviewTip text={item.text} wide onSelect={() => toggleSelect(item)}>
+                                    <span className="flex min-w-0 items-center gap-1">
+                                      <span className="max-w-full truncate text-sm font-bold">{item.name || item.text}</span>
+                                      {selectedId === item.id && (
+                                        <span className="shrink-0 rounded-sm bg-primary px-1 text-xs font-bold text-primary-foreground">编辑中</span>
+                                      )}
+                                    </span>
+                                  </RecordPreviewTip>
+                                )}
+                            <div className="flex gap-0.5">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="重命名"
+                                onClick={() => {
+                                  setRenamingId(item.id)
+                                  setNameDraft(item.name)
+                                }}
+                              >
+                                <Pencil />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="复制"
+                                onClick={() => copyHistory(item.id, item.text)}
+                              >
+                                {copiedId === item.id ? <Check /> : <Copy />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="删除"
+                                onClick={() => setConfirmState({ kind: 'remove', id: item.id })}
+                              >
+                                <Trash2 />
+                              </Button>
+                            </div>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -769,6 +1205,16 @@ function UrlParserTool() {
           />
         </div>
       )}
+
+      {/* 删除 / 清空记录的二次确认 */}
+      <ConfirmDialog
+        open={confirmState !== null}
+        title={confirmState?.kind === 'clear' ? '清空全部记录' : '删除这条记录'}
+        description={confirmState?.kind === 'clear' ? '所有保存的记录都会被删除，且无法恢复。' : '这条记录会被删除，且无法恢复。'}
+        confirmLabel={confirmState?.kind === 'clear' ? '清空' : '删除'}
+        onConfirm={handleConfirm}
+        onClose={() => setConfirmState(null)}
+      />
     </div>
   )
 }

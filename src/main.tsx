@@ -1,11 +1,10 @@
 import type { DataRouteObject, DOMRouterOpts } from 'react-router'
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, Navigate } from 'react-router'
 import { ViteReactSSG } from 'vite-react-ssg'
 import App from './App.tsx'
 import { RootLayout } from './root-layout.tsx'
 import FrameAnimationTool from './tools/frame-animation'
 import NinePatchTool from './tools/nine-patch'
-import QrCodeTool from './tools/qrcode-generator'
 import UrlParserTool from './tools/url-parser'
 import './index.scss'
 
@@ -27,7 +26,8 @@ export const createRoot = ViteReactSSG({
       element: <RootLayout />,
       children: [
         { id: 'home', path: '/', element: <App /> },
-        { id: 'qrcode-generator', path: '/tools/qrcode-generator', element: <QrCodeTool /> },
+        // 二维码工具已合并进 URL 解析：旧链接 301 式重定向（replace 不留历史记录）
+        { id: 'qrcode-generator', path: '/tools/qrcode-generator', element: <Navigate to="/tools/url-parser" replace /> },
         { id: 'url-parser', path: '/tools/url-parser', element: <UrlParserTool /> },
         { id: 'frame-animation', path: '/tools/frame-animation', element: <FrameAnimationTool /> },
         { id: 'nine-patch', path: '/tools/nine-patch', element: <NinePatchTool /> },
