@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Film, Frame, Link2 } from 'lucide-react'
+import { Film, Frame, Images, Link2 } from 'lucide-react'
 
 export interface ToolMeta {
   /** 路由/锚点 id，kebab-case */
@@ -23,24 +23,32 @@ export interface ToolMeta {
 export const tools: ToolMeta[] = [
   {
     id: 'url-qrcode',
-    name: 'URL 与二维码',
-    description: 'URL 参数解析与二维码双向转换；任意协议 URL / 路径拆成树，嵌套参数递归展开、可编辑',
+    name: '链接解析',
+    description: '拆解 URL 参数，和二维码互相转换',
     icon: Link2,
     status: 'ready',
     accentClass: 'bg-chart-3',
   },
   {
     id: 'frame-animation',
-    name: '帧动画预览',
-    description: '导入多张图片逐帧播放，帧率 / 方向 / 循环 / 缩放可调',
+    name: '帧动画',
+    description: '把多张图片连成动画播放',
     icon: Film,
     status: 'ready',
     accentClass: 'bg-chart-1',
   },
   {
+    id: 'lottie-preview',
+    name: 'Lottie 预览',
+    description: '播放 Lottie 动画并优化图片素材',
+    icon: Images,
+    status: 'ready',
+    accentClass: 'bg-chart-5',
+  },
+  {
     id: 'nine-patch',
-    name: '点九图工具',
-    description: '拖动四条切线定义九宫格，导出 CSS 与裁剪后的最小 PNG',
+    name: '点九图',
+    description: '制作九宫格切片并生成 CSS',
     icon: Frame,
     status: 'ready',
     accentClass: 'bg-chart-4',

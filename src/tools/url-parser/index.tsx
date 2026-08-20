@@ -12,6 +12,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { PopConfirm } from '@/components/ui/pop-confirm'
 import { readHashParam, writeHashParam } from '@/lib/hash-param'
 import { cn } from '@/lib/utils'
+import { DEMO_URL } from '../demos/url-qrcode'
 import { decodeQr, encodeQr } from './qr-codec'
 import { renderQrParameterPreview } from './qr-preview-image'
 import { generateCode } from './url-code'
@@ -27,13 +28,6 @@ const KEY_GRADIENTS = [
   'from-chart-2 from-30% to-chart-3 to-70%',
   'from-chart-3 from-30% to-chart-4 to-70%',
 ] as const
-
-/** 示例：OAuth 授权链接，redirect_uri 内嵌回调地址，回调里再嵌订单详情路径，外加 hash 路由 */
-const EXAMPLE = `https://auth.example.com/oauth/authorize?client_id=shop-web&response_type=code&redirect_uri=${
-  encodeURIComponent(`https://shop.example.com/oauth/callback?next=${
-    encodeURIComponent('/order/detail?id=1024&from=分享卡片')
-  }`)
-}&state=a1b2c3#/consent?source=banner`
 
 /** 只关心参数：查询参数 + hash（hash 内的参数递归取） */
 function paramNodes(tree: UrlTree): UrlNode[] {
@@ -1104,7 +1098,7 @@ function UrlParserTool() {
     <div className="mx-auto max-w-5xl px-4 pb-16">
       <Seo
         title="URL 与二维码"
-        description="解析任意协议的 URL 与路径，递归展开嵌套参数，并与二维码双向转换；支持编辑、拖拽、变量代码预览和本地记录。"
+        description="解析任意协议的 URL 与路径，递归展开嵌套参数，并与二维码双向转换；支持编辑、拖拽、变量代码预览和历史记录。"
         path="/tools/url-qrcode"
       />
       {/* 顶栏 */}
@@ -1140,9 +1134,8 @@ function UrlParserTool() {
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" disabled={!input} onClick={copy}>
+              <Button variant="outline" size="icon-sm" disabled={!input} title="复制" aria-label="复制" onClick={copy}>
                 {copied ? <Check /> : <Copy />}
-                复制
               </Button>
               {/* 选中记录时提供「更新」回写该记录；「保存」始终新增一条记录 */}
               {selectedId && (
@@ -1167,7 +1160,7 @@ function UrlParserTool() {
                 <Plus />
                 保存
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setInput(EXAMPLE)}>
+              <Button variant="secondary" size="sm" onClick={() => setInput(DEMO_URL)}>
                 <Sparkles />
                 试试示例
               </Button>
@@ -1242,17 +1235,16 @@ function UrlParserTool() {
         <CardHeader>
           <CardTitle>参数</CardTitle>
           <CardDescription>
-            点击 key 或 value 即可编辑；任意 key / # 都可拖放：value 是 URL 时移入该 URL，否则移动到目标同一层；URL 会携带其全部参数，拖到顶部 URL 可整体替换；值写成
+            点击 key / value 编辑；写成
             {' '}
             <code className="rounded-sm bg-secondary px-1 font-mono">$$变量名</code>
             {' '}
-            即声明变量，声明后右侧会生成模板字符串代码（嵌套 URL 里的变量按层级叠对应次数的 encodeURIComponent）
+            声明变量，拖放可移动或嵌套节点
           </CardDescription>
           {hasVars && (
             <CardAction>
-              <Button variant="ghost" size="sm" disabled={!isUrl} onClick={copyCode}>
+              <Button variant="ghost" size="icon-sm" disabled={!isUrl} title="复制代码" aria-label="复制代码" onClick={copyCode}>
                 {copiedCode ? <Check /> : <Copy />}
-                复制代码
               </Button>
             </CardAction>
           )}
@@ -1363,16 +1355,10 @@ function UrlParserTool() {
                 <Bookmark className="size-4" />
                 记录
               </CardTitle>
-              <CardDescription>仅保存在浏览器本地；点击记录即可切换到该记录的内容</CardDescription>
               {records.length > 0 && (
                 <CardAction>
                   <PopConfirm
-                    trigger={(
-                      <>
-                        <Trash2 />
-                        清空
-                      </>
-                    )}
+                    trigger={<Trash2 />}
                     triggerAriaLabel="清空全部记录"
                     triggerClassName={buttonVariants({ variant: 'ghost', size: 'sm' })}
                     title="清空全部记录？"

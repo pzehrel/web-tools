@@ -50,7 +50,7 @@ export function ToolCard({ tool }: ToolCardProps) {
       </div>
       {ready && (
         <div className="flex items-center gap-1 self-end text-sm font-bold text-primary">
-          打开工具
+          打开
           <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
         </div>
       )}

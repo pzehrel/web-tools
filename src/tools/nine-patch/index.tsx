@@ -10,6 +10,8 @@ import {
   Link2,
   Link2Off,
   RotateCcw,
+  Sparkles,
+  Trash2,
   TriangleAlert,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -18,11 +20,13 @@ import { Link } from 'react-router'
 
 import { Seo } from '@/components/seo'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DEFAULT_CHECKER_STYLE as CHECKER_STYLE } from '@/lib/checker'
 import { useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
+import { createDemoImage } from '../demos/nine-patch'
 
-/** 已加载的源图：objectURL 或内置示例的 dataURL，绝不离开浏览器 */
+/** 已加载的源图：objectURL 或内置示例的 dataURL */
 interface SourceImage {
   name: string
   url: string
@@ -49,7 +53,7 @@ const SIDES: { side: Side, label: string }[] = [
 ]
 
 /** 导出代码里的占位图名：用户自行替换为实际路径 */
-const EXPORT_IMAGE_NAME = 'nine-patch.png'
+const EXPORT_IMAGE_NAME = 'YOUR-IMAGE-PATH.EXT'
 
 /** 读取用户选择的图片文件；解码失败返回 null */
 function loadImageFile(file: File): Promise<SourceImage | null> {
@@ -63,58 +67,6 @@ function loadImageFile(file: File): Promise<SourceImage | null> {
     }
     img.src = url
   })
-}
-
-/**
- * 内置示例图（96×96，建议切片 24）：
- * 粗描边圆角徽章 + 中心圆点，四角是圆弧、四边是直线段，
- * 切片后拉伸 / 平铺的效果一眼可辨。仅在客户端生成（canvas 无 SSG 环境）。
- */
-function createDemoImage(): SourceImage | null {
-  const size = 96
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')
-  if (!ctx)
-    return null
-
-  const inset = 8
-  const r = 18
-  const x0 = inset
-  const y0 = inset
-  const x1 = size - inset
-  const y1 = size - inset
-  ctx.beginPath()
-  ctx.moveTo(x0 + r, y0)
-  ctx.lineTo(x1 - r, y0)
-  ctx.arcTo(x1, y0, x1, y0 + r, r)
-  ctx.lineTo(x1, y1 - r)
-  ctx.arcTo(x1, y1, x1 - r, y1, r)
-  ctx.lineTo(x0 + r, y1)
-  ctx.arcTo(x0, y1, x0, y1 - r, r)
-  ctx.lineTo(x0, y0 + r)
-  ctx.arcTo(x0, y0, x0 + r, y0, r)
-  ctx.closePath()
-  ctx.fillStyle = '#fff3d6'
-  ctx.fill()
-  ctx.lineWidth = 8
-  ctx.strokeStyle = '#33302b'
-  ctx.stroke()
-
-  // 中心圆点：落在内容区，用于观察 fill 开 / 关的差别
-  ctx.beginPath()
-  ctx.arc(size / 2, size / 2, 10, 0, Math.PI * 2)
-  ctx.fillStyle = '#e2622b'
-  ctx.fill()
-  // 边上小刻度：让 repeat / round / space 的平铺单元可数
-  ctx.fillStyle = '#33302b'
-  ctx.fillRect(size / 2 - 2, y0 - 4, 4, 8)
-  ctx.fillRect(size / 2 - 2, y1 - 4, 4, 8)
-  ctx.fillRect(x0 - 4, size / 2 - 2, 8, 4)
-  ctx.fillRect(x1 - 4, size / 2 - 2, 8, 4)
-
-  return { name: 'demo.png', url: canvas.toDataURL('image/png'), width: size, height: size }
 }
 
 /** 默认切片：短边的 1/4，四边相同 */
@@ -294,12 +246,6 @@ function fitZoom(w: number, h: number): number {
   return Math.min(w, h) < 200 ? 2 : 1
 }
 
-/** 舞台棋盘格底纹：语义令牌双色，随主题联动 */
-const CHECKER_STYLE = {
-  backgroundImage: 'conic-gradient(var(--muted) 25%, transparent 0 50%, var(--muted) 0 75%, transparent 0)',
-  backgroundSize: '16px 16px',
-} as const
-
 /** 裁剪遮罩：前景 / 背景色交叉斜纹——图片内容色不可控，双向条纹保证任意图上至少一组可辨 */
 const CROP_MASK_STYLE = {
   backgroundColor: 'color-mix(in srgb, var(--foreground) 12%, transparent)',
@@ -411,6 +357,19 @@ export default function NinePatchTool() {
     if (demo)
       applyImage(demo)
   }, [applyImage])
+
+  /** 清除图片：回收 objectURL，回到空状态 */
+  const clearImage = useCallback(() => {
+    setImage((prev) => {
+      if (prev && prev.url.startsWith('blob:'))
+        URL.revokeObjectURL(prev.url)
+      return null
+    })
+    setImportError(null)
+    // 与换图同理：裁剪状态随图片一并清掉
+    setCropEnabled(false)
+    setCropKeep({ w: 1, h: 1 })
+  }, [])
 
   // 卸载时回收 objectURL
   useEffect(() => () => {
@@ -783,7 +742,7 @@ export default function NinePatchTool() {
     <div className="mx-auto max-w-5xl px-4 pb-16">
       <Seo
         title="点九图工具"
-        description="上传图片并拖动四条切线定义九宫格切片，实时预览 border-image 的拉伸 / 平铺效果，一键复制 CSS / SCSS / Less 代码，并可裁剪中心区域导出最小体积的 PNG，全部在浏览器本地完成。"
+        description="上传图片并拖动四条切线定义九宫格切片，实时预览 border-image 的拉伸 / 平铺效果，一键复制 CSS / SCSS / Less 代码，并可裁剪中心区域导出最小体积的 PNG。"
         path="/tools/nine-patch"
       />
       {/* 顶栏 */}
@@ -873,7 +832,7 @@ export default function NinePatchTool() {
                         </div>
                         <div>
                           <p className="font-bold">拖拽图片到此处，或</p>
-                          <p className="mt-1 text-sm text-muted-foreground">PNG / SVG / WebP 均可，图片不出浏览器</p>
+                          <p className="mt-1 text-sm text-muted-foreground">PNG / SVG / WebP 均可</p>
                         </div>
                         <div className="flex gap-2">
                           <Button type="button" onClick={() => fileInputRef.current?.click()}>
@@ -881,7 +840,7 @@ export default function NinePatchTool() {
                             选择图片
                           </Button>
                           <Button type="button" variant="outline" onClick={loadDemo}>
-                            <Frame />
+                            <Sparkles />
                             试试示例
                           </Button>
                         </div>
@@ -915,6 +874,16 @@ export default function NinePatchTool() {
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <ImagePlus />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    title="清除图片"
+                    aria-label="清除图片"
+                    onClick={clearImage}
+                  >
+                    <Trash2 />
                   </Button>
                 </div>
               )}
@@ -1232,15 +1201,9 @@ export default function NinePatchTool() {
         <Card>
           <CardHeader>
             <CardTitle>样式代码</CardTitle>
-            <CardDescription>
-              {'把代码里的 '}
-              <code className="font-mono">{EXPORT_IMAGE_NAME}</code>
-              {' 换成你的图片路径即可使用'}
-            </CardDescription>
             <CardAction>
-              <Button type="button" variant="outline" size="sm" onClick={copyCode}>
+              <Button type="button" variant="outline" size="icon-sm" title="复制" aria-label="复制" onClick={copyCode}>
                 {copied ? <Check /> : <Copy />}
-                {copied ? '已复制' : '复制'}
               </Button>
             </CardAction>
           </CardHeader>
@@ -1252,7 +1215,7 @@ export default function NinePatchTool() {
                 onChange={setCodeFormat}
                 options={(['scss', 'less', 'css'] as CodeFormat[]).map(f => ({
                   value: f,
-                  label: f.toUpperCase(),
+                  label: f === 'less' ? 'Less' : f.toUpperCase(),
                 }))}
               />
               <OptionGroup
@@ -1270,7 +1233,19 @@ export default function NinePatchTool() {
               onKeyDown={selectCodeOnShortcut}
               className="overflow-auto rounded-md border-2 border-border bg-muted p-3 font-mono text-xs leading-5 whitespace-pre outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
-              {exportText}
+              {exportText.split(/(url\("[^"]*"\))/g).map(part => (
+                part.startsWith('url(')
+                  ? (
+                      <mark
+                        key={part}
+                        title="下载 PNG 后，把这里换成项目里的实际路径"
+                        className="rounded-sm bg-chart-3/40 px-0.5 font-bold text-foreground"
+                      >
+                        {part}
+                      </mark>
+                    )
+                  : part
+              ))}
             </pre>
           </CardContent>
         </Card>

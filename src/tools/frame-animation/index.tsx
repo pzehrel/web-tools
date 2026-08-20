@@ -18,6 +18,8 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Sparkles,
+  Trash2,
   TriangleAlert,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
@@ -26,10 +28,12 @@ import { Link } from 'react-router'
 import { Seo } from '@/components/seo'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CHECKER_PALETTES, checkerBackground } from '@/lib/checker'
 import { useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
+import { createDemoFrames } from '../demos/frame-animation'
 
-/** 一帧：本地图片的 objectURL，绝不离开浏览器 */
+/** 一帧：图片的 objectURL */
 interface FrameItem {
   id: string
   /** 上传序号：导入时分配，重排 / 裁剪后保持不变 */
@@ -322,7 +326,7 @@ interface ExportParams {
   rows: number
 }
 
-const SPRITE_URL = 'frame-anim-sprite.png'
+const SPRITE_URL = 'YOUR-IMAGE-PATH.EXT'
 
 /** 数字格式：两位小数截尾零 */
 function num(v: number): number {
@@ -338,12 +342,14 @@ function resolveSpriteDims(frameCount: number, axis: SpriteDimensionAxis, value:
     : { cols: Math.ceil(count / primary), rows: primary }
 }
 
-/** 语言差异适配：变量引用 / 变量声明 / 注释 / 「帧数 × 单元宽 px」表达式 */
+/** 语言差异适配：变量引用 / 变量声明 / 注释 / 「帧数 × 单元宽 px」表达式 / keyframes 能否嵌进选择器 */
 interface LangSpec {
   v: (name: string) => string
   decl: (name: string, value: string) => string
   comment: (text: string) => string
   framesTimesPx: (cellW: number) => string
+  /** SCSS / Less 支持 @keyframes 嵌套在选择器内（编译时冒泡到顶层）；原生 CSS 必须平铺 */
+  nestedKeyframes: boolean
 }
 
 const LANG: Record<ExportFormat, LangSpec> = {
@@ -352,18 +358,21 @@ const LANG: Record<ExportFormat, LangSpec> = {
     decl: (n, val) => `  --${n}: ${val};`,
     comment: t => `/* ${t} */`,
     framesTimesPx: w => `calc(var(--frames) * -${w}px)`,
+    nestedKeyframes: false,
   },
   less: {
     v: n => `@${n}`,
     decl: (n, val) => `  @${n}: ${val};`,
     comment: t => `// ${t}`,
     framesTimesPx: w => `(@frames * -${w}px)`,
+    nestedKeyframes: true,
   },
   scss: {
     v: n => `$${n}`,
     decl: (n, val) => `  $${n}: ${val};`,
     comment: t => `// ${t}`,
     framesTimesPx: w => `($frames * -${w}px)`,
+    nestedKeyframes: true,
   },
 }
 
@@ -405,7 +414,7 @@ function buildExport(p: ExportParams, lang: LangSpec): string {
   }
 
   const sizeLines = p.useContainer
-    ? [lang.comment('宽高交给容器：宽度撑满，按单帧宽高比推导高度'), '  width: 100%;', `  aspect-ratio: ${p.cellW} / ${p.cellH};`]
+    ? [`  ${lang.comment('宽高交给容器：宽度撑满，按单帧宽高比推导高度')}`, '  width: 100%;', `  aspect-ratio: ${p.cellW} / ${p.cellH};`]
     : [`  width: ${p.cellW}px;`, `  height: ${p.cellH}px;`]
 
   let bgSizeLine: string | null = null
@@ -438,6 +447,14 @@ function buildExport(p: ExportParams, lang: LangSpec): string {
     ]
   }
 
+  // keyframes：SCSS / Less 嵌进 .frame-anim 内（编译时冒泡），CSS 平铺在顶层
+  const keyframesBlock = [
+    ...(keyframesComment ? [lang.nestedKeyframes ? `  ${keyframesComment}` : keyframesComment] : []),
+    lang.nestedKeyframes ? '  @keyframes frame-anim-play {' : '@keyframes frame-anim-play {',
+    ...keyframeLines.map(line => lang.nestedKeyframes ? `  ${line}` : line),
+    lang.nestedKeyframes ? '  }' : '}',
+  ]
+
   return [
     '.frame-anim {',
     ...varLines,
@@ -447,12 +464,10 @@ function buildExport(p: ExportParams, lang: LangSpec): string {
     ...(bgSizeLine ? [bgSizeLine] : []),
     ...(p.pixelated ? ['  image-rendering: pixelated;'] : []),
     `  animation: frame-anim-play ${duration} ${timing} ${p.iteration} ${p.direction};`,
+    // SCSS / Less：keyframes 嵌进选择器内（编译时冒泡到顶层），CSS：平铺在外
+    ...(lang.nestedKeyframes ? ['', ...keyframesBlock] : []),
     '}',
-    '',
-    ...(keyframesComment ? [keyframesComment] : []),
-    '@keyframes frame-anim-play {',
-    ...keyframeLines,
-    '}',
+    ...(lang.nestedKeyframes ? [] : ['', ...keyframesBlock]),
   ].join('\n')
 }
 
@@ -506,64 +521,7 @@ function OptionGroup<T extends string | number>({
   )
 }
 
-/* ---------- 舞台颜色：单底色 + 算法派生 ---------- */
-
-function hexToRgb(hex: string): [number, number, number] | null {
-  const m = hex.match(/^#?([0-9a-f]{6})$/i)
-  if (!m)
-    return null
-  const n = Number.parseInt(m[1], 16)
-  return [(n >> 16) & 0xFF, (n >> 8) & 0xFF, n & 0xFF]
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-  const c = (v: number) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')
-  return `#${c(r)}${c(g)}${c(b)}`
-}
-
-/** oklch(l c h) → hex（OKLab → LMS → 线性 sRGB → gamma）；解析失败返回 null */
-function oklchToHex(color: string): string | null {
-  const m = color.match(/oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+([\d.]+)/)
-  if (!m)
-    return null
-  const L = m[2] === '%' ? Number(m[1]) / 100 : Number(m[1])
-  const rad = (Number(m[4]) * Math.PI) / 180
-  const a = Number(m[3]) * Math.cos(rad)
-  const b = Number(m[3]) * Math.sin(rad)
-  const l_ = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
-  const m_ = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
-  const s_ = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
-  const gamma = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055) * 255
-  return rgbToHex(
-    gamma(4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_),
-    gamma(-1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_),
-    gamma(-0.0041960863 * l_ - 0.7034186147 * m_ + 1.707614701 * s_),
-  )
-}
-
-/**
- * 由底色派生棋盘格第二色：逐通道反色（255 - c）+ 低透明度叠回底色。
- * 即 B = 底色 × (1 - α) + 反色 × α —— 白底配浅灰、黑底配深灰，
- * 彩色底则是朝反色方向轻轻偏移的同色系色，不会出现洗白 / 死黑。
- * 盲区兜底：中灰的反色≈自身（对比趋近于零），此时退化为按亮度叠黑 / 白。
- */
-const CHECKER_ALPHA = 0.12
-
-function checkerMate(hex: string): string {
-  const rgb = hexToRgb(hex)
-  if (!rgb)
-    return '#cccccc'
-  const a = CHECKER_ALPHA
-  const inv = rgb.map(c => c * (1 - 2 * a) + 255 * a)
-  // 反色对比不足（底色在近中灰区），改用亮度方向叠黑 / 白
-  const dist = Math.abs(inv[0] - rgb[0]) + Math.abs(inv[1] - rgb[1]) + Math.abs(inv[2] - rgb[2])
-  if (dist < 30) {
-    const luminance = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255
-    const overlay = luminance >= 0.5 ? 0 : 255
-    return rgbToHex(...rgb.map(c => c * (1 - a) + overlay * a) as [number, number, number])
-  }
-  return rgbToHex(...inv as [number, number, number])
-}
+/* ---------- 舞台颜色 ---------- */
 
 /** 订阅 <html> 的 dark class 变化（主题切换由 ThemeToggle 驱动） */
 function subscribeDarkClass(onChange: () => void): () => void {
@@ -572,14 +530,13 @@ function subscribeDarkClass(onChange: () => void): () => void {
   return () => ob.disconnect()
 }
 
-function readThemeCardHex(): string {
-  const raw = getComputedStyle(document.documentElement).getPropertyValue('--card').trim()
-  return oklchToHex(raw) ?? '#ffffff'
+function readIsDark(): boolean {
+  return document.documentElement.classList.contains('dark')
 }
 
-/** 主题卡片色（hex）：跟随主题切换实时重算；SSG 快照为空串（首帧透明，挂载后即修正） */
-function useThemeCardHex(): string {
-  return useSyncExternalStore(subscribeDarkClass, readThemeCardHex, () => '')
+/** 是否处于暗色主题：跟随主题切换实时更新 */
+function useIsDarkTheme(): boolean {
+  return useSyncExternalStore(subscribeDarkClass, readIsDark, () => false)
 }
 
 /**
@@ -627,47 +584,6 @@ function BrutalCheckbox({
   )
 }
 
-/** 颜色选择：色块按钮（隐藏原生取色器，点击色块唤起）+ 色值展示；传 checker 时色块画迷你棋盘格预览双色 */
-function ColorField({
-  label,
-  value,
-  onChange,
-  checker,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  /** 棋盘格第二色：传入后色块以 2×2 迷你棋盘展示两个色 */
-  checker?: string
-}) {
-  return (
-    <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-      <span className="relative block size-8 shrink-0 overflow-hidden rounded-md border-2 border-border shadow-hard-xs transition-all hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
-        <span
-          className="absolute inset-0"
-          style={{
-            background: checker
-              ? `conic-gradient(${checker} 25%, ${value} 0 50%, ${checker} 0 75%, ${value} 0) 0 0 / 10px 10px`
-              : value,
-          }}
-        />
-        <input
-          type="color"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          aria-label={label}
-          className="absolute inset-0 size-full cursor-pointer opacity-0"
-        />
-      </span>
-      <span className="font-mono text-xs">
-        {label}
-        {' '}
-        {value}
-      </span>
-    </label>
-  )
-}
-
 export default function FrameAnimationTool() {
   const [frames, setFrames] = useState<FrameItem[]>([])
   const [current, setCurrent] = useState(0)
@@ -682,16 +598,13 @@ export default function FrameAnimationTool() {
   const [loopInfinite, setLoopInfinite] = useState(true)
   const [loopCount, setLoopCount] = useState(3)
   const [stageBg, setStageBg] = useState<StageBg>('checker')
-  /**
-   * 舞台颜色：null = 跟随主题（--card 令牌），用户选色后覆盖。
-   * 棋盘格第二色不单独存，由 checkerMate() 从底色派生。
-   */
-  const [checkerBase, setCheckerBase] = useState<string | null>(null)
-  const [solidBase, setSolidBase] = useState<string | null>(null)
-  const themeCardHex = useThemeCardHex()
-  const resolvedCheckerA = checkerBase ?? themeCardHex
-  const resolvedCheckerB = resolvedCheckerA ? checkerMate(resolvedCheckerA) : ''
-  const resolvedSolid = solidBase ?? themeCardHex
+  /** 棋盘配色：固定 4 套（每套含亮/暗两版），默认浅灰 */
+  const [checkerIndex, setCheckerIndex] = useState(0)
+  const isDark = useIsDarkTheme()
+  const checkerColors = isDark ? CHECKER_PALETTES[checkerIndex].dark : CHECKER_PALETTES[checkerIndex].light
+  /** 纯色背景：同一组 6 套配色（取格 A 色），跟随主题 */
+  const [solidIndex, setSolidIndex] = useState(0)
+  const solidColor = isDark ? CHECKER_PALETTES[solidIndex].dark.a : CHECKER_PALETTES[solidIndex].light.a
   /** 舞台视图缩放（1 = 100%）：滚轮或双指调整，不影响导出 */
   const [zoom, setZoom] = useState(0.75)
   const [pixelated, setPixelated] = useState(false)
@@ -818,6 +731,13 @@ export default function FrameAnimationTool() {
     void addFiles(e.dataTransfer.files)
   }, [addFiles])
 
+  /** 载入内置示例帧（canvas 只有客户端可用，用户点「试试示例」时现场生成） */
+  const loadDemo = useCallback(async () => {
+    const files = await createDemoFrames()
+    if (files)
+      await addFiles(files)
+  }, [addFiles])
+
   /** 跳到指定帧：同步 rAF 游标并打断往返方向 / 循环计数 */
   const jumpTo = useCallback((index: number) => {
     playRef.current = { index, dir: 1, cycles: 0 }
@@ -934,6 +854,23 @@ export default function FrameAnimationTool() {
       return null
     })
   }, [])
+
+  /** 清除全部帧：回收所有 objectURL，回到空状态（精灵图预览随 spriteKey 变空自动清理） */
+  const clearAll = useCallback(() => {
+    setPlaying(false)
+    setCurrent(0)
+    playRef.current = { index: 0, dir: 1, cycles: 0 }
+    finishedRef.current = false
+    setFrames((prev) => {
+      prev.forEach(f => URL.revokeObjectURL(f.url))
+      return []
+    })
+    setSelected(new Set())
+    setRangeRaw(null)
+    closeCropPreview()
+    setCropResult(null)
+    setImportError(null)
+  }, [closeCropPreview])
 
   /** 确认裁剪：按预览的并集矩形裁掉所有帧 */
   const applyCrop = useCallback(async () => {
@@ -1147,9 +1084,22 @@ export default function FrameAnimationTool() {
   const spriteRef = useRef<{ key: string, url: string } | null>(null)
   spriteRef.current = sprite
 
+  /** 丢弃当前精灵图预览并回收 objectURL */
+  const disposeSprite = useCallback(() => {
+    spriteRef.current = null
+    setSprite((prev) => {
+      if (prev)
+        URL.revokeObjectURL(prev.url)
+      return null
+    })
+  }, [])
+
   useEffect(() => {
-    if (!spriteKey)
+    if (!spriteKey) {
+      // 无入选帧（含清除全部）：丢弃旧预览并回收 objectURL
+      disposeSprite()
       return
+    }
     let cancelled = false
     const timer = setTimeout(() => {
       void buildSpriteSheet(exportFramesRef.current, { cols: spriteCols, rows: spriteRows }).then((blob) => {
@@ -1167,7 +1117,7 @@ export default function FrameAnimationTool() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [spriteKey, spriteCols, spriteRows])
+  }, [spriteKey, spriteCols, spriteRows, disposeSprite])
 
   // 卸载回收精灵图预览的 objectURL
   useEffect(() => () => {
@@ -1209,7 +1159,7 @@ export default function FrameAnimationTool() {
     <div className="mx-auto max-w-5xl px-4 pb-16">
       <Seo
         title="帧动画预览"
-        description="导入多张图片逐帧预览动画效果，可调帧率、播放方向、循环次数、缩放与背景，全部在浏览器本地完成，图片不上传。"
+        description="导入多张图片逐帧预览动画效果，可调帧率、播放方向、循环次数、缩放与背景。"
         path="/tools/frame-animation"
       />
       {/* 顶栏 */}
@@ -1224,7 +1174,7 @@ export default function FrameAnimationTool() {
         </div>
         <div>
           <h1 className="text-lg font-black tracking-tight">帧动画预览</h1>
-          <p className="text-sm text-muted-foreground">导入多张图片逐帧播放，帧率 / 方向 / 循环 / 缩放可调，图片不出浏览器</p>
+          <p className="text-sm text-muted-foreground">导入多张图片逐帧播放，帧率 / 方向 / 循环 / 缩放可调</p>
         </div>
       </header>
 
@@ -1260,11 +1210,8 @@ export default function FrameAnimationTool() {
                 )}
                 style={{
                   background: stageBg === 'checker'
-                    // 棋盘格：conic-gradient 四象限拼格；格 B 由底色算法派生
-                    ? (resolvedCheckerA
-                        ? `conic-gradient(${resolvedCheckerB} 25%, ${resolvedCheckerA} 0 50%, ${resolvedCheckerB} 0 75%, ${resolvedCheckerA} 0) 0 0 / 16px 16px`
-                        : 'transparent')
-                    : (resolvedSolid || 'transparent'),
+                    ? checkerBackground(checkerColors.a, checkerColors.b)
+                    : solidColor,
                 }}
               >
                 {frame
@@ -1314,6 +1261,10 @@ export default function FrameAnimationTool() {
                                   <FolderOpen />
                                   添加文件夹
                                 </Button>
+                                <Button type="button" variant="outline" onClick={() => void loadDemo()}>
+                                  <Sparkles />
+                                  试试示例
+                                </Button>
                               </div>
                             </div>
                           )
@@ -1357,6 +1308,16 @@ export default function FrameAnimationTool() {
                   >
                     <FolderOpen />
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    title="清除全部帧"
+                    aria-label="清除全部帧"
+                    onClick={clearAll}
+                  >
+                    <Trash2 />
+                  </Button>
                 </div>
               )}
             </div>
@@ -1380,11 +1341,7 @@ export default function FrameAnimationTool() {
               </span>
               <div
                 className="min-h-24 max-w-full overflow-hidden rounded-md border-2 border-border"
-                style={{
-                  background: resolvedCheckerA
-                    ? `conic-gradient(${resolvedCheckerB} 25%, ${resolvedCheckerA} 0 50%, ${resolvedCheckerB} 0 75%, ${resolvedCheckerA} 0) 0 0 / 12px 12px`
-                    : 'transparent',
-                }}
+                style={{ background: stageBg === 'checker' ? checkerBackground(checkerColors.a, checkerColors.b) : solidColor }}
               >
                 {sprite && sprite.key === spriteKey && spriteKey !== ''
                   ? (
@@ -1707,213 +1664,240 @@ export default function FrameAnimationTool() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              {stageBg === 'checker'
-                ? (
-                    <>
-                      <ColorField
-                        label="棋盘"
-                        value={resolvedCheckerA || '#ffffff'}
-                        onChange={setCheckerBase}
-                        checker={resolvedCheckerB || undefined}
-                      />
-                      {checkerBase !== null && (
-                        <Button type="button" variant="ghost" size="icon-sm" title="恢复跟随主题" aria-label="恢复跟随主题" onClick={() => setCheckerBase(null)}>
-                          <RotateCcw />
-                        </Button>
+              {/* 同一批 DOM 在棋盘格 / 纯色间复用（只换内联样式与选中态），避免卸载重挂造成的闪烁 */}
+              <div
+                className="grid w-full grid-cols-6 items-center gap-2"
+                role="radiogroup"
+                aria-label={stageBg === 'checker' ? '棋盘配色' : '纯色配色'}
+              >
+                {CHECKER_PALETTES.map((palette, index) => {
+                  const colors = isDark ? palette.dark : palette.light
+                  const active = stageBg === 'checker' ? checkerIndex : solidIndex
+                  return (
+                    <button
+                      key={palette.name}
+                      type="button"
+                      role="radio"
+                      aria-checked={active === index}
+                      title={palette.name}
+                      aria-label={palette.name}
+                      onClick={() => {
+                        if (stageBg === 'checker')
+                          setCheckerIndex(index)
+                        else
+                          setSolidIndex(index)
+                      }}
+                      className={cn(
+                        'aspect-square w-full rounded-md border-2 shadow-hard-xs transition-[transform,box-shadow]',
+                        active === index
+                          ? 'border-primary ring-[3px] ring-ring/50'
+                          : 'border-border hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
                       )}
-                    </>
+                      style={{ background: stageBg === 'checker' ? checkerBackground(colors.a, colors.b) : colors.a }}
+                    />
                   )
-                : (
-                    <>
-                      <ColorField label="背景" value={resolvedSolid || '#ffffff'} onChange={setSolidBase} />
-                      {solidBase !== null && (
-                        <Button type="button" variant="ghost" size="icon-sm" title="恢复跟随主题" aria-label="恢复跟随主题" onClick={() => setSolidBase(null)}>
-                          <RotateCcw />
-                        </Button>
-                      )}
-                    </>
-                  )}
+                })}
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* 样式导出（常驻；无入选帧时按钮禁用、代码区占位） */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="col-span-full sm:col-span-1">样式代码</CardTitle>
-          <CardDescription className="col-span-full sm:col-span-1">
-            动画参数实时映射到样式代码；下载精灵图后把 url() 换成项目里的实际路径
-          </CardDescription>
-          <CardAction className="col-span-full col-start-1 row-span-1 row-start-3 mt-2 w-full justify-self-stretch sm:col-span-1 sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:w-auto sm:justify-self-end">
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={!exportText} onClick={() => copyCss(exportText)}>
+      {/* 样式代码 + 帧序列：与上方「预览 + 参数」同列对齐（帧序列 300px 与动画参数一致） */}
+      <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        {/* 样式导出（常驻；无入选帧时按钮禁用、代码区占位）；高度基准：两个板块等高对齐 */}
+        <Card className="min-w-0 lg:h-[35rem]">
+          <CardHeader>
+            <CardTitle>样式代码</CardTitle>
+            <CardAction>
+              <Button type="button" variant="outline" size="icon-sm" disabled={!exportText} title="复制" aria-label="复制" onClick={() => copyCss(exportText)}>
                 {copiedCss ? <Check /> : <Copy />}
-                {copiedCss ? '已复制' : '复制'}
               </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pb-6">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <OptionGroup<ExportFormat>
+                label="导出格式"
+                className="w-fit"
+                value={exportFormat}
+                onChange={setExportFormat}
+                options={[
+                  { value: 'scss', label: 'SCSS' },
+                  { value: 'less', label: 'Less' },
+                  { value: 'css', label: 'CSS' },
+                ]}
+              />
+              <BrutalCheckbox
+                checked={exportVars}
+                onChange={setExportVars}
+                label="变量"
+                title="帧数 / 时长提取为变量，便于集中调整"
+              />
+              <BrutalCheckbox
+                checked={exportContainer}
+                onChange={setExportContainer}
+                label="容器"
+                title="宽高由容器控制（100% + aspect-ratio），帧切换走百分比定位；关闭则写死单帧 px 尺寸"
+              />
             </div>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 pb-6 sm:flex-row sm:items-start">
-          <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 sm:flex-col sm:items-start sm:gap-3">
-            <OptionGroup<ExportFormat>
-              label="导出格式"
-              className="w-fit flex-col"
-              value={exportFormat}
-              onChange={setExportFormat}
-              options={[
-                { value: 'scss', label: 'SCSS' },
-                { value: 'less', label: 'Less' },
-                { value: 'css', label: 'CSS' },
-              ]}
-            />
-            <BrutalCheckbox
-              checked={exportVars}
-              onChange={setExportVars}
-              label="变量"
-              title="帧数 / 时长提取为变量，便于集中调整"
-            />
-            <BrutalCheckbox
-              checked={exportContainer}
-              onChange={setExportContainer}
-              label="容器"
-              title="宽高由容器控制（100% + aspect-ratio），帧切换走百分比定位；关闭则写死单帧 px 尺寸"
-            />
-          </div>
-          <pre
-            tabIndex={0}
-            aria-label="导出样式代码"
-            onKeyDown={selectCodeOnShortcut}
-            className="max-h-96 min-w-0 flex-1 overflow-auto rounded-md border-2 border-border bg-background px-4 py-3 font-mono text-sm leading-relaxed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            {exportText || '// 导入帧后生成样式代码'}
-          </pre>
-        </CardContent>
-      </Card>
+            <pre
+              tabIndex={0}
+              aria-label="导出样式代码"
+              onKeyDown={selectCodeOnShortcut}
+              className="max-h-96 min-w-0 flex-1 overflow-auto rounded-md border-2 border-border bg-background px-4 py-3 font-mono text-sm leading-relaxed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {exportText
+                ? exportText.split(/(url\("[^"]*"\))/g).map(part => (
+                    part.startsWith('url(')
+                      ? (
+                          <mark
+                            key={part}
+                            title="下载精灵图后，把这里换成项目里的实际路径"
+                            className="rounded-sm bg-chart-3/40 px-0.5 font-bold text-foreground"
+                          >
+                            {part}
+                          </mark>
+                        )
+                      : part
+                  ))
+                : '// 导入帧后生成样式代码'}
+            </pre>
+          </CardContent>
+        </Card>
 
-      {/* 帧列表（常驻）：大缩略图网格；勾选 = 入选预览，不提供删除（防误操作） */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="col-span-full sm:col-span-1">
-            帧序列（
-            {frameCount}
-            ）
-          </CardTitle>
-          <CardDescription className="col-span-full sm:col-span-1">勾选参与预览；点击跳转；拖拽重排</CardDescription>
-          <CardAction className="col-span-full col-start-1 row-span-1 row-start-3 mt-2 w-full justify-self-stretch sm:col-span-1 sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:w-auto sm:justify-self-end">
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={toggleSelectAll}>
-                <Check />
-                {selected.size >= frameCount ? '全不选' : '全选'}
-              </Button>
+        {/* 帧列表（常驻）：列表一行一帧；勾选 = 入选预览，不提供删除（防误操作）；高度跟随样式代码板块 */}
+        <Card className="flex min-w-0 flex-col lg:h-[35rem]">
+          <CardHeader>
+            <CardTitle>
+              帧序列（
+              {frameCount}
+              ）
+            </CardTitle>
+            {/* 窄卡片：按钮组换行到标题下方；裁剪独占一行，全选 / 排序同一行 */}
+            <CardAction className="col-start-1 row-start-3 flex w-full flex-col gap-2">
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
+                className="w-full"
                 disabled={cropping}
                 onClick={() => void prepareCrop()}
               >
                 {cropping ? <LoaderCircle className="animate-spin" /> : <Crop />}
-                裁掉公共透明边
+                裁透明边
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={sortByName}>
-                <ArrowDownAZ />
-                按名称排序
-              </Button>
-            </div>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="pb-6">
-          {cropResult && (
-            <p className="mb-3 rounded-md border-2 border-border bg-secondary px-3 py-2 text-sm font-bold">
-              {cropResult}
-            </p>
-          )}
-          <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {frames.map((f, i) => {
-              const isActive = selected.has(f.id)
-              const activeIdx = isActive ? activeFrames.indexOf(f) : -1
-              return (
-                <li
-                  key={f.id}
-                  draggable
-                  title={`${f.name} · ${f.width} × ${f.height} · ${formatSize(f.size)}`}
-                  onDragStart={(e) => {
-                    dragIndexRef.current = i
-                    e.dataTransfer.effectAllowed = 'move'
-                  }}
-                  onDragOver={(e) => {
-                    if (dragIndexRef.current === null)
-                      return
-                    e.preventDefault()
-                    e.dataTransfer.dropEffect = 'move'
-                    // 网格布局：按指针在格子的左 / 右半部分决定插入到目标之前还是之后
-                    const rect = e.currentTarget.getBoundingClientRect()
-                    const after = e.clientX > rect.left + rect.width / 2
-                    setDropTarget({ index: i, after })
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    const from = dragIndexRef.current
-                    if (from !== null) {
+              <div className="flex w-full gap-2">
+                <Button type="button" variant="outline" size="sm" className="flex-1" onClick={toggleSelectAll}>
+                  <Check />
+                  {selected.size >= frameCount ? '全不选' : '全选'}
+                </Button>
+                <Button type="button" variant="outline" size="sm" className="flex-1" onClick={sortByName}>
+                  <ArrowDownAZ />
+                  排序
+                </Button>
+              </div>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="min-h-0 flex-1 overflow-y-auto pb-6">
+            {cropResult && (
+              <p className="mb-3 rounded-md border-2 border-border bg-secondary px-3 py-2 text-sm font-bold">
+                {cropResult}
+              </p>
+            )}
+            <ul className="flex flex-col gap-2">
+              {frames.map((f, i) => {
+                const isActive = selected.has(f.id)
+                const activeIdx = isActive ? activeFrames.indexOf(f) : -1
+                return (
+                  <li
+                    key={f.id}
+                    draggable
+                    title={`${f.name} · ${f.width} × ${f.height} · ${formatSize(f.size)}`}
+                    onDragStart={(e) => {
+                      dragIndexRef.current = i
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onDragOver={(e) => {
+                      if (dragIndexRef.current === null)
+                        return
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'move'
+                      // 列表布局：按指针在行的上 / 下半部分决定插入到目标之前还是之后
                       const rect = e.currentTarget.getBoundingClientRect()
-                      moveFrameTo(from, i, e.clientX > rect.left + rect.width / 2)
-                    }
-                    dragIndexRef.current = null
-                    setDropTarget(null)
-                  }}
-                  onDragEnd={() => {
-                    dragIndexRef.current = null
-                    setDropTarget(null)
-                  }}
-                  className={cn(
-                    'relative overflow-hidden rounded-md border-2 transition-colors',
-                    isActive ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-40',
-                    'border-border/40 hover:border-border',
-                    // 插入指示线：竖向内阴影，颜色走令牌
-                    dropTarget?.index === i && (dropTarget.after
-                      ? 'shadow-[inset_-3px_0_0_0_var(--color-primary)]'
-                      : 'shadow-[inset_3px_0_0_0_var(--color-primary)]'),
-                  )}
-                  onClick={() => {
-                    if (!isActive)
-                      return
-                    setPlaying(false)
-                    jumpTo(activeIdx)
-                  }}
-                >
-                  <img
-                    src={f.url}
-                    alt={f.name}
-                    draggable={false}
-                    className="h-28 w-full object-contain"
-                  />
-                  {/* 上传序号：叠加在图左上角，重排不变 */}
-                  <span className="absolute top-1 left-1 rounded-sm border-2 border-border bg-background px-1 font-mono text-[10px] leading-4 font-bold">
-                    #
-                    {f.seq}
-                  </span>
-                  {/* 勾选 = 入选预览 */}
-                  <span
-                    className="absolute top-1.5 right-1.5"
-                    onClick={e => e.stopPropagation()}
+                      const after = e.clientY > rect.top + rect.height / 2
+                      setDropTarget({ index: i, after })
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      const from = dragIndexRef.current
+                      if (from !== null) {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        moveFrameTo(from, i, e.clientY > rect.top + rect.height / 2)
+                      }
+                      dragIndexRef.current = null
+                      setDropTarget(null)
+                    }}
+                    onDragEnd={() => {
+                      dragIndexRef.current = null
+                      setDropTarget(null)
+                    }}
+                    className={cn(
+                      'flex items-center gap-1.5 overflow-hidden rounded-md border-2 px-2 py-1.5 transition-colors',
+                      isActive ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-40',
+                      'border-border/40 hover:border-border',
+                      // 插入指示线：横向内阴影，颜色走令牌
+                      dropTarget?.index === i && (dropTarget.after
+                        ? 'shadow-[inset_0_-3px_0_0_var(--color-primary)]'
+                        : 'shadow-[inset_0_3px_0_0_var(--color-primary)]'),
+                    )}
+                    onClick={() => {
+                      if (!isActive)
+                        return
+                      setPlaying(false)
+                      jumpTo(activeIdx)
+                    }}
                   >
-                    <BrutalCheckbox
-                      checked={isActive}
-                      onChange={() => toggleSelect(f.id)}
-                      title={isActive ? `移出预览：${f.name}` : `加入预览：${f.name}`}
+                    {/* 缩略图 */}
+                    {/* 勾选 = 入选预览（最左） */}
+                    <span
+                      className="shrink-0"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <BrutalCheckbox
+                        checked={isActive}
+                        onChange={() => toggleSelect(f.id)}
+                        title={isActive ? `移出预览：${f.name}` : `加入预览：${f.name}`}
+                      />
+                    </span>
+                    <img
+                      src={f.url}
+                      alt={f.name}
+                      draggable={false}
+                      className="h-10 w-10 shrink-0 rounded-sm object-contain"
+                      style={{ background: stageBg === 'checker' ? checkerBackground(checkerColors.a, checkerColors.b) : solidColor }}
                     />
-                  </span>
-                  {/* 文件名：叠加在图底部 */}
-                  <span className="absolute inset-x-0 bottom-0 truncate border-t-2 border-border bg-background/90 px-1.5 py-0.5 text-[11px] font-bold">
-                    {f.name}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        </CardContent>
-      </Card>
+                    {/* 文件名（去扩展名）+ 尺寸/体积（两行） */}
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate text-sm font-bold">
+                        {f.name.replace(/\.[^.]+$/, '')}
+                      </span>
+                      <span className="truncate font-mono text-xs text-muted-foreground">
+                        {`${f.width}×${f.height} · ${formatSize(f.size)}`}
+                      </span>
+                    </span>
+                    {/* 上传序号：最右，重排不变 */}
+                    <span className="shrink-0 rounded-sm border-2 border-border bg-background px-1 font-mono text-[10px] leading-4 font-bold">
+                      #
+                      {f.seq}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* 裁剪确认弹窗：所有帧叠放预览（最后一帧垫底），虚线框出保留区域 */}
       {cropPreview && (
@@ -1982,11 +1966,7 @@ export default function FrameAnimationTool() {
             <div className="mt-4 flex justify-center">
               <div
                 className="rounded-md border-2 border-border p-2"
-                style={{
-                  background: resolvedCheckerA
-                    ? `conic-gradient(${resolvedCheckerB} 25%, ${resolvedCheckerA} 0 50%, ${resolvedCheckerB} 0 75%, ${resolvedCheckerA} 0) 0 0 / 12px 12px`
-                    : 'transparent',
-                }}
+                style={{ background: checkerBackground(checkerColors.a, checkerColors.b) }}
               >
                 <div className="relative w-fit">
                   <img
