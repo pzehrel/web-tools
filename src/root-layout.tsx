@@ -1,14 +1,12 @@
 import { Outlet } from 'react-router'
-import { SiteFooter } from '@/components/site-footer'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { SiteActions } from '@/components/site-actions'
 
-/** 全局布局：页面出口 + 主题切换 + 页脚 */
+/** 全局布局：页面出口 + 右上角站点操作 */
 export function RootLayout() {
   return (
     <>
       <Outlet />
-      <ThemeToggle />
-      <SiteFooter />
+      <SiteActions />
     </>
   )
 }
