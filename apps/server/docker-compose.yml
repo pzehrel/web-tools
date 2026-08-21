@@ -1,0 +1,32 @@
+# 语法预留（当前不构建/不部署，仅记录目标形态）
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: apps/server/Dockerfile
+    ports:
+      - '8787:8787'
+    environment:
+      DATABASE_URL: postgres://webtools:webtools@postgres:5432/webtools
+      DATA_DIR: /data/files
+      TRUST_PROXY: '1'
+    volumes:
+      - ./data/files:/data/files
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: webtools
+      POSTGRES_PASSWORD: webtools
+      POSTGRES_DB: webtools
+    volumes:
+      - ./data/pg:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U webtools]
+      interval: 5s
+      timeout: 3s
+      retries: 10

@@ -1,0 +1,30 @@
+{
+  "name": "@web-tools/server",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web 工具集合后端（Hono + Drizzle + Postgres）",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.0",
+    "@hono/zod-validator": "^0.9.0",
+    "drizzle-orm": "^0.44.0",
+    "hono": "^4.8.0",
+    "pg": "^8.16.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.15.0",
+    "drizzle-kit": "^0.31.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.2"
+  }
+}

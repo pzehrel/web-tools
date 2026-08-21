@@ -7,6 +7,7 @@
   "description": "A collection of pure frontend web tools (monorepo root)",
   "scripts": {
     "dev": "pnpm --filter @web-tools/web dev",
+    "dev:server": "pnpm --filter @web-tools/server dev",
     "build": "pnpm --filter @web-tools/web build",
     "preview": "pnpm --filter @web-tools/web preview",
     "lint": "eslint .",

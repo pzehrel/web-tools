@@ -205,3 +205,7 @@ dist
 .vercel
 .env*
 .playwright-cli/
+
+# server 本地数据卷与 env
+apps/server/data/
+apps/server/.env
