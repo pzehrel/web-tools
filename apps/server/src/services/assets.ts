@@ -4,6 +4,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import type { Db } from '../db/index.ts'
 import { assets } from '../db/schema.ts'
 import { newBlobKey, newId } from '../ids.ts'
+import type { Identity } from '../identity.ts'
 import { FsBlobStore } from '../storage/fs.ts'
 import type { BlobStore } from '../storage/types.ts'
 
@@ -35,6 +36,13 @@ interface SaveInput {
   meta?: Record<string, unknown>
 }
 
+/** 登录按 userId 查，匿名按 deviceId 查 */
+function ownerCond(owner: Identity) {
+  return owner.userId
+    ? eq(assets.userId, owner.userId)
+    : eq(assets.deviceId, owner.deviceId!)
+}
+
 function toSummary(r: typeof assets.$inferSelect): AssetSummary {
   return {
     id: r.id,
@@ -57,21 +65,21 @@ export class AssetService {
     this.blobs = blobs
   }
 
-  async list(deviceId: string, toolId: string): Promise<AssetSummary[]> {
+  async list(owner: Identity, toolId: string): Promise<AssetSummary[]> {
     const rows = await this.db
       .select()
       .from(assets)
-      .where(and(eq(assets.deviceId, deviceId), eq(assets.toolId, toolId)))
+      .where(and(ownerCond(owner), eq(assets.toolId, toolId)))
       .orderBy(desc(assets.updatedAt))
       .limit(500)
     return rows.map(toSummary)
   }
 
-  async get(deviceId: string, toolId: string, id: string): Promise<AssetBody | undefined> {
+  async get(owner: Identity, toolId: string, id: string): Promise<AssetBody | undefined> {
     const [row] = await this.db
       .select()
       .from(assets)
-      .where(and(eq(assets.deviceId, deviceId), eq(assets.toolId, toolId), eq(assets.id, id)))
+      .where(and(ownerCond(owner), eq(assets.toolId, toolId), eq(assets.id, id)))
       .limit(1)
     if (!row)
       return undefined
@@ -82,7 +90,7 @@ export class AssetService {
   }
 
   /** 保存（同 id 覆盖，upsert 语义，与前端 save 对齐） */
-  async save(deviceId: string, input: SaveInput): Promise<AssetSummary> {
+  async save(owner: Identity, input: SaveInput): Promise<AssetSummary> {
     const id = input.id ?? newId()
     let blobKey: string | undefined
     let inlinePayload: string | undefined
@@ -105,7 +113,8 @@ export class AssetService {
       .insert(assets)
       .values({
         id,
-        deviceId,
+        deviceId: owner.deviceId ?? null,
+        userId: owner.userId ?? null,
         toolId: input.toolId,
         inlinePayload,
         blobKey,
@@ -128,10 +137,10 @@ export class AssetService {
     return toSummary(row)
   }
 
-  async remove(deviceId: string, toolId: string, id: string): Promise<boolean> {
+  async remove(owner: Identity, toolId: string, id: string): Promise<boolean> {
     const [row] = await this.db
       .delete(assets)
-      .where(and(eq(assets.deviceId, deviceId), eq(assets.toolId, toolId), eq(assets.id, id)))
+      .where(and(ownerCond(owner), eq(assets.toolId, toolId), eq(assets.id, id)))
       .returning()
     if (!row)
       return false
@@ -141,11 +150,11 @@ export class AssetService {
   }
 
   /** 取 Blob 本体的流（下载用） */
-  async raw(deviceId: string, toolId: string, id: string): Promise<{ stream: ReadableStream<Uint8Array>, mimeType: string | undefined } | undefined> {
+  async raw(owner: Identity, toolId: string, id: string): Promise<{ stream: ReadableStream<Uint8Array>, mimeType: string | undefined } | undefined> {
     const [row] = await this.db
       .select()
       .from(assets)
-      .where(and(eq(assets.deviceId, deviceId), eq(assets.toolId, toolId), eq(assets.id, id)))
+      .where(and(ownerCond(owner), eq(assets.toolId, toolId), eq(assets.id, id)))
       .limit(1)
     if (!row?.blobKey)
       return undefined

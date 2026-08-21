@@ -1,16 +1,29 @@
-import type { AppEnv } from './app-env.ts'
 import { createMiddleware } from 'hono/factory'
-import { HTTPException } from 'hono/http-exception'
+import { getCookie } from 'hono/cookie'
+
+import type { AppEnv } from './app-env.ts'
+import type { Identity } from './identity.ts'
+import type { PublicUser, UserService } from './services/users.ts'
+import { SESSION_COOKIE } from './services/users.ts'
 
 /**
- * 匿名设备认证：请求头 X-Device-ID（前端首次生成 UUID 存 localStorage）。
- * 个人自部署规模下这是最简隔离；升级版认证（passcode/反代层）见 docs/BACKEND.md。
+ * 身份中间件：session cookie 优先（登录用户），否则回落 X-Device-ID（匿名）。
+ * 二者皆无 → 401。注入 identity（owner 维度）与可选 user。
  */
-export const deviceId = createMiddleware<AppEnv>(async (c, next) => {
-  const id = c.req.header('X-Device-ID')
-  if (!id || id.length < 8 || id.length > 64) {
-    throw new HTTPException(401, { message: 'missing or invalid X-Device-ID' })
-  }
-  c.set('deviceId', id)
-  await next()
-})
+export function identity(users: UserService) {
+  return createMiddleware<AppEnv>(async (c, next) => {
+    const user = await users.userFromToken(getCookie(c, SESSION_COOKIE))
+    if (user) {
+      c.set('identity', { userId: user.id } satisfies Identity)
+      c.set('user', user satisfies PublicUser)
+    }
+    else {
+      const deviceId = c.req.header('X-Device-ID')
+      if (deviceId && deviceId.length >= 8 && deviceId.length <= 64)
+        c.set('identity', { deviceId } satisfies Identity)
+    }
+    if (!c.get('identity'))
+      return c.json({ error: 'authentication required (session cookie or X-Device-ID)' }, 401)
+    await next()
+  })
+}

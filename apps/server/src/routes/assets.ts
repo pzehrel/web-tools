@@ -3,9 +3,10 @@ import { createFactory } from 'hono/factory'
 import { zValidator } from '@hono/zod-validator'
 
 import type { AppEnv } from '../app-env.ts'
-import { deviceId } from '../auth.ts'
+import { identity } from '../auth.ts'
 import { idParamSchema, saveFormSchema, toolQuerySchema } from '../schemas.ts'
 import type { AssetService } from '../services/assets.ts'
+import type { UserService } from '../services/users.ts'
 
 const factory = createFactory<AppEnv>()
 
@@ -14,24 +15,24 @@ const factory = createFactory<AppEnv>()
  * 契约见 docs/BACKEND.md：REST 形状是前后端唯一硬约定，
  * 前端经 hc<AppType> 在编译期获得类型（RPC 纯编译期，产物即普通 fetch）。
  */
-export function assetsRoute(svc: AssetService) {
+export function assetsRoute(svc: AssetService, users: UserService) {
   const list = factory.createHandlers(
-    deviceId,
+    identity(users),
     zValidator('query', toolQuerySchema),
     async (c) => {
-      const items = await svc.list(c.get('deviceId'), c.req.valid('query').tool)
+      const items = await svc.list(c.get('identity'), c.req.valid('query').tool)
       return c.json({ items })
     },
   )
 
   const save = factory.createHandlers(
-    deviceId,
+    identity(users),
     zValidator('form', saveFormSchema),
     async (c) => {
       const form = c.req.valid('form')
       if (!form.file && form.payload === undefined)
         return c.json({ error: 'file or payload required' }, 400)
-      const item = await svc.save(c.get('deviceId'), {
+      const item = await svc.save(c.get('identity'), {
         toolId: form.toolId,
         id: form.id,
         file: form.file,
@@ -44,22 +45,22 @@ export function assetsRoute(svc: AssetService) {
   )
 
   const get = factory.createHandlers(
-    deviceId,
+    identity(users),
     zValidator('query', toolQuerySchema),
     zValidator('param', idParamSchema),
     async (c) => {
-      const item = await svc.get(c.get('deviceId'), c.req.valid('query').tool, c.req.valid('param').id)
+      const item = await svc.get(c.get('identity'), c.req.valid('query').tool, c.req.valid('param').id)
       return item ? c.json(item) : c.json({ error: 'not found' }, 404)
     },
   )
 
   const raw = factory.createHandlers(
-    deviceId,
+    identity(users),
     zValidator('query', toolQuerySchema),
     zValidator('param', idParamSchema),
     async (c) => {
       const { id } = c.req.valid('param')
-      const raw = await svc.raw(c.get('deviceId'), c.req.valid('query').tool, id)
+      const raw = await svc.raw(c.get('identity'), c.req.valid('query').tool, id)
       return raw
         ? new Response(raw.stream, {
             headers: {
@@ -72,11 +73,11 @@ export function assetsRoute(svc: AssetService) {
   )
 
   const remove = factory.createHandlers(
-    deviceId,
+    identity(users),
     zValidator('query', toolQuerySchema),
     zValidator('param', idParamSchema),
     async (c) => {
-      const ok = await svc.remove(c.get('deviceId'), c.req.valid('query').tool, c.req.valid('param').id)
+      const ok = await svc.remove(c.get('identity'), c.req.valid('query').tool, c.req.valid('param').id)
       return ok ? c.json({ ok: true }) : c.json({ error: 'not found' }, 404)
     },
   )

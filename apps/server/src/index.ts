@@ -6,14 +6,17 @@ import { logger } from 'hono/logger'
 import type { AppEnv } from './app-env.ts'
 import { db } from './db/index.ts'
 import { env } from './env.ts'
+import { authRoute } from './routes/auth.ts'
 import { assetsRoute } from './routes/assets.ts'
 import { health } from './routes/health.ts'
 import { AssetService } from './services/assets.ts'
+import { AuthError, UserService } from './services/users.ts'
 
 /**
  * 应用工厂：测试/调试可 import buildApp() 直接用 app.request() 冒烟，不起端口。
  */
 export function buildApp() {
+  const users = new UserService(db)
   const svc = new AssetService(db)
   const app = new Hono<AppEnv>()
   app.use(logger())
@@ -22,6 +25,8 @@ export function buildApp() {
   app.onError((err, c) => {
     if (err instanceof HTTPException)
       return err.getResponse()
+    if (err instanceof AuthError)
+      return c.json({ error: err.message }, err.status)
     if (isDbError(err))
       return c.json({ error: 'database unavailable' }, 503)
     console.error('[server] unhandled error:', err)
@@ -30,7 +35,8 @@ export function buildApp() {
   app.notFound((c) => c.json({ error: 'not found' }, 404))
 
   app.get('/api/health', () => health())
-  app.route('/api/assets', assetsRoute(svc))
+  app.route('/api/auth', authRoute(users))
+  app.route('/api/assets', assetsRoute(svc, users))
   return app
 }
 
