@@ -65,11 +65,12 @@ export class AssetService {
     this.blobs = blobs
   }
 
-  async list(owner: Identity, toolId: string): Promise<AssetSummary[]> {
+  /** 列表；toolId 省略时返回该身份下全部工具的素材（跨工具历史页用） */
+  async list(owner: Identity, toolId?: string): Promise<AssetSummary[]> {
     const rows = await this.db
       .select()
       .from(assets)
-      .where(and(ownerCond(owner), eq(assets.toolId, toolId)))
+      .where(toolId ? and(ownerCond(owner), eq(assets.toolId, toolId)) : ownerCond(owner))
       .orderBy(desc(assets.updatedAt))
       .limit(500)
     return rows.map(toSummary)

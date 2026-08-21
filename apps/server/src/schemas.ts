@@ -3,6 +3,12 @@ import { z } from 'zod'
 /** 请求侧校验 schema（响应侧不做运行时校验，见 docs/BACKEND.md 版本配对决策） */
 
 export const toolQuerySchema = z.object({
+  /** 省略 = 跨工具全量列表（仅 list 端点） */
+  tool: z.string().min(1).max(64).optional(),
+})
+
+/** 定位单个资源（get/raw/delete）时 tool 必填 */
+export const requiredToolQuerySchema = toolQuerySchema.extend({
   tool: z.string().min(1).max(64),
 })
 

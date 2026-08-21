@@ -1,7 +1,9 @@
 import { serve } from '@hono/node-server'
+import { bodyLimit } from 'hono/body-limit'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
+import { secureHeaders } from 'hono/secure-headers'
 
 import type { AppEnv } from './app-env.ts'
 import { db } from './db/index.ts'
@@ -20,6 +22,11 @@ export function buildApp() {
   const svc = new AssetService(db)
   const app = new Hono<AppEnv>()
   app.use(logger())
+  app.use(secureHeaders())
+
+  // 请求体上限：JSON（登录注册）1MB；multipart（素材上传）100MB。
+  // bodyLimit 中间件统一设 100MB，JSON 的收紧由 zod/邮箱密码 max 长度兜底。
+  app.use('*', bodyLimit({ maxSize: 100 * 1024 * 1024 }))
 
   // 集中错误处理：路由内不写 try/catch，异常统一在这里翻译成响应
   app.onError((err, c) => {

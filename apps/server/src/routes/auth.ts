@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import type { AppEnv } from '../app-env.ts'
 import { identity } from '../auth.ts'
+import { rateLimit } from '../rate-limit.ts'
 import { AuthError, SESSION_COOKIE, type UserService } from '../services/users.ts'
 
 const factory = createFactory<AppEnv>()
@@ -14,6 +15,9 @@ const credentialsSchema = z.object({
   email: z.string().email().max(128),
   password: z.string().min(8).max(128),
 })
+
+// auth 端点限流：每 IP 每分钟 10 次（注册登录共用，防暴破/防批量注册）
+const authRateLimit = rateLimit({ key: 'auth', limit: 10, windowMs: 60_000 })
 
 /** Cookie 属性：HttpOnly（JS 不可读）+ SameSite=Lax（防 CSRF 基线）+ Secure（HTTPS） */
 const cookieOpts = {
@@ -30,6 +34,7 @@ const cookieOpts = {
  */
 export function authRoute(users: UserService) {
   const register = factory.createHandlers(
+    authRateLimit,
     zValidator('json', credentialsSchema),
     async (c) => {
       const { email, password } = c.req.valid('json')
@@ -44,6 +49,7 @@ export function authRoute(users: UserService) {
   )
 
   const login = factory.createHandlers(
+    authRateLimit,
     zValidator('json', credentialsSchema),
     async (c) => {
       const { email, password } = c.req.valid('json')

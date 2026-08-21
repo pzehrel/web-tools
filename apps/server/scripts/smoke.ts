@@ -17,7 +17,7 @@ const authed = await app.request('/api/assets?tool=demo', { headers: { 'X-Device
 console.log('authed-list(no-db):', authed.status, authed.status === 503 ? '(DB 掉线正确翻译为 503 ✓)' : '(✗)')
 
 const noTool = await app.request('/api/assets', { headers: { 'X-Device-ID': 'device-abc12345' } })
-console.log('missing-tool:', noTool.status, noTool.status === 400 ? '(期望 400 ✓)' : '(✗)')
+console.log('all-tools-list(no-db):', noTool.status, noTool.status === 503 ? '(tool 省略=跨工具列表，合法，DB 掉线 503 ✓)' : '(✗)')
 
 // auth 路由：非法 body 被 zod 拦（400），合法 body 落到 DB 层报 503
 const badRegister = await app.request('/api/auth/register', {

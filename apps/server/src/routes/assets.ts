@@ -4,7 +4,7 @@ import { zValidator } from '@hono/zod-validator'
 
 import type { AppEnv } from '../app-env.ts'
 import { identity } from '../auth.ts'
-import { idParamSchema, saveFormSchema, toolQuerySchema } from '../schemas.ts'
+import { idParamSchema, requiredToolQuerySchema, saveFormSchema, toolQuerySchema } from '../schemas.ts'
 import type { AssetService } from '../services/assets.ts'
 import type { UserService } from '../services/users.ts'
 
@@ -46,7 +46,7 @@ export function assetsRoute(svc: AssetService, users: UserService) {
 
   const get = factory.createHandlers(
     identity(users),
-    zValidator('query', toolQuerySchema),
+    zValidator('query', requiredToolQuerySchema),
     zValidator('param', idParamSchema),
     async (c) => {
       const item = await svc.get(c.get('identity'), c.req.valid('query').tool, c.req.valid('param').id)
@@ -56,7 +56,7 @@ export function assetsRoute(svc: AssetService, users: UserService) {
 
   const raw = factory.createHandlers(
     identity(users),
-    zValidator('query', toolQuerySchema),
+    zValidator('query', requiredToolQuerySchema),
     zValidator('param', idParamSchema),
     async (c) => {
       const { id } = c.req.valid('param')
@@ -74,7 +74,7 @@ export function assetsRoute(svc: AssetService, users: UserService) {
 
   const remove = factory.createHandlers(
     identity(users),
-    zValidator('query', toolQuerySchema),
+    zValidator('query', requiredToolQuerySchema),
     zValidator('param', idParamSchema),
     async (c) => {
       const ok = await svc.remove(c.get('identity'), c.req.valid('query').tool, c.req.valid('param').id)

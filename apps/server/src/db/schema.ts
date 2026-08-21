@@ -51,7 +51,10 @@ export const assets = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   t => [
+    // 匿名态：device_id 非空时保证同设备同工具内 id 唯一
     uniqueIndex('assets_device_tool_id').on(t.deviceId, t.toolId, t.id),
+    // 登录态：device_id 为 NULL（PG 唯一索引不比较 NULL），需独立约束
+    uniqueIndex('assets_user_tool_id').on(t.userId, t.toolId, t.id),
     index('assets_user_tool_idx').on(t.userId, t.toolId),
   ],
 )
