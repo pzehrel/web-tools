@@ -12,3 +12,5 @@ allowBuilds:
 # （rolldown 等项目同样排除，见 https://github.com/rolldown/rolldown/pull/7302 ）
 trustPolicyExclude:
   - semver@6.3.1
+packages:
+  - 'apps/*'

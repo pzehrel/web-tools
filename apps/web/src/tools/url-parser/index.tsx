@@ -17,7 +17,7 @@ import { decodeQr, encodeQr } from './qr-codec'
 import { renderQrParameterPreview } from './qr-preview-image'
 import { generateCode } from './url-code'
 import { useUrlRecords } from './url-records'
-import { addParam, canMoveNode, deleteNode, insertParamBelow, looksLikeUrl, moveNode, parseUrl, serializeUrl, setNodeValue, updateNode, variableName } from './url-tree'
+import { addParam, baseOfTree, canMoveNode, deleteNode, findInsertedId, hasParams, insertParamBelow, looksLikeUrl, mergeBaseEdit, moveNode, paramNodes, parseUrl, serializeUrl, setNodeValue, suffixOfTree, updateNode, variableName } from './url-tree'
 
 /** 层级文字颜色轮换：橙 → 黄 → 绿，暖色系相邻过渡（chart 令牌，随主题联动） */
 const DEPTH_COLORS = ['text-chart-4', 'text-chart-2', 'text-chart-3'] as const
@@ -29,21 +29,13 @@ const KEY_GRADIENTS = [
   'from-chart-3 from-30% to-chart-4 to-70%',
 ] as const
 
-/** 只关心参数：查询参数 + hash（hash 内的参数递归取） */
-function paramNodes(tree: UrlTree): UrlNode[] {
-  return tree.nodes.filter(n => n.kind === 'param' || n.kind === 'hash')
-}
-
-function hasParams(tree: UrlTree): boolean {
-  return paramNodes(tree).length > 0
-}
-
 /** 点击即编辑的文本：点击进入编辑态，Enter / 失焦提交，Esc 取消 */
 function EditableText({
   text,
   className,
   mono,
   autoSize,
+  editSignal = 0,
   title = '点击编辑',
   onCommit,
 }: {
@@ -52,10 +44,24 @@ function EditableText({
   mono?: boolean
   /** 输入框宽度随内容变化（否则占满整行） */
   autoSize?: boolean
+  /** 外部触发的编辑信号（每次 +1）：重解析会复用组件实例，不能靠挂载初始态 */
+  editSignal?: number
   title?: string
   onCommit: (next: string) => void
 }) {
   const [draft, setDraft] = useState<string | null>(null)
+  const selectNextRef = useRef(false)
+  const lastSignalRef = useRef(0)
+
+  // 外部信号进入编辑态（+ 号新建的 key）：nonce 变化时触发，全选方便直接覆盖。
+  // 不加依赖数组：text 需取当次渲染的最新值
+  useEffect(() => {
+    if (editSignal && editSignal !== lastSignalRef.current) {
+      lastSignalRef.current = editSignal
+      selectNextRef.current = true
+      setDraft(text)
+    }
+  })
 
   if (draft !== null) {
     const commit = () => {
@@ -63,12 +69,19 @@ function EditableText({
       if (draft !== text)
         onCommit(draft)
       setDraft(null)
+      selectNextRef.current = false
     }
     return (
       <input
         autoFocus
         value={draft}
         onChange={e => setDraft(e.target.value)}
+        onFocus={(e) => {
+          if (selectNextRef.current) {
+            e.currentTarget.select()
+            selectNextRef.current = false
+          }
+        }}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === 'Enter')
@@ -118,26 +131,6 @@ function TreePrefix({ lastFlags, isLast }: { lastFlags: boolean[], isLast: boole
   )
 }
 
-/** 序列化一棵树时去掉参数和 hash（它们已展开成子级行） */
-function baseOfTree(tree: UrlTree): string {
-  return serializeUrl({
-    ...tree,
-    hasQuery: false,
-    hasHash: false,
-    nodes: tree.nodes.filter(n => n.kind !== 'param' && n.kind !== 'hash'),
-  })
-}
-
-/** 一棵树的参数 + hash 后缀（编辑 base 时保留它们） */
-function suffixOfTree(tree: UrlTree): string {
-  return serializeUrl({
-    ...tree,
-    leadingSlash: false,
-    trailingSlash: false,
-    nodes: tree.nodes.filter(n => n.kind === 'param' || n.kind === 'hash'),
-  })
-}
-
 function ParamRow({
   node,
   depth,
@@ -147,9 +140,11 @@ function ParamRow({
   onEditValue,
   onEditBase,
   onAddBelow,
+  onAddInside,
   onDelete,
   dragSourceId,
   dropTargetId,
+  autoEdit,
   onDragStart,
   onDragEnd,
   onDragOverUrl,
@@ -168,9 +163,13 @@ function ParamRow({
   onEditBase: (node: UrlNode, nextBase: string) => void
   /** 在该行所在层级、该行下方插入 key=value */
   onAddBelow: (node: UrlNode) => void
+  /** 值是嵌套 URL / 路径时，向该 URL 内部追加 key=value */
+  onAddInside: (id: string) => void
   onDelete: (id: string) => void
   dragSourceId: string | null
   dropTargetId: string | null | undefined
+  /** 新建参数后需要主动进入编辑态的节点（id + 触发信号） */
+  autoEdit: { id: string, nonce: number } | null
   onDragStart: (event: DragEvent<HTMLElement>, id: string) => void
   onDragEnd: () => void
   onDragOverUrl: (event: DragEvent<HTMLElement>, targetId: string) => void
@@ -226,6 +225,7 @@ function ParamRow({
                 <EditableText
                   text={node.label}
                   autoSize
+                  editSignal={autoEdit?.id === node.id ? autoEdit.nonce : 0}
                   className={cn('text-sm font-bold', keyClass)}
                   onCommit={next => onEdit(node.id, { label: next })}
                 />
@@ -295,8 +295,9 @@ function ParamRow({
         )}
         <button
           type="button"
-          aria-label="在下方插入字段"
-          onClick={() => onAddBelow(node)}
+          aria-label={node.children !== null ? '在该 URL 内添加字段' : '在下方插入字段'}
+          title={node.children !== null ? '在该 URL 内添加字段' : '在下方插入字段'}
+          onClick={() => (node.children !== null ? onAddInside(node.id) : onAddBelow(node))}
           className={cn('flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground', node.children === null && 'ml-1')}
         >
           <Plus className="size-3" />
@@ -320,9 +321,11 @@ function ParamRow({
           onEditValue={onEditValue}
           onEditBase={onEditBase}
           onAddBelow={onAddBelow}
+          onAddInside={onAddInside}
           onDelete={onDelete}
           dragSourceId={dragSourceId}
           dropTargetId={dropTargetId}
+          autoEdit={autoEdit}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           onDragOverUrl={onDragOverUrl}
@@ -342,9 +345,11 @@ function ParamTree({
   onEditValue,
   onEditBase,
   onAddBelow,
+  onAddInside,
   onDelete,
   dragSourceId,
   dropTargetId,
+  autoEdit,
   onDragStart,
   onDragEnd,
   onDragOverUrl,
@@ -358,9 +363,12 @@ function ParamTree({
   onEditValue: (id: string, value: string) => void
   onEditBase: (node: UrlNode, nextBase: string) => void
   onAddBelow: (node: UrlNode) => void
+  onAddInside: (id: string) => void
   onDelete: (id: string) => void
   dragSourceId: string | null
   dropTargetId: string | null | undefined
+  /** 新建参数后需要主动进入编辑态的节点（id + 触发信号） */
+  autoEdit: { id: string, nonce: number } | null
   onDragStart: (event: DragEvent<HTMLElement>, id: string) => void
   onDragEnd: () => void
   onDragOverUrl: (event: DragEvent<HTMLElement>, targetId: string) => void
@@ -381,9 +389,11 @@ function ParamTree({
           onEditValue={onEditValue}
           onEditBase={onEditBase}
           onAddBelow={onAddBelow}
+          onAddInside={onAddInside}
           onDelete={onDelete}
           dragSourceId={dragSourceId}
           dropTargetId={dropTargetId}
+          autoEdit={autoEdit}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           onDragOverUrl={onDragOverUrl}
@@ -825,25 +835,45 @@ function UrlParserTool() {
     setInput(prev => serializeUrl(setNodeValue(parseUrl(prev), id, value)))
   }, [])
 
-  // 编辑嵌套 URL 的 base（协议/域名/路径）：剥离误贴的参数/hash 后，拼接原参数后缀再重解析
+  // 编辑嵌套 URL 的 base（协议/域名/路径）：剥离误贴的 query，但保留手动输入的 hash（视为显式替换）
   const handleEditBase = useCallback((node: UrlNode, nextBase: string) => {
-    const cleanBase = nextBase.split(/[?#]/)[0]
     const suffix = node.children ? suffixOfTree(node.children) : ''
-    setInput(prev => serializeUrl(setNodeValue(parseUrl(prev), node.id, cleanBase + suffix)))
+    setInput(prev => serializeUrl(setNodeValue(parseUrl(prev), node.id, mergeBaseEdit(nextBase, suffix))))
   }, [])
 
   const handleDelete = useCallback((id: string) => {
     setInput(prev => serializeUrl(deleteNode(parseUrl(prev), id)))
   }, [])
 
+  // 新增参数后，主动让新 key 进入编辑态。id 经「新旧树结构 diff」在重解析后的树里定位
+  // （序列化 → 重解析会重新分配全部 id，不能直接用 addParam 内部生成的 id）；
+  // nonce 每次递增：新节点的 id 可能与旧行的 id 相同（整体位移），React 会复用组件实例，
+  // 必须靠信号变化触发 effect，不能依赖挂载初始态
+  const [autoEdit, setAutoEdit] = useState<{ id: string, nonce: number } | null>(null)
+  const commitAdd = useCallback((prevTree: UrlTree, nextTree: UrlTree) => {
+    const nextInput = serializeUrl(nextTree)
+    setInput(nextInput)
+    const id = findInsertedId(prevTree.nodes, parseUrl(nextInput).nodes)
+    if (id)
+      setAutoEdit(prev => ({ id, nonce: (prev?.nonce ?? 0) + 1 }))
+  }, [])
+
   // 在某一行所在层级、其下方插入 key=value（默认值便于继续编辑）
   const handleAddBelow = useCallback((node: UrlNode | null) => {
-    setInput(prev => serializeUrl(
+    const parsed = parseUrl(input)
+    commitAdd(
+      parsed,
       node === null
-        ? addParam(parseUrl(prev), null, 'key', 'value')
-        : insertParamBelow(parseUrl(prev), node.id, 'key', 'value'),
-    ))
-  }, [])
+        ? addParam(parsed, null, 'key', 'value')
+        : insertParamBelow(parsed, node.id, 'key', 'value'),
+    )
+  }, [input, commitAdd])
+
+  // 向嵌套 URL / 路径内部追加 key=value（值是 URL 的行上 + 号的含义）
+  const handleAddInside = useCallback((id: string) => {
+    const parsed = parseUrl(input)
+    commitAdd(parsed, addParam(parsed, id, 'key', 'value'))
+  }, [input, commitAdd])
 
   // 参数树拖拽：所有 key 都是目标；URL value 接收为子级，普通 value 接收到同一层。
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
@@ -1160,7 +1190,7 @@ function UrlParserTool() {
                 <Plus />
                 保存
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setInput(DEMO_URL)}>
+              <Button variant="outline" size="sm" onClick={() => setInput(DEMO_URL)}>
                 <Sparkles />
                 试试示例
               </Button>
@@ -1278,7 +1308,7 @@ function UrlParserTool() {
                           text={baseUrl}
                           mono
                           className={cn('w-full break-all', DEPTH_COLORS[0])}
-                          onCommit={next => setInput(next.split(/[?#]/)[0] + suffixOfTree(tree))}
+                          onCommit={next => setInput(mergeBaseEdit(next, suffixOfTree(tree)))}
                         />
                       </span>
                       <button
@@ -1309,9 +1339,11 @@ function UrlParserTool() {
                             onEditValue={handleEditValue}
                             onEditBase={handleEditBase}
                             onAddBelow={handleAddBelow}
+                            onAddInside={handleAddInside}
                             onDelete={handleDelete}
                             dragSourceId={dragSourceId}
                             dropTargetId={dropTargetId}
+                            autoEdit={autoEdit}
                             onDragStart={handleTreeDragStart}
                             onDragEnd={clearTreeDrag}
                             onDragOverUrl={(event, targetId) => handleTreeDragOver(event, targetId)}

@@ -3,7 +3,7 @@
   "name": "web-tools",
   "compatibility_date": "2026-08-18",
   "assets": {
-    "directory": "./dist",
+    "directory": "./apps/web/dist",
     // 与 canonical/sitemap 的无尾斜杠 URL 对齐，避免 307 跳转
     "html_handling": "drop-trailing-slash"
   }

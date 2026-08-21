@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router'
 import { ViteReactSSG } from 'vite-react-ssg'
 import App from './App.tsx'
 import { RootLayout } from './root-layout.tsx'
+import FontToolkitTool from './tools/font-toolkit'
 import FrameAnimationTool from './tools/frame-animation'
 import LottiePreviewTool from './tools/lottie-preview'
 import NinePatchTool from './tools/nine-patch'
@@ -18,7 +19,7 @@ import './index.scss'
  * 与 SSR HTML 不一致 → React 放弃水合整树重渲染 → 页面上出现两份内容。
  * 这里显式声明每个路由的 loader 已有数据（null），让路由初始化即 hydrated。
  */
-const ROUTE_IDS = ['root', 'home', 'qrcode-generator', 'url-parser', 'url-qrcode', 'frame-animation', 'lottie-preview', 'nine-patch', 'fallback'] as const
+const ROUTE_IDS = ['root', 'home', 'qrcode-generator', 'url-parser', 'url-qrcode', 'frame-animation', 'lottie-preview', 'nine-patch', 'font-toolkit', 'fallback'] as const
 
 export const createRoot = ViteReactSSG({
   routes: [
@@ -34,6 +35,7 @@ export const createRoot = ViteReactSSG({
         { id: 'frame-animation', path: '/tools/frame-animation', element: <FrameAnimationTool /> },
         { id: 'lottie-preview', path: '/tools/lottie-preview', element: <LottiePreviewTool /> },
         { id: 'nine-patch', path: '/tools/nine-patch', element: <NinePatchTool /> },
+        { id: 'font-toolkit', path: '/tools/font-toolkit', element: <FontToolkitTool /> },
         { id: 'fallback', path: '*', element: <App /> },
       ],
     },

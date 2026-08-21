@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Film, Frame, Images, Link2 } from 'lucide-react'
+import { Film, Frame, Images, Link2, Type } from 'lucide-react'
 
 export interface ToolMeta {
   /** 路由/锚点 id，kebab-case */
@@ -8,7 +8,7 @@ export interface ToolMeta {
   description: string
   icon: LucideIcon
   /** ready = 可用；planned = 筹备中（占位展示） */
-  status: 'ready' | 'planned'
+  status: 'ready' | 'planned' | 'hidden'
   /**
    * 图标装饰色，使用 chart-1 ~ chart-5 主题令牌对应的 Tailwind 类，
    * 保证换肤时随主题联动
@@ -52,5 +52,13 @@ export const tools: ToolMeta[] = [
     icon: Frame,
     status: 'ready',
     accentClass: 'bg-chart-4',
+  },
+  {
+    id: 'font-toolkit',
+    name: '字体工具箱',
+    description: '字体预览、体检、子集化与格式转换',
+    icon: Type,
+    status: 'hidden',
+    accentClass: 'bg-chart-2',
   },
 ]

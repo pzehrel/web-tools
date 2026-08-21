@@ -36,9 +36,9 @@ function App() {
         </p>
       </section>
 
-      {/* 工具网格 */}
+      {/* 工具网格（hidden 工具不在首页露出，直链可访问） */}
       <section className="grid grid-cols-1 gap-5 pb-16 sm:grid-cols-2 lg:grid-cols-3">
-        {tools.map(tool => (
+        {tools.filter(tool => tool.status !== 'hidden').map(tool => (
           <ToolCard key={tool.id} tool={tool} />
         ))}
       </section>

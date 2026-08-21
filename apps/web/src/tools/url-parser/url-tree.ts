@@ -295,6 +295,85 @@ export function serializeUrl(tree: UrlTree): string {
   return build(tree)
 }
 
+/** 只关心参数：查询参数 + hash（hash 内的参数递归取） */
+export function paramNodes(tree: UrlTree): UrlNode[] {
+  return tree.nodes.filter(n => n.kind === 'param' || n.kind === 'hash')
+}
+
+export function hasParams(tree: UrlTree): boolean {
+  return paramNodes(tree).length > 0
+}
+
+/** 序列化一棵树时去掉参数和 hash（它们已展开成子级行） */
+export function baseOfTree(tree: UrlTree): string {
+  return serializeUrl({
+    ...tree,
+    hasQuery: false,
+    hasHash: false,
+    nodes: tree.nodes.filter(n => n.kind !== 'param' && n.kind !== 'hash'),
+  })
+}
+
+/** 一棵树的参数 + hash 后缀（编辑 base 时保留它们） */
+export function suffixOfTree(tree: UrlTree): string {
+  return serializeUrl({
+    ...tree,
+    leadingSlash: false,
+    trailingSlash: false,
+    nodes: tree.nodes.filter(n => n.kind === 'param' || n.kind === 'hash'),
+  })
+}
+
+/**
+ * 编辑 base 后拼接回参数后缀：
+ * - `?query` 剥离（参数已展开成行，避免与后缀重复）
+ * - 手动输入的 `#hash` 视为用户显式指定的新 hash，替换旧 hash（否则永远无法手动加 hash 路由）
+ */
+export function mergeBaseEdit(nextBase: string, suffix: string): string {
+  const hashIdx = nextBase.indexOf('#')
+  const manualHash = hashIdx >= 0 ? nextBase.slice(hashIdx + 1) : null
+  const cleanBase = (hashIdx >= 0 ? nextBase.slice(0, hashIdx) : nextBase).split('?')[0]
+  const suffixHashIdx = suffix.indexOf('#')
+  const querySuffix = suffixHashIdx >= 0 ? suffix.slice(0, suffixHashIdx) : suffix
+  const oldHash = suffixHashIdx >= 0 ? suffix.slice(suffixHashIdx) : ''
+  return cleanBase + querySuffix + (manualHash !== null ? `#${manualHash}` : oldHash)
+}
+
+/**
+ * 找出「新增一个参数」后在重解析树里对应节点的 id。
+ * 按文档顺序对齐两棵树（结构只差一个节点），错位处即新插入的节点。
+ * 注意：对齐只看 kind + label——往嵌套 URL 里插参数会改变容器的 value，
+ * 按 value 比较会把容器误判成新节点（应递归进它的子树里找）。
+ */
+export function findInsertedId(prevNodes: UrlNode[], nextNodes: UrlNode[]): string | null {
+  let i = 0
+  for (let j = 0; j < nextNodes.length; j++) {
+    const aligned = i < prevNodes.length
+      && prevNodes[i].kind === nextNodes[j].kind
+      && prevNodes[i].label === nextNodes[j].label
+    if (aligned) {
+      const prevChild = prevNodes[i].children?.nodes
+      const nextChild = nextNodes[j].children?.nodes
+      if (prevChild && nextChild) {
+        const found = findInsertedId(prevChild, nextChild)
+        if (found)
+          return found
+      }
+      else if (!prevChild && nextChild && nextNodes[j].kind === 'param') {
+        // 值原本不展开、插入首个参数后展开：整个子树都是新的，取第一个 param
+        const firstParam = nextChild.find(n => n.kind === 'param')
+        if (firstParam)
+          return firstParam.id
+      }
+      i++
+    }
+    else if (nextNodes[j].kind === 'param') {
+      return nextNodes[j].id
+    }
+  }
+  return null
+}
+
 /** 不可变更新某个节点的 label / value */
 export function updateNode(tree: UrlTree, id: string, patch: Partial<Pick<UrlNode, 'label' | 'value'>>): UrlTree {
   return {

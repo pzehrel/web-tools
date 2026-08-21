@@ -501,7 +501,7 @@ export default function LottiePreviewTool() {
                             </Button>
                             <Button type="button" variant="outline" onClick={() => void loadDemo()} disabled={busy}>
                               <Sparkles />
-                              试用示例
+                              试试示例
                             </Button>
                           </div>
                         </div>

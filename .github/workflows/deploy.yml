@@ -32,11 +32,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # CI 再挡一道（husky 只管本地提交）
-      - run: pnpm lint && pnpm typecheck
+      - run: pnpm lint && pnpm typecheck && pnpm test
 
       - run: pnpm build
 
-      # wrangler versions upload 要求 Worker 已存在，首次部署先初始化
+      # wrangler 在仓库根执行（wrangler.jsonc 的 assets 目录指向 apps/web/dist）
       - name: Ensure Worker exists
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
