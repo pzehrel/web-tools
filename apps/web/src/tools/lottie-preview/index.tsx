@@ -23,17 +23,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Link } from 'react-router'
 import { Seo } from '@/components/seo'
+import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
+import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { DEFAULT_CHECKER_STYLE } from '@/lib/checker'
 
 import { useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoProject } from '../demos/lottie-preview'
-import { disposeOptimizedResult, exportOptimizedProject, optimizeLottie } from './atlas-optimizer'
+import { countAtlasOptimizableImages, disposeOptimizedResult, exportOptimizedProject, optimizeLottie } from './atlas-optimizer'
 import { createPreviewAnimation, disposeProject, loadLottieProject } from './import-files'
 import { LottiePreview } from './preview'
 import { LottieReactPreview } from './react-preview'
+import { calculateLottieResourceMetrics } from './resource-metrics'
 
 const DEFAULT_OPTIONS: AtlasOptions = {
   maxSize: 2048,
@@ -57,6 +59,14 @@ function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024)
     return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+}
+
+function formatPixels(pixels: number): string {
+  if (pixels < 1000)
+    return `${pixels} px`
+  if (pixels < 1000 * 1000)
+    return `${(pixels / 1000).toFixed(1)} Kpx`
+  return `${(pixels / 1000 / 1000).toFixed(2)} MP`
 }
 
 function Checkbox({ checked, label, onChange, disabled = false }: {
@@ -102,11 +112,11 @@ function SettingRow({ children, description, label }: { children: ReactNode, des
   )
 }
 
-function Stat({ label, value }: { label: string, value: string }) {
+function Stat({ label, lastRow = false, value }: { label: string, lastRow?: boolean, value: string }) {
   return (
-    <div className="rounded-md border-2 border-border bg-muted/40 px-3 py-2">
-      <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">{label}</p>
-      <p className="font-mono text-sm font-black">{value}</p>
+    <div className={cn('flex min-w-0 items-baseline justify-between gap-2 px-2 py-1.5 odd:border-r-2 odd:border-border/20', !lastRow && 'border-b-2 border-border/20')}>
+      <p className="truncate text-[10px] font-bold text-muted-foreground">{label}</p>
+      <p className="shrink-0 font-mono text-xs font-black">{value}</p>
     </div>
   )
 }
@@ -136,10 +146,28 @@ export default function LottiePreviewTool() {
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [zoom, setZoom] = useState(1)
+  const [atlasZoom, setAtlasZoom] = useState(1)
+  const stageView = useStageViewSettings()
+  const atlasStageView = useStageViewSettings()
   const stageRef = useRef<HTMLDivElement>(null)
-  useStageZoom(stageRef, zoom, setZoom)
+  const atlasStageRef = useRef<HTMLDivElement>(null)
+  const stageZoom = useStageZoom(stageRef, zoom, setZoom, Boolean(project))
+  const atlasStageZoom = useStageZoom(atlasStageRef, atlasZoom, setAtlasZoom, Boolean(optimized))
   const stagePan = useStagePan(stageRef, () => false)
+  const atlasStagePan = useStagePan(atlasStageRef, () => false)
   const resetStagePan = stagePan.resetPan
+  const optimizableImageCount = useMemo(() => project ? countAtlasOptimizableImages(project) : 0, [project])
+  const sequenceImageCount = project ? [...project.images.values()].filter(image => image.asset.t === 'seq').length : 0
+  const animatedImageCount = project ? [...project.images.values()].filter(image => image.isAnimated).length : 0
+  const excludedImageDescription = sequenceImageCount > 0 && animatedImageCount > 0
+    ? `${sequenceImageCount} 个图片序列和 ${animatedImageCount} 个动态图片保留原始素材，不参与图集优化。`
+    : sequenceImageCount > 0
+      ? `${sequenceImageCount} 个图片序列保留原始素材，暂不参与图集优化。`
+      : animatedImageCount > 0
+        ? `${animatedImageCount} 个动态图片保留原始素材，不参与图集优化。`
+        : null
+  const resourceMetrics = useMemo(() => project ? calculateLottieResourceMetrics(project, optimized) : null, [optimized, project])
+  const atlasDimensions = optimized ? optimized.atlases.map(atlas => `${atlas.width}×${atlas.height}`).join(' / ') : '—'
 
   const replaceResult = useCallback((next: OptimizedLottieResult | null) => {
     const previous = resultRef.current
@@ -186,7 +214,12 @@ export default function LottiePreviewTool() {
   }, [])
 
   useEffect(() => {
-    if (!project || !optimizationEnabled || project.images.size === 0 || project.warnings.length > 0) {
+    atlasStagePan.resetPan()
+    setAtlasZoom(1)
+  }, [atlasStagePan.resetPan, optimized])
+
+  useEffect(() => {
+    if (!project || !optimizationEnabled || optimizableImageCount === 0 || project.warnings.length > 0) {
       replaceResult(null)
       setOptimizing(false)
       return
@@ -215,11 +248,11 @@ export default function LottiePreviewTool() {
       active = false
       window.clearTimeout(timer)
     }
-  }, [optimizationEnabled, options, project, replaceResult])
+  }, [optimizableImageCount, optimizationEnabled, options, project, replaceResult])
 
   const originalPreview = useMemo(() => project ? createPreviewAnimation(project) : null, [project])
-  const shouldOptimize = Boolean(project && optimizationEnabled && project.images.size > 0 && project.warnings.length === 0)
-  const activeAnimation = shouldOptimize ? (optimized?.previewAnimation ?? null) : originalPreview
+  const shouldOptimize = Boolean(project && optimizationEnabled && optimizableImageCount > 0 && project.warnings.length === 0)
+  const activeAnimation = shouldOptimize && optimized ? optimized.previewAnimation : originalPreview
 
   const importFiles = useCallback(async (files: File[]) => {
     if (files.length === 0)
@@ -268,7 +301,7 @@ export default function LottiePreviewTool() {
 
   function updateOption<K extends keyof AtlasOptions>(key: K, value: AtlasOptions[K]): void {
     replaceResult(null)
-    setOptimizing(Boolean(project && optimizationEnabled && project.warnings.length === 0))
+    setOptimizing(Boolean(project && optimizationEnabled && optimizableImageCount > 0 && project.warnings.length === 0))
     setOptions(current => ({ ...current, [key]: value }))
   }
 
@@ -285,58 +318,106 @@ export default function LottiePreviewTool() {
   }
 
   const resourceResult = (
-    <Card className="lg:h-full">
-      <CardHeader>
+    <Card className="gap-4 lg:h-full">
+      <CardHeader className="px-5 pt-5">
         <CardTitle className="flex items-center gap-2">
           <Gauge className="size-5" />
           资源结果
         </CardTitle>
-        <CardDescription>{!project ? '导入素材后显示图集与资源统计。' : project.warnings.length > 0 ? '资源路径校验未通过，请查看右上角消息。' : project.images.size === 0 ? 'data.json 没有引用可打包的图片素材。' : !optimizationEnabled ? '图集优化已关闭，画布显示原始素材。' : optimizing ? '正在重新排布图集，画布等待最新结果…' : optimized ? '画布当前显示的就是此导出结果。' : '等待图集优化结果'}</CardDescription>
+        <CardDescription>{!project ? '导入素材后显示图集与资源统计。' : project.warnings.length > 0 ? '资源路径校验未通过，请查看右上角消息。' : project.images.size === 0 ? 'data.json 没有引用可预览的图片素材。' : optimizableImageCount === 0 && excludedImageDescription ? excludedImageDescription : !optimizationEnabled ? '图集优化已关闭，画布显示原始素材。' : optimizing ? '正在重新排布图集，画布先显示原始素材…' : optimized ? '画布当前显示的就是此导出结果。' : '等待图集优化结果'}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 pb-6">
-        <div className="grid grid-cols-2 gap-2">
+      <CardContent className="space-y-3 px-5 pb-5">
+        <div className="grid grid-cols-2 overflow-hidden rounded-md border-2 border-border bg-muted/30">
           <Stat label="原始资源" value={project ? formatSize(project.sourceBytes) : '—'} />
-          <Stat label="图片数" value={project ? `${project.images.size}` : '—'} />
-          <Stat label="图集数" value={optimized ? `${optimized.atlases.length}` : '—'} />
-          <Stat label="占用率" value={optimized ? `${(optimized.occupancy * 100).toFixed(1)}%` : '—'} />
+          <Stat label="纹理资源" value={resourceMetrics ? optimized ? `${resourceMetrics.sourceImageCount} → ${resourceMetrics.activeTextureCount}` : `${resourceMetrics.sourceImageCount}` : '—'} />
+          <Stat label="总像素" value={resourceMetrics ? formatPixels(resourceMetrics.sourcePixels) : '—'} />
+          <Stat label="解码内存" value={resourceMetrics ? `≈${formatSize(resourceMetrics.sourceDecodedBytes)}` : '—'} />
+          <Stat label="输出资源" value={resourceMetrics?.optimizedResourceBytes != null ? formatSize(resourceMetrics.optimizedResourceBytes) : '—'} />
+          <Stat label="当前纹理" value={resourceMetrics ? `≈${formatSize(resourceMetrics.activeTextureBytes)}` : '—'} />
+          <Stat label="图集数" value={optimized ? `${optimized.atlases.length}` : '—'} lastRow />
+          <Stat label="占用率" value={optimized ? `${(optimized.occupancy * 100).toFixed(1)}%` : '—'} lastRow />
         </div>
-        {optimized && (
-          <>
-            <div className="grid gap-3">
-              {optimized.atlases.map(atlas => (
-                <figure key={atlas.id} className="w-full">
-                  <div className="flex h-40 w-full items-center justify-center overflow-hidden rounded-md border-2 border-border bg-muted">
-                    <img src={atlas.objectUrl} alt={atlas.filename} className="size-full object-contain" />
-                  </div>
-                  <figcaption className="mt-1 truncate text-center font-mono text-[10px]">
-                    {atlas.width}
-                    ×
-                    {atlas.height}
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              <ImageIcon className="size-3.5" />
-              {optimized.sourceImageCount}
-              {' '}
-              个引用 →
-              {optimized.packedImageCount}
-              {' '}
-              份像素数据
-            </p>
-            <Button type="button" className="w-full" onClick={() => void exportProject()} disabled={busy || optimizing}>
-              <Download />
-              导出 ZIP
-            </Button>
-          </>
-        )}
-        {optimizing && (
-          <div className="flex items-center gap-2 text-sm font-bold">
-            <LoaderCircle className="size-4 animate-spin" />
-            生成图集中
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          内存按 RGBA 4 B/像素估算，不含 Canvas、解码缓存和播放器开销。
+        </p>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+            <p className="font-bold tracking-wide uppercase">图集预览</p>
+            <span className="max-w-[60%] truncate text-right font-mono font-black" title={optimized ? atlasDimensions : undefined}>{atlasDimensions}</span>
           </div>
-        )}
+          <div
+            ref={atlasStageRef}
+            data-testid="lottie-atlas-stage"
+            aria-label="图集预览画布"
+            {...atlasStagePan.panHandlers}
+            className={cn(
+              'relative flex h-[162px] touch-none overflow-hidden rounded-md border-2 border-border select-none',
+              optimized && (atlasStagePan.panning ? 'cursor-grabbing' : 'cursor-grab'),
+            )}
+            style={{ background: atlasStageView.background }}
+          >
+            {optimized
+              ? (
+                  <div
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                    style={{ transform: `translate(${atlasStagePan.offset.x}px, ${atlasStagePan.offset.y}px)` }}
+                  >
+                    <div
+                      className="flex shrink-0 origin-center items-center gap-2 p-2"
+                      style={{ transform: `scale(${atlasZoom})` }}
+                    >
+                      {optimized.atlases.map(atlas => (
+                        <img
+                          key={atlas.id}
+                          src={atlas.objectUrl}
+                          alt={atlas.filename}
+                          width={atlas.width}
+                          height={atlas.height}
+                          draggable={false}
+                          className={cn('block max-w-none shrink-0', atlasStageView.showBounds && STAGE_BOUNDARY_CLASS)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+              )
+              : (
+                  <div className="m-auto flex items-center justify-center gap-2 rounded-md border-2 border-border bg-background/90 px-3 py-1.5 text-xs font-bold text-muted-foreground">
+                    {optimizing
+                      ? <LoaderCircle className="size-4 animate-spin" />
+                      : <ImageIcon className="size-4" />}
+                    {optimizing ? '生成图集中' : '暂无图集'}
+                  </div>
+                )}
+            <StageZoomIndicator zoom={atlasZoom} visible={atlasStageZoom.zoomIndicatorVisible} />
+            <StageViewControls hasContent={Boolean(optimized)} settings={atlasStageView} />
+            {optimized && (atlasStagePan.offset.x !== 0 || atlasStagePan.offset.y !== 0 || atlasZoom !== 1) && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                title="重置图集视图（居中并恢复 100%）"
+                aria-label="重置图集视图"
+                className="absolute top-2 right-2 bg-background/90"
+                onClick={() => {
+                  atlasStagePan.resetPan()
+                  setAtlasZoom(1)
+                }}
+              >
+                <RotateCcw />
+              </Button>
+            )}
+          </div>
+        </div>
+        <p className="flex min-h-4 items-center gap-1 text-xs text-muted-foreground">
+          <ImageIcon className="size-3.5" />
+          <span className="truncate">
+            {optimized ? `${optimized.sourceImageCount} 个引用 → ${optimized.packedImageCount} 份像素数据` : '生成图集后显示素材合并统计'}
+          </span>
+        </p>
+        <Button type="button" className="w-full" onClick={() => void exportProject()} disabled={!optimized || busy || optimizing}>
+          <Download />
+          导出 ZIP
+        </Button>
       </CardContent>
     </Card>
   )
@@ -423,17 +504,17 @@ export default function LottiePreviewTool() {
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
                 className={cn(
-                  'relative flex h-72 overflow-hidden rounded-md border-2 transition-colors sm:h-96',
+                  'relative flex h-72 touch-none overflow-hidden rounded-md border-2 transition-colors select-none sm:h-96',
                   project && (stagePan.panning ? 'cursor-grabbing' : 'cursor-grab'),
                   dragOver ? 'border-primary bg-primary/10' : 'border-border',
                   !project && 'border-dashed',
                 )}
-                style={DEFAULT_CHECKER_STYLE}
+                style={{ background: stageView.background }}
               >
                 {activeAnimation
                   ? (
                       <div
-                        className="pointer-events-none m-auto size-full shrink-0 origin-center"
+                        className={cn('pointer-events-none m-auto size-full shrink-0 origin-center', stageView.showBounds && STAGE_BOUNDARY_CLASS)}
                         style={{ transform: `translate(${stagePan.offset.x}px, ${stagePan.offset.y}px) scale(${zoom})` }}
                       >
                         {library === 'lottie-web'
@@ -511,12 +592,10 @@ export default function LottiePreviewTool() {
                     <LoaderCircle className="size-7 animate-spin" />
                   </div>
                 )}
+                <StageZoomIndicator zoom={zoom} visible={stageZoom.zoomIndicatorVisible} />
+                <StageViewControls hasContent={Boolean(activeAnimation)} settings={stageView} />
                 {project && (
                   <>
-                    <span className="pointer-events-none absolute bottom-2 left-2 rounded-sm border-2 border-border bg-background/90 px-2 py-0.5 font-mono text-[10px] font-black shadow-hard-xs">
-                      {Math.round(zoom * 100)}
-                      %
-                    </span>
                     {/* 加载内容后：导入按钮悬浮在画布右上角（与九宫格工具一致）；平移/缩放后出现「重置视图」 */}
                     <div className="absolute top-2 right-2 flex gap-1.5">
                       {(stagePan.offset.x !== 0 || stagePan.offset.y !== 0 || zoom !== 1) && (
@@ -576,35 +655,29 @@ export default function LottiePreviewTool() {
                 )}
               </div>
 
-              {project && (
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <Button type="button" size="icon" variant="outline" aria-label={playing ? '暂停' : '播放'} onClick={() => setPlaying(value => !value)} disabled={!activeAnimation}>
-                    {playing ? <Pause /> : <Play />}
-                  </Button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={Math.max(0, totalFrames - 1)}
-                    step={0.01}
-                    value={Math.min(currentFrame, totalFrames - 1)}
-                    disabled={!activeAnimation}
-                    onChange={(event) => {
-                      setPlaying(false)
-                      setCurrentFrame(Number(event.target.value))
-                      setSeekToken(value => value + 1)
-                    }}
-                    className="min-w-32 flex-1 accent-primary disabled:opacity-50"
-                    aria-label="动画进度"
-                  />
-                  <span className="w-24 text-right font-mono text-xs font-bold">
-                    {Math.floor(currentFrame) + 1}
-                    {' '}
-                    /
-                    {' '}
-                    {totalFrames}
-                  </span>
-                </div>
-              )}
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Button type="button" size="icon" variant="outline" aria-label={playing ? '暂停' : '播放'} onClick={() => setPlaying(value => !value)} disabled={!activeAnimation}>
+                  {playing ? <Pause /> : <Play />}
+                </Button>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(0, totalFrames - 1)}
+                  step={0.01}
+                  value={Math.min(currentFrame, totalFrames - 1)}
+                  disabled={!activeAnimation}
+                  onChange={(event) => {
+                    setPlaying(false)
+                    setCurrentFrame(Number(event.target.value))
+                    setSeekToken(value => value + 1)
+                  }}
+                  className="min-w-32 flex-1 accent-primary disabled:opacity-50"
+                  aria-label="动画进度"
+                />
+                <span className="w-24 text-right font-mono text-xs font-bold text-muted-foreground">
+                  {project ? `${Math.floor(currentFrame) + 1} / ${totalFrames}` : '— / —'}
+                </span>
+              </div>
             </CardContent>
           </Card>
           {resourceResult}
@@ -686,11 +759,11 @@ export default function LottiePreviewTool() {
                 <Settings2 className="size-5" />
                 图集设置
               </CardTitle>
-              <CardDescription>开启后画布与导出均使用图集素材</CardDescription>
-              <CardAction><Checkbox checked={optimizationEnabled} onChange={setOptimizationEnabled} label="纹理图集优化" disabled={!project} /></CardAction>
+              <CardDescription>{project && excludedImageDescription ? excludedImageDescription : '开启后画布与导出均使用图集素材'}</CardDescription>
+              <CardAction><Checkbox checked={optimizationEnabled && optimizableImageCount > 0} onChange={setOptimizationEnabled} label="纹理图集优化" disabled={!project || optimizableImageCount === 0} /></CardAction>
             </CardHeader>
             <CardContent className="pb-6">
-              <div className={cn((!optimizationEnabled || !project) && 'pointer-events-none opacity-45')}>
+              <div className={cn((!optimizationEnabled || !project || optimizableImageCount === 0) && 'pointer-events-none opacity-45')}>
                 <label className="mb-3 block text-xs font-bold text-muted-foreground">
                   最大图集尺寸
                   <select value={options.maxSize} onChange={event => updateOption('maxSize', Number(event.target.value) as AtlasOptions['maxSize'])} className={cn(INPUT_CLASS, 'mt-1')}>

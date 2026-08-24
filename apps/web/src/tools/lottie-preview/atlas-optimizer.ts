@@ -11,7 +11,7 @@ import type {
 import { zipSync } from 'fflate'
 
 import { MaxRectsPacker, Rectangle } from 'maxrects-packer'
-import { collectReferencedAssetIds } from './import-files'
+import { collectReferencedAssetIds, resolveImageAssetsForPreview } from './import-files'
 
 interface PreparedSprite {
   assetIds: string[]
@@ -40,6 +40,19 @@ interface PlacedSprite {
 
 interface SpriteRectangle extends Rectangle {
   data: PreparedSprite
+}
+
+export function isAtlasOptimizableImage(image: ResolvedImageAsset): boolean {
+  return image.asset.t !== 'seq' && !image.isAnimated
+}
+
+export function countAtlasOptimizableImages(project: LoadedLottieProject): number {
+  let count = 0
+  for (const image of project.images.values()) {
+    if (isAtlasOptimizableImage(image))
+      count++
+  }
+  return count
 }
 
 function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -179,6 +192,8 @@ async function prepareSprites(project: LoadedLottieProject, options: AtlasOption
   const sprites: PreparedSprite[] = []
   const duplicateMap = new Map<string, PreparedSprite>()
   for (const image of project.images.values()) {
+    if (!isAtlasOptimizableImage(image))
+      continue
     const normalized = await normalizeAsset(image)
     const trimmed = options.allowTrim
       ? trimCanvas(normalized, options.alphaThreshold)
@@ -328,7 +343,8 @@ export function disposeOptimizedResult(result: OptimizedLottieResult | null): vo
 }
 
 export async function optimizeLottie(project: LoadedLottieProject, options: AtlasOptions): Promise<OptimizedLottieResult> {
-  if (project.images.size === 0)
+  const sourceImageCount = countAtlasOptimizableImages(project)
+  if (sourceImageCount === 0)
     throw new Error('没有可打包的图片素材')
 
   const sprites = await prepareSprites(project, options)
@@ -406,7 +422,7 @@ export async function optimizeLottie(project: LoadedLottieProject, options: Atla
     e: 0,
   }))
   const animation = rewriteAnimation(project.animation, atlasAssets, placements)
-  const previewAnimation = structuredClone(animation)
+  const previewAnimation = resolveImageAssetsForPreview(animation, project.images)
   for (const asset of previewAnimation.assets ?? []) {
     const atlas = atlases.find(item => item.filename === asset.p)
     if (!atlas)
@@ -420,7 +436,7 @@ export async function optimizeLottie(project: LoadedLottieProject, options: Atla
     animation,
     previewAnimation,
     atlases,
-    sourceImageCount: project.images.size,
+    sourceImageCount,
     packedImageCount: sprites.length,
     occupancy: atlasArea === 0 ? 0 : usedArea / atlasArea,
   }
@@ -441,6 +457,11 @@ export async function exportOptimizedProject(project: LoadedLottieProject, resul
   }
   for (const atlas of result.atlases)
     entries[atlas.filename] = new Uint8Array(await atlas.blob.arrayBuffer())
+  for (const image of project.images.values()) {
+    if (isAtlasOptimizableImage(image) || image.asset.e === 1 || image.asset.p?.startsWith('data:'))
+      continue
+    entries[image.sourceName] = new Uint8Array(await image.blob.arrayBuffer())
+  }
   const zip = zipSync(entries, { level: 6 })
   triggerDownload(new Blob([zip as BlobPart], { type: 'application/zip' }), `${project.name}-atlas.zip`)
 }

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 /** 舞台缩放范围：滚轮 / 双指捏合共用 */
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 8
+const ZOOM_INDICATOR_HIDE_DELAY = 1200
 
 /** 指数缩放：每单位 delta 缩放固定倍率，手感均匀 */
 export function clampZoom(z: number): number {
@@ -25,11 +26,31 @@ export function useStageZoom(
   ref: RefObject<HTMLElement | null>,
   zoom: number,
   setZoom: Dispatch<SetStateAction<number>>,
+  enabled = true,
 ) {
+  const [zoomIndicatorVisible, setZoomIndicatorVisible] = useState(false)
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom
   const setZoomRef = useRef(setZoom)
   setZoomRef.current = setZoom
+  const enabledRef = useRef(enabled)
+  enabledRef.current = enabled
+  const hideIndicatorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const revealZoomIndicator = useCallback(() => {
+    setZoomIndicatorVisible(true)
+    if (hideIndicatorTimerRef.current)
+      clearTimeout(hideIndicatorTimerRef.current)
+    hideIndicatorTimerRef.current = setTimeout(() => {
+      hideIndicatorTimerRef.current = null
+      setZoomIndicatorVisible(false)
+    }, ZOOM_INDICATOR_HIDE_DELAY)
+  }, [])
+
+  useEffect(() => () => {
+    if (hideIndicatorTimerRef.current)
+      clearTimeout(hideIndicatorTimerRef.current)
+  }, [])
 
   // 滚轮 / 触控板捏合
   useEffect(() => {
@@ -37,14 +58,17 @@ export function useStageZoom(
     if (!el)
       return
     const onWheel = (e: WheelEvent) => {
+      if (!enabledRef.current)
+        return
       e.preventDefault()
       // 触控板捏合（ctrlKey）的 delta 更小更密，系数分开调
       const speed = e.ctrlKey ? 0.01 : 0.001
       setZoomRef.current(z => clampZoom(z * Math.exp(-e.deltaY * speed)))
+      revealZoomIndicator()
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [ref])
+  }, [ref, revealZoomIndicator])
 
   // 触屏双指捏合：跟踪两个 touch 指针的距离比
   useEffect(() => {
@@ -59,7 +83,7 @@ export function useStageZoom(
       return Math.hypot(a.x - b.x, a.y - b.y)
     }
     const onDown = (e: PointerEvent) => {
-      if (e.pointerType !== 'touch')
+      if (!enabledRef.current || e.pointerType !== 'touch')
         return
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
       if (touches.size === 2) {
@@ -71,8 +95,10 @@ export function useStageZoom(
       if (!touches.has(e.pointerId))
         return
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
-      if (touches.size === 2 && startDist > 0)
+      if (touches.size === 2 && startDist > 0) {
         setZoomRef.current(() => clampZoom(startZoom * distance() / startDist))
+        revealZoomIndicator()
+      }
     }
     const onUp = (e: PointerEvent) => {
       touches.delete(e.pointerId)
@@ -87,7 +113,9 @@ export function useStageZoom(
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointercancel', onUp)
     }
-  }, [ref])
+  }, [ref, revealZoomIndicator])
+
+  return { zoomIndicatorVisible }
 }
 
 /**

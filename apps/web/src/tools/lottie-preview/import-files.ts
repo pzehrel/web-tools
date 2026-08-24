@@ -1,6 +1,7 @@
 import type { LoadedLottieProject, LottieAsset, LottieDocument, LottieLayer, ResolvedImageAsset } from './types'
 
 import { unzipSync } from 'fflate'
+import { detectAnimatedImage } from './image-animation'
 
 const IMAGE_MIME_BY_EXT: Record<string, string> = {
   avif: 'image/avif',
@@ -119,8 +120,12 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return response.blob()
 }
 
-function isStillImageAsset(asset: LottieAsset): boolean {
-  return !asset.layers && asset.t !== 'seq' && typeof asset.p === 'string' && typeof asset.w === 'number' && typeof asset.h === 'number'
+export function isPreviewImageAsset(asset: LottieAsset): boolean {
+  return !asset.layers
+    && (!asset.t || asset.t === 'seq')
+    && typeof asset.p === 'string'
+    && typeof asset.w === 'number'
+    && typeof asset.h === 'number'
 }
 
 export function collectReferencedAssetIds(animation: LottieDocument): Set<string> {
@@ -140,17 +145,21 @@ export function collectReferencedAssetIds(animation: LottieDocument): Set<string
   return referenced
 }
 
-export function createPreviewAnimation(project: LoadedLottieProject): LottieDocument {
-  const animation = structuredClone(project.animation)
-  for (const asset of animation.assets ?? []) {
-    const image = project.images.get(asset.id)
+export function resolveImageAssetsForPreview(animation: LottieDocument, images: Map<string, ResolvedImageAsset>): LottieDocument {
+  const previewAnimation = structuredClone(animation)
+  for (const asset of previewAnimation.assets ?? []) {
+    const image = images.get(asset.id)
     if (!image)
       continue
     asset.u = ''
     asset.p = image.url
     asset.e = 1
   }
-  return animation
+  return previewAnimation
+}
+
+export function createPreviewAnimation(project: LoadedLottieProject): LottieDocument {
+  return resolveImageAssetsForPreview(project.animation, project.images)
 }
 
 export function disposeProject(project: LoadedLottieProject | null): void {
@@ -176,11 +185,8 @@ export async function loadLottieProject(files: File[]): Promise<LoadedLottieProj
   for (const asset of animation.assets ?? []) {
     if (!referencedAssetIds.has(asset.id))
       continue
-    if (!isStillImageAsset(asset)) {
-      if (!asset.layers && asset.t === 'seq')
-        warnings.push(`图片序列 ${asset.id} 暂不支持图集优化`)
+    if (!isPreviewImageAsset(asset))
       continue
-    }
 
     try {
       let blob: Blob | null = null
@@ -204,8 +210,9 @@ export async function loadLottieProject(files: File[]): Promise<LoadedLottieProj
         warnings.push(`缺少图片素材：${asset.u ?? ''}${asset.p ?? ''}`)
         continue
       }
+      const isAnimated = await detectAnimatedImage(blob, sourceName)
       const url = URL.createObjectURL(blob)
-      images.set(asset.id, { assetId: asset.id, asset, blob, url, sourceName })
+      images.set(asset.id, { assetId: asset.id, asset, blob, isAnimated, url, sourceName })
       sourceBytes += blob.size
     }
     catch {

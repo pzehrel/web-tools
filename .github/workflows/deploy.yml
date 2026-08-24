@@ -49,8 +49,8 @@ jobs:
             echo "Worker 已存在"
           fi
 
-      # Workers 语义：tag 发版 → wrangler deploy 上生产（web-tools.pzehrel.workers.dev）；
-      # main push / PR → wrangler versions upload，只生成预览 URL，不碰生产
+      # Workers 语义：tag 发版 → wrangler deploy 上生产（自定义域名由 Cloudflare 控制台管理）；
+      # main push / PR → wrangler versions upload，只生成临时预览 URL，不碰生产
       - name: Determine deploy target
         id: target
         run: |

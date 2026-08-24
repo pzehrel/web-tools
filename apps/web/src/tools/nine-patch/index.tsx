@@ -19,9 +19,10 @@ import { flushSync } from 'react-dom'
 import { Link } from 'react-router'
 
 import { Seo } from '@/components/seo'
+import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
+import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DEFAULT_CHECKER_STYLE as CHECKER_STYLE } from '@/lib/checker'
 import { useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoImage } from '../demos/nine-patch'
@@ -308,6 +309,8 @@ export default function NinePatchTool() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editorStageRef = useRef<HTMLDivElement>(null)
   const previewStageRef = useRef<HTMLDivElement>(null)
+  const editorStageView = useStageViewSettings()
+  const previewStageView = useStageViewSettings()
   /** 切线拖拽快照：指针 id + 边 + 起始指针坐标 + 起始边距（图像 px） */
   const lineDragRef = useRef<{ pointerId: number, side: Side, startClient: number, startValue: number } | null>(null)
   /** 预览框缩边拖拽快照：起始指针 / 尺寸 / 缩放 + 锚定边（对边或对角的屏幕坐标，拖拽全程保持不动） */
@@ -327,8 +330,8 @@ export default function NinePatchTool() {
   const imageRef = useRef<SourceImage | null>(null)
   imageRef.current = image
 
-  useStageZoom(editorStageRef, zoom, setZoom)
-  useStageZoom(previewStageRef, previewZoom, setPreviewZoom)
+  const editorStageZoom = useStageZoom(editorStageRef, zoom, setZoom, Boolean(image))
+  const previewStageZoom = useStageZoom(previewStageRef, previewZoom, setPreviewZoom, Boolean(image))
   const editorPan = useStagePan(editorStageRef, () => lineDragRef.current !== null)
   const previewPan = useStagePan(previewStageRef, () => resizeDragRef.current !== null)
 
@@ -786,12 +789,12 @@ export default function NinePatchTool() {
                   !image && 'border-dashed',
                   dragOver ? 'border-primary' : 'border-border',
                 )}
-                style={CHECKER_STYLE}
+                style={{ background: editorStageView.background }}
               >
                 {image
                   ? (
                       <div
-                        className="relative m-auto shrink-0 select-none"
+                        className={cn('relative m-auto shrink-0 select-none', editorStageView.showBounds && STAGE_BOUNDARY_CLASS)}
                         style={{
                           width: image.width * scale,
                           height: image.height * scale,
@@ -847,6 +850,8 @@ export default function NinePatchTool() {
                       </div>
                     )}
               </div>
+              <StageZoomIndicator zoom={zoom} visible={editorStageZoom.zoomIndicatorVisible} />
+              <StageViewControls hasContent={Boolean(image)} settings={editorStageView} />
               {/* 有图后：操作按钮悬浮在舞台右上角（与帧动画工具一致）；平移后出现「回到居中」 */}
               {image && (
                 <div className="absolute top-2 right-2 flex gap-1.5">
@@ -911,7 +916,7 @@ export default function NinePatchTool() {
                   'flex h-72 touch-none overflow-hidden rounded-md border-2 border-border p-8 select-none',
                   previewPan.panning ? 'cursor-grabbing' : 'cursor-grab',
                 )}
-                style={CHECKER_STYLE}
+                style={{ background: previewStageView.background }}
               >
                 {image
                   ? (
@@ -933,7 +938,7 @@ export default function NinePatchTool() {
                             transformOrigin: '0 0',
                           }}
                         >
-                          <div className="group/preview relative m-3" style={{ width: previewSize.w, height: previewSize.h }}>
+                          <div className={cn('group/preview relative m-3', previewStageView.showBounds && STAGE_BOUNDARY_CLASS)} style={{ width: previewSize.w, height: previewSize.h }}>
                             <div
                               className="flex size-full items-center justify-center"
                               style={{
@@ -992,6 +997,8 @@ export default function NinePatchTool() {
                       <p className="m-auto text-sm text-muted-foreground">先导入一张图片</p>
                     )}
               </div>
+              <StageZoomIndicator zoom={previewZoom} visible={previewStageZoom.zoomIndicatorVisible} />
+              <StageViewControls hasContent={Boolean(image)} settings={previewStageView} />
               {/* 平移 / 缩放 / 缩边补偿后：悬浮「重置视图」回到居中 */}
               {(previewPan.offset.x !== 0 || previewPan.offset.y !== 0 || previewZoom !== 1 || resizeOffset.x !== 0 || resizeOffset.y !== 0) && (
                 <Button

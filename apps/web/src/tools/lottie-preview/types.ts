@@ -51,6 +51,7 @@ export interface ResolvedImageAsset {
   assetId: string
   asset: LottieAsset
   blob: Blob
+  isAnimated: boolean
   url: string
   sourceName: string
 }

@@ -4,6 +4,8 @@
  */
 import process from 'node:process'
 
+import './load-env.ts'
+
 function int(value: string | undefined, fallback: number): number {
   const n = Number.parseInt(value ?? '', 10)
   return Number.isFinite(n) ? n : fallback

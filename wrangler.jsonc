@@ -2,6 +2,10 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "web-tools",
   "compatibility_date": "2026-08-18",
+  // 生产仅使用 Cloudflare 控制台配置的自定义域名，不开放 workers.dev
+  "workers_dev": false,
+  // 保留 main / PR 的临时版本预览 URL
+  "preview_urls": true,
   "assets": {
     "directory": "./apps/web/dist",
     // 与 canonical/sitemap 的无尾斜杠 URL 对齐，避免 307 跳转

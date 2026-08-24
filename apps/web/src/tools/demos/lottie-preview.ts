@@ -130,6 +130,7 @@ export async function createDemoProject(): Promise<LoadedLottieProject> {
       assetId: asset.id,
       asset,
       blob,
+      isAnimated: false,
       url: URL.createObjectURL(blob),
       sourceName: asset.p!,
     })

@@ -22,13 +22,14 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import { Seo } from '@/components/seo'
+import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
+import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { CHECKER_PALETTES, checkerBackground } from '@/lib/checker'
 import { useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoFrames } from '../demos/frame-animation'
@@ -47,7 +48,6 @@ interface FrameItem {
 }
 
 type Direction = 'forward' | 'reverse' | 'pingpong'
-type StageBg = 'checker' | 'solid'
 type SpriteDimensionAxis = 'cols' | 'rows'
 interface SpriteDims {
   cols: number
@@ -521,24 +521,6 @@ function OptionGroup<T extends string | number>({
   )
 }
 
-/* ---------- 舞台颜色 ---------- */
-
-/** 订阅 <html> 的 dark class 变化（主题切换由 ThemeToggle 驱动） */
-function subscribeDarkClass(onChange: () => void): () => void {
-  const ob = new MutationObserver(onChange)
-  ob.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-  return () => ob.disconnect()
-}
-
-function readIsDark(): boolean {
-  return document.documentElement.classList.contains('dark')
-}
-
-/** 是否处于暗色主题：跟随主题切换实时更新 */
-function useIsDarkTheme(): boolean {
-  return useSyncExternalStore(subscribeDarkClass, readIsDark, () => false)
-}
-
 /**
  * 双头滑块的共享样式：轨道透明且不响应指针（自定义轨道视觉），
  * 只有滑块可拖；两个 input 重叠放置，各管一个端点。
@@ -597,21 +579,12 @@ export default function FrameAnimationTool() {
   const [direction, setDirection] = useState<Direction>('forward')
   const [loopInfinite, setLoopInfinite] = useState(true)
   const [loopCount, setLoopCount] = useState(3)
-  const [stageBg, setStageBg] = useState<StageBg>('checker')
-  /** 棋盘配色：固定 4 套（每套含亮/暗两版），默认浅灰 */
-  const [checkerIndex, setCheckerIndex] = useState(0)
-  const isDark = useIsDarkTheme()
-  const checkerColors = isDark ? CHECKER_PALETTES[checkerIndex].dark : CHECKER_PALETTES[checkerIndex].light
-  /** 纯色背景：同一组 6 套配色（取格 A 色），跟随主题 */
-  const [solidIndex, setSolidIndex] = useState(0)
-  const solidColor = isDark ? CHECKER_PALETTES[solidIndex].dark.a : CHECKER_PALETTES[solidIndex].light.a
+  const stageView = useStageViewSettings()
   /** 舞台视图缩放（1 = 100%）：滚轮或双指调整，不影响导出 */
   const [zoom, setZoom] = useState(0.75)
   const [pixelated, setPixelated] = useState(false)
-  /** 显示帧边界：给当前帧画出单张精灵图格子的描边 */
-  const [showBounds, setShowBounds] = useState(true)
   const stageRef = useRef<HTMLDivElement>(null)
-  useStageZoom(stageRef, zoom, setZoom)
+  const stageZoom = useStageZoom(stageRef, zoom, setZoom, frames.length > 0)
   const stagePan = useStagePan(stageRef, () => false)
   /** 入选的帧（按 id）：勾选 = 参与预览 / 播放 / 导出；不提供删除，防误操作 */
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
@@ -1208,11 +1181,7 @@ export default function FrameAnimationTool() {
                   frameCount === 0 && 'border-dashed',
                   dragOver ? 'border-primary' : 'border-border',
                 )}
-                style={{
-                  background: stageBg === 'checker'
-                    ? checkerBackground(checkerColors.a, checkerColors.b)
-                    : solidColor,
-                }}
+                style={{ background: stageView.background }}
               >
                 {frame
                   ? (
@@ -1223,7 +1192,7 @@ export default function FrameAnimationTool() {
                         className={cn(
                           'm-auto shrink-0',
                           // 帧边界：勾出单张精灵图格子的范围
-                          showBounds && 'outline-2 outline-dashed outline-primary -outline-offset-2',
+                          stageView.showBounds && STAGE_BOUNDARY_CLASS,
                         )}
                         style={{
                           width: frame.width * zoom,
@@ -1270,6 +1239,8 @@ export default function FrameAnimationTool() {
                           )
                     )}
               </div>
+              <StageZoomIndicator zoom={zoom} visible={stageZoom.zoomIndicatorVisible} />
+              <StageViewControls hasContent={Boolean(frame)} settings={stageView} />
               {/* 有帧时：添加按钮悬浮在舞台右上角；平移后出现「回到居中」 */}
               {frame && (
                 <div className="absolute top-2 right-2 flex gap-1.5">
@@ -1341,7 +1312,7 @@ export default function FrameAnimationTool() {
               </span>
               <div
                 className="min-h-24 max-w-full overflow-hidden rounded-md border-2 border-border"
-                style={{ background: stageBg === 'checker' ? checkerBackground(checkerColors.a, checkerColors.b) : solidColor }}
+                style={{ background: stageView.background }}
               >
                 {sprite && sprite.key === spriteKey && spriteKey !== ''
                   ? (
@@ -1637,12 +1608,6 @@ export default function FrameAnimationTool() {
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
               <BrutalCheckbox
-                checked={showBounds}
-                onChange={setShowBounds}
-                label="帧边界"
-                title="勾出单张精灵图格子的描边"
-              />
-              <BrutalCheckbox
                 checked={pixelated}
                 onChange={setPixelated}
                 label="像素风"
@@ -1650,55 +1615,6 @@ export default function FrameAnimationTool() {
               />
             </div>
 
-            {/* 舞台背景 */}
-            <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">背景</p>
-              <OptionGroup<StageBg>
-                label="舞台背景"
-                value={stageBg}
-                onChange={setStageBg}
-                options={[
-                  { value: 'checker', label: '棋盘格' },
-                  { value: 'solid', label: '纯色' },
-                ]}
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              {/* 同一批 DOM 在棋盘格 / 纯色间复用（只换内联样式与选中态），避免卸载重挂造成的闪烁 */}
-              <div
-                className="grid w-full grid-cols-6 items-center gap-2"
-                role="radiogroup"
-                aria-label={stageBg === 'checker' ? '棋盘配色' : '纯色配色'}
-              >
-                {CHECKER_PALETTES.map((palette, index) => {
-                  const colors = isDark ? palette.dark : palette.light
-                  const active = stageBg === 'checker' ? checkerIndex : solidIndex
-                  return (
-                    <button
-                      key={palette.name}
-                      type="button"
-                      role="radio"
-                      aria-checked={active === index}
-                      title={palette.name}
-                      aria-label={palette.name}
-                      onClick={() => {
-                        if (stageBg === 'checker')
-                          setCheckerIndex(index)
-                        else
-                          setSolidIndex(index)
-                      }}
-                      className={cn(
-                        'aspect-square w-full rounded-md border-2 shadow-hard-xs transition-[transform,box-shadow]',
-                        active === index
-                          ? 'border-primary ring-[3px] ring-ring/50'
-                          : 'border-border hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
-                      )}
-                      style={{ background: stageBg === 'checker' ? checkerBackground(colors.a, colors.b) : colors.a }}
-                    />
-                  )
-                })}
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -1875,7 +1791,7 @@ export default function FrameAnimationTool() {
                       alt={f.name}
                       draggable={false}
                       className="h-10 w-10 shrink-0 rounded-sm object-contain"
-                      style={{ background: stageBg === 'checker' ? checkerBackground(checkerColors.a, checkerColors.b) : solidColor }}
+                      style={{ background: stageView.background }}
                     />
                     {/* 文件名（去扩展名）+ 尺寸/体积（两行） */}
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -1966,7 +1882,7 @@ export default function FrameAnimationTool() {
             <div className="mt-4 flex justify-center">
               <div
                 className="rounded-md border-2 border-border p-2"
-                style={{ background: checkerBackground(checkerColors.a, checkerColors.b) }}
+                style={{ background: stageView.checkerBackground }}
               >
                 <div className="relative w-fit">
                   <img

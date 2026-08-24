@@ -9,15 +9,19 @@ Web 工具集合的可选后端（MVP）。架构决策见 `docs/BACKEND.md`。
 ```bash
 # 仓库根
 pnpm install
-pnpm dev:server        # tsx watch，默认 http://localhost:8787
 
-# 数据库：export DATABASE_URL 指向可用的 Postgres（如内网 dev 机器）
-DATABASE_URL=postgres://webtools:webtools@192.168.x.x:5432/webtools pnpm dev:server
+# 配置数据库（.env 已被 git 忽略）
+cp apps/server/.env.example apps/server/.env
+# 编辑 apps/server/.env，让 DATABASE_URL 指向可用的 Postgres（如内网 dev 机器）
 
 # 建表（开发期用 push 直同步 schema；正式发版改用 generate + migrate）
 pnpm --filter @web-tools/server db:push
+
+# tsx watch，默认 http://localhost:8787
+pnpm dev:server
 ```
 
+服务端和 Drizzle 命令都会读取 `apps/server/.env`；shell/Docker 已注入的环境变量优先。
 默认值见 `src/env.ts`：`PORT=8787`、`DATABASE_URL=postgres://webtools:webtools@localhost:5432/webtools`、`DATA_DIR=./data/files`。
 
 ## API

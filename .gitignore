@@ -204,6 +204,7 @@ dist
 *.sw?
 .vercel
 .env*
+!apps/server/.env.example
 .playwright-cli/
 
 # server 本地数据卷与 env
