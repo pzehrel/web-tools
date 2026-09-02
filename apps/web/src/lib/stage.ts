@@ -8,13 +8,60 @@ import type { Dispatch, PointerEvent as ReactPointerEvent, RefObject, SetStateAc
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /** 舞台缩放范围：滚轮 / 双指捏合共用 */
-const MIN_ZOOM = 0.25
+const MIN_ZOOM = 0.01
 const MAX_ZOOM = 8
 const ZOOM_INDICATOR_HIDE_DELAY = 1200
 
 /** 指数缩放：每单位 delta 缩放固定倍率，手感均匀 */
 export function clampZoom(z: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
+}
+
+/**
+ * 把一组内容的联合矩形完整放进舞台。返回的是 100% 视图对应的基础比例，
+ * 用户缩放应在此基础上继续相乘。
+ */
+export function calculateStageFitScale(
+  stageWidth: number,
+  stageHeight: number,
+  contentWidth: number,
+  contentHeight: number,
+  inset = 8,
+): number {
+  if (stageWidth <= 0 || stageHeight <= 0 || contentWidth <= 0 || contentHeight <= 0)
+    return 1
+  const availableWidth = Math.max(1, stageWidth - inset * 2)
+  const availableHeight = Math.max(1, stageHeight - inset * 2)
+  return Math.min(availableWidth / contentWidth, availableHeight / contentHeight)
+}
+
+/** 监听舞台尺寸，为一个或多个内容的联合矩形计算“适配 = 100%”基础比例。 */
+export function useStageFitScale(
+  ref: RefObject<HTMLElement | null>,
+  contentWidth: number,
+  contentHeight: number,
+  enabled = true,
+  inset = 8,
+): number {
+  const [fitScale, setFitScale] = useState(1)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !enabled) {
+      setFitScale(1)
+      return
+    }
+
+    const update = () => {
+      setFitScale(calculateStageFitScale(el.clientWidth, el.clientHeight, contentWidth, contentHeight, inset))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [contentHeight, contentWidth, enabled, inset, ref])
+
+  return fitScale
 }
 
 /**

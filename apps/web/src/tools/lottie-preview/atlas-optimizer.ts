@@ -43,7 +43,7 @@ interface SpriteRectangle extends Rectangle {
 }
 
 export function isAtlasOptimizableImage(image: ResolvedImageAsset): boolean {
-  return image.asset.t !== 'seq' && !image.isAnimated
+  return !image.isAnimated
 }
 
 export function countAtlasOptimizableImages(project: LoadedLottieProject): number {

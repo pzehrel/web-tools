@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Film, Frame, Images, Link2, Type } from 'lucide-react'
+import { Film, Frame, Images, Link2, Sparkles, Type } from 'lucide-react'
 
 export interface ToolMeta {
   /** 路由/锚点 id，kebab-case */
@@ -52,6 +52,14 @@ export const tools: ToolMeta[] = [
     icon: Frame,
     status: 'ready',
     accentClass: 'bg-chart-4',
+  },
+  {
+    id: 'css-shine',
+    name: 'CSS 扫光',
+    description: '调出扫光动效并复制即用 CSS',
+    icon: Sparkles,
+    status: 'ready',
+    accentClass: 'bg-chart-2',
   },
   {
     id: 'font-toolkit',

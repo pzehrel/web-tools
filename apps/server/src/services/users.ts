@@ -1,8 +1,7 @@
-import { randomUUID } from 'node:crypto'
 import { and, eq, gt, isNull, lt, or } from 'drizzle-orm'
 
 import type { Db } from '../db/index.ts'
-import { assets, sessions, users } from '../db/schema.ts'
+import type { Tables } from '../deps.ts'
 import { hashPassword, newSessionToken, sha256, verifyPassword } from '../passwords.ts'
 
 export const SESSION_COOKIE = 'wt_session'
@@ -15,12 +14,16 @@ export interface PublicUser {
 
 export class UserService {
   private readonly db: Db
+  private readonly t: Tables
 
-  constructor(db: Db) {
+  /** tables 由组合根注入：Node 传 pg schema，Workers 传 sqlite schema（结构同构） */
+  constructor(db: Db, tables: Tables) {
     this.db = db
+    this.t = tables
   }
 
   async register(email: string, password: string): Promise<PublicUser> {
+    const { users } = this.t
     const [existing] = await this.db
       .select({ id: users.id })
       .from(users)
@@ -30,12 +33,13 @@ export class UserService {
       throw new AuthError('email already registered', 409)
     const [row] = await this.db
       .insert(users)
-      .values({ id: randomUUID(), email, passwordHash: await hashPassword(password) })
+      .values({ id: crypto.randomUUID(), email, passwordHash: await hashPassword(password) })
       .returning()
     return { id: row.id, email: row.email }
   }
 
   async login(email: string, password: string): Promise<{ user: PublicUser, token: string }> {
+    const { sessions, users } = this.t
     const [row] = await this.db
       .select()
       .from(users)
@@ -49,7 +53,7 @@ export class UserService {
       throw new AuthError('invalid email or password', 401)
     const { token, tokenHash } = newSessionToken()
     await this.db.insert(sessions).values({
-      id: randomUUID(),
+      id: crypto.randomUUID(),
       userId: row.id,
       tokenHash,
       expiresAt: new Date(Date.now() + SESSION_TTL_MS),
@@ -60,6 +64,7 @@ export class UserService {
   async logout(token: string | undefined): Promise<void> {
     if (!token)
       return
+    const { sessions } = this.t
     await this.db.delete(sessions).where(eq(sessions.tokenHash, sha256(token)))
   }
 
@@ -67,6 +72,7 @@ export class UserService {
   async userFromToken(token: string | undefined): Promise<PublicUser | undefined> {
     if (!token)
       return undefined
+    const { sessions, users } = this.t
     const [row] = await this.db
       .select({ id: users.id, email: users.email })
       .from(sessions)
@@ -80,6 +86,7 @@ export class UserService {
   async claimDeviceAssets(userId: string, deviceId: string | undefined): Promise<number> {
     if (!deviceId)
       return 0
+    const { assets } = this.t
     const rows = await this.db
       .update(assets)
       .set({ userId })
@@ -90,6 +97,7 @@ export class UserService {
 
   /** 顺手清理过期会话（惰性，无定时任务） */
   async purgeExpiredSessions(): Promise<void> {
+    const { sessions } = this.t
     await this.db.delete(sessions).where(or(lt(sessions.expiresAt, new Date())))
   }
 }

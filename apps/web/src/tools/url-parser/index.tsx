@@ -200,7 +200,7 @@ function ParamRow({
 
   return (
     <div>
-      <div className="group flex items-center gap-0.5 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
+      <div className="group flex items-start gap-0.5 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
         <TreePrefix lastFlags={lastFlags} isLast={isLast} />
 
         {/* key：param 可编辑，hash 固定为 # */}
@@ -448,7 +448,7 @@ function StaticRow({ node, depth, isLast, lastFlags }: { node: UrlNode, depth: n
 
   return (
     <div>
-      <div className="flex items-center gap-0.5 rounded-sm pr-1 leading-5">
+      <div className="flex items-start gap-0.5 rounded-sm pr-1 leading-5">
         <TreePrefix lastFlags={lastFlags} isLast={isLast} />
         {/* key：param 展示参数名，hash 固定为 # */}
         <span className={cn('shrink-0 px-1 text-sm font-bold', keyClass)}>
@@ -500,7 +500,7 @@ function StaticTree({ tree, depth, lastFlags }: { tree: UrlTree, depth: number, 
 function StaticUrlTree({ tree }: { tree: UrlTree }) {
   return (
     <>
-      <div className="flex items-center gap-1 leading-5">
+      <div className="flex items-start gap-1 leading-5">
         <Link2 className={cn('size-3.5 shrink-0', DEPTH_COLORS[0])} />
         <span className={cn('flex-1 font-mono text-sm break-all', DEPTH_COLORS[0])}>{baseOfTree(tree)}</span>
       </div>
@@ -1291,7 +1291,7 @@ function UrlParserTool() {
                   {/* 参数树 */}
                   <div className="w-full">
                     {/* 根节点：顶层 URL 的 base（可编辑），颜色与下面的参数字段一致 */}
-                    <div className="group flex items-center gap-1 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
+                    <div className="group flex items-start gap-1 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
                       <Link2 className={cn('size-3.5 shrink-0', DEPTH_COLORS[0])} />
                       <span
                         data-drop-url="root"
@@ -1378,7 +1378,7 @@ function UrlParserTool() {
         </CardContent>
       </Card>
 
-      {/* 记录（存 localStorage，仅客户端渲染以避免 hydration 不一致） */}
+      {/* 记录（存 IndexedDB，仅客户端渲染以避免 hydration 不一致） */}
       <ClientOnly>
         {() => (
           <Card className="mt-5">

@@ -13,6 +13,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Save,
   Settings2,
   SlidersHorizontal,
   Sparkles,
@@ -28,13 +29,14 @@ import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-import { useStagePan, useStageZoom } from '@/lib/stage'
+import { useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoProject } from '../demos/lottie-preview'
 import { countAtlasOptimizableImages, disposeOptimizedResult, exportOptimizedProject, optimizeLottie } from './atlas-optimizer'
 import { createPreviewAnimation, disposeProject, loadLottieProject } from './import-files'
 import { LottiePreview } from './preview'
 import { LottieReactPreview } from './react-preview'
+import { createLottieArchive, createLottieItem, useLottieRecords, type LottieRecordMeta } from './records'
 import { calculateLottieResourceMetrics } from './resource-metrics'
 
 const DEFAULT_OPTIONS: AtlasOptions = {
@@ -53,20 +55,43 @@ const INPUT_CLASS = 'h-9 w-full rounded-md border-2 border-border bg-background 
 
 type LottieLibrary = 'lottie-react' | 'lottie-web'
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024)
-    return `${bytes} B`
-  if (bytes < 1024 * 1024)
-    return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+interface ComparisonValue {
+  after: string
+  before: string
+  unit: string
 }
 
-function formatPixels(pixels: number): string {
-  if (pixels < 1000)
-    return `${pixels} px`
-  if (pixels < 1000 * 1000)
-    return `${(pixels / 1000).toFixed(1)} Kpx`
-  return `${(pixels / 1000 / 1000).toFixed(2)} MP`
+function formatComparisonValue(before: number | null, after: number | null, scales: Array<{ decimals: number, divisor: number, unit: string }>): ComparisonValue {
+  if (before == null)
+    return { after: '—', before: '—', unit: '' }
+  const largest = Math.max(before, after ?? before)
+  let scale = scales[0]
+  for (const candidate of scales) {
+    if (largest >= candidate.divisor)
+      scale = candidate
+  }
+  const format = (value: number) => scale.decimals === 0 ? `${Math.round(value / scale.divisor)}` : (value / scale.divisor).toFixed(scale.decimals)
+  return {
+    after: after == null ? '—' : format(after),
+    before: format(before),
+    unit: scale.unit,
+  }
+}
+
+function formatSizeComparison(before: number | null, after: number | null): ComparisonValue {
+  return formatComparisonValue(before, after, [
+    { decimals: 0, divisor: 1, unit: 'B' },
+    { decimals: 1, divisor: 1024, unit: 'KB' },
+    { decimals: 2, divisor: 1024 * 1024, unit: 'MB' },
+  ])
+}
+
+function formatPixelComparison(before: number | null, after: number | null): ComparisonValue {
+  return formatComparisonValue(before, after, [
+    { decimals: 0, divisor: 1, unit: 'px' },
+    { decimals: 1, divisor: 1000, unit: 'Kpx' },
+    { decimals: 2, divisor: 1000 * 1000, unit: 'MP' },
+  ])
 }
 
 function Checkbox({ checked, label, onChange, disabled = false }: {
@@ -112,11 +137,39 @@ function SettingRow({ children, description, label }: { children: ReactNode, des
   )
 }
 
-function Stat({ label, lastRow = false, value }: { label: string, lastRow?: boolean, value: string }) {
+function ComparisonStat({ after, before, label, lastRow = false, negative = false, title = label, unit = '' }: {
+  after: string
+  before: string
+  label: string
+  lastRow?: boolean
+  negative?: boolean
+  title?: string
+  unit?: string
+}) {
+  const hasAfter = after !== '—'
   return (
-    <div className={cn('flex min-w-0 items-baseline justify-between gap-2 px-2 py-1.5 odd:border-r-2 odd:border-border/20', !lastRow && 'border-b-2 border-border/20')}>
+    <div title={title} className={cn('flex min-w-0 items-baseline justify-between gap-2 px-2 py-1.5 odd:border-r-2 odd:border-border/20', !lastRow && 'border-b-2 border-border/20', negative && 'bg-destructive/10')}>
       <p className="truncate text-[10px] font-bold text-muted-foreground">{label}</p>
-      <p className="shrink-0 font-mono text-xs font-black">{value}</p>
+      <p className="flex shrink-0 items-baseline gap-1 font-mono text-[11px] font-black">
+        <span>
+          {before}
+          {!hasAfter && unit ? ` ${unit}` : ''}
+        </span>
+        <span className="text-muted-foreground">→</span>
+        <span className={cn(negative && 'text-destructive')}>
+          {after}
+          {hasAfter && unit ? ` ${unit}` : ''}
+        </span>
+      </p>
+    </div>
+  )
+}
+
+function Stat({ label, lastRow = false, title = label, value }: { label: string, lastRow?: boolean, title?: string, value: string }) {
+  return (
+    <div title={title} className={cn('flex min-w-0 items-baseline justify-between gap-2 px-2 py-1.5 odd:border-r-2 odd:border-border/20', !lastRow && 'border-b-2 border-border/20')}>
+      <p className="truncate text-[10px] font-bold text-muted-foreground">{label}</p>
+      <p className="shrink-0 font-mono text-[11px] font-black">{value}</p>
     </div>
   )
 }
@@ -127,6 +180,8 @@ export default function LottiePreviewTool() {
   const projectRef = useRef<LoadedLottieProject | null>(null)
   const resultRef = useRef<OptimizedLottieResult | null>(null)
   const [project, setProject] = useState<LoadedLottieProject | null>(null)
+  const { records, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useLottieRecords()
+  const [recordName, setRecordName] = useState('')
   const [optimized, setOptimized] = useState<OptimizedLottieResult | null>(null)
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
   const [optimizationEnabled, setOptimizationEnabled] = useState(true)
@@ -148,7 +203,6 @@ export default function LottiePreviewTool() {
   const [zoom, setZoom] = useState(1)
   const [atlasZoom, setAtlasZoom] = useState(1)
   const stageView = useStageViewSettings()
-  const atlasStageView = useStageViewSettings()
   const stageRef = useRef<HTMLDivElement>(null)
   const atlasStageRef = useRef<HTMLDivElement>(null)
   const stageZoom = useStageZoom(stageRef, zoom, setZoom, Boolean(project))
@@ -157,17 +211,20 @@ export default function LottiePreviewTool() {
   const atlasStagePan = useStagePan(atlasStageRef, () => false)
   const resetStagePan = stagePan.resetPan
   const optimizableImageCount = useMemo(() => project ? countAtlasOptimizableImages(project) : 0, [project])
-  const sequenceImageCount = project ? [...project.images.values()].filter(image => image.asset.t === 'seq').length : 0
   const animatedImageCount = project ? [...project.images.values()].filter(image => image.isAnimated).length : 0
-  const excludedImageDescription = sequenceImageCount > 0 && animatedImageCount > 0
-    ? `${sequenceImageCount} 个图片序列和 ${animatedImageCount} 个动态图片保留原始素材，不参与图集优化。`
-    : sequenceImageCount > 0
-      ? `${sequenceImageCount} 个图片序列保留原始素材，暂不参与图集优化。`
-      : animatedImageCount > 0
-        ? `${animatedImageCount} 个动态图片保留原始素材，不参与图集优化。`
-        : null
+  const excludedImageDescription = animatedImageCount > 0
+    ? `${animatedImageCount} 个动态图片保留原始素材，不参与图集优化。`
+    : null
   const resourceMetrics = useMemo(() => project ? calculateLottieResourceMetrics(project, optimized) : null, [optimized, project])
   const atlasDimensions = optimized ? optimized.atlases.map(atlas => `${atlas.width}×${atlas.height}`).join(' / ') : '—'
+  const atlasContentSize = useMemo(() => ({
+    height: optimized ? Math.max(...optimized.atlases.map(atlas => atlas.height), 0) : 0,
+    width: optimized ? optimized.atlases.reduce((total, atlas) => total + atlas.width, 0) + Math.max(0, optimized.atlases.length - 1) * 8 : 0,
+  }), [optimized])
+  const atlasFitScale = useStageFitScale(atlasStageRef, atlasContentSize.width, atlasContentSize.height, Boolean(optimized))
+  const resourceSizeComparison = formatSizeComparison(project?.sourceBytes ?? null, optimized ? resourceMetrics?.optimizedResourceBytes ?? null : null)
+  const texturePixelComparison = formatPixelComparison(resourceMetrics?.sourcePixels ?? null, optimized && resourceMetrics ? resourceMetrics.activeTextureBytes / 4 : null)
+  const textureMemoryComparison = formatSizeComparison(resourceMetrics?.sourceDecodedBytes ?? null, optimized ? resourceMetrics?.activeTextureBytes ?? null : null)
 
   const replaceResult = useCallback((next: OptimizedLottieResult | null) => {
     const previous = resultRef.current
@@ -270,6 +327,75 @@ export default function LottiePreviewTool() {
     }
   }, [replaceProject])
 
+  const saveRecord = useCallback(async () => {
+    if (!project)
+      return
+    setBusy(true)
+    try {
+      const archive = await createLottieArchive(project)
+      const meta: LottieRecordMeta = {
+        name: recordName.trim() || project.name,
+        projectName: project.name,
+        width: project.animation.w,
+        height: project.animation.h,
+        frameRate: project.animation.fr,
+        imageCount: project.images.size,
+        options,
+        optimizationEnabled,
+        library,
+        renderer,
+        loop,
+        speed,
+        direction,
+        fit,
+      }
+      await saveRecordItem(createLottieItem(crypto.randomUUID(), archive, meta))
+      setRecordName('')
+    }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : '项目保存失败')
+    }
+    finally {
+      setBusy(false)
+    }
+  }, [direction, fit, library, loop, optimizationEnabled, options, project, recordName, renderer, saveRecordItem, speed])
+
+  const loadRecord = useCallback(async (id: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const item = await getRecordItem(id)
+      if (!item || !(item.payload instanceof Blob))
+        return
+      const meta = item.meta as unknown as Partial<LottieRecordMeta>
+      const name = typeof meta.projectName === 'string' && meta.projectName ? meta.projectName : 'lottie'
+      replaceProject(await loadLottieProject([new File([item.payload], `${name}.zip`, { type: 'application/zip' })]))
+      if (meta.options)
+        setOptions(meta.options)
+      if (typeof meta.optimizationEnabled === 'boolean')
+        setOptimizationEnabled(meta.optimizationEnabled)
+      if (meta.library)
+        setLibrary(meta.library)
+      if (meta.renderer)
+        setRenderer(meta.renderer)
+      if (typeof meta.loop === 'boolean')
+        setLoop(meta.loop)
+      if (typeof meta.speed === 'number')
+        setSpeed(meta.speed)
+      if (meta.direction)
+        setDirection(meta.direction)
+      if (meta.fit)
+        setFit(meta.fit)
+      setRecordName(typeof meta.name === 'string' ? meta.name : '')
+    }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : '项目加载失败')
+    }
+    finally {
+      setBusy(false)
+    }
+  }, [getRecordItem, replaceProject])
+
   async function loadDemo(): Promise<void> {
     setBusy(true)
     try {
@@ -328,17 +454,42 @@ export default function LottiePreviewTool() {
       </CardHeader>
       <CardContent className="space-y-3 px-5 pb-5">
         <div className="grid grid-cols-2 overflow-hidden rounded-md border-2 border-border bg-muted/30">
-          <Stat label="原始资源" value={project ? formatSize(project.sourceBytes) : '—'} />
-          <Stat label="纹理资源" value={resourceMetrics ? optimized ? `${resourceMetrics.sourceImageCount} → ${resourceMetrics.activeTextureCount}` : `${resourceMetrics.sourceImageCount}` : '—'} />
-          <Stat label="总像素" value={resourceMetrics ? formatPixels(resourceMetrics.sourcePixels) : '—'} />
-          <Stat label="解码内存" value={resourceMetrics ? `≈${formatSize(resourceMetrics.sourceDecodedBytes)}` : '—'} />
-          <Stat label="输出资源" value={resourceMetrics?.optimizedResourceBytes != null ? formatSize(resourceMetrics.optimizedResourceBytes) : '—'} />
-          <Stat label="当前纹理" value={resourceMetrics ? `≈${formatSize(resourceMetrics.activeTextureBytes)}` : '—'} />
-          <Stat label="图集数" value={optimized ? `${optimized.atlases.length}` : '—'} lastRow />
-          <Stat label="占用率" value={optimized ? `${(optimized.occupancy * 100).toFixed(1)}%` : '—'} lastRow />
+          <ComparisonStat
+            label="体积"
+            title="资源体积"
+            before={resourceSizeComparison.before}
+            after={resourceSizeComparison.after}
+            unit={resourceSizeComparison.unit}
+            negative={Boolean(optimized && project && resourceMetrics?.optimizedResourceBytes != null && resourceMetrics.optimizedResourceBytes > project.sourceBytes)}
+          />
+          <ComparisonStat
+            label="纹理"
+            title="纹理数量"
+            before={resourceMetrics ? `${resourceMetrics.sourceImageCount}` : '—'}
+            after={optimized && resourceMetrics ? `${resourceMetrics.activeTextureCount}` : '—'}
+            negative={Boolean(optimized && resourceMetrics && resourceMetrics.activeTextureCount > resourceMetrics.sourceImageCount)}
+          />
+          <ComparisonStat
+            label="像素"
+            title="纹理像素"
+            before={texturePixelComparison.before}
+            after={texturePixelComparison.after}
+            unit={texturePixelComparison.unit}
+            negative={Boolean(optimized && resourceMetrics && resourceMetrics.activeTextureBytes / 4 > resourceMetrics.sourcePixels)}
+          />
+          <ComparisonStat
+            label="内存"
+            title="RGBA 内存"
+            before={textureMemoryComparison.before}
+            after={textureMemoryComparison.after}
+            unit={textureMemoryComparison.unit}
+            negative={Boolean(optimized && resourceMetrics && resourceMetrics.activeTextureBytes > resourceMetrics.sourceDecodedBytes)}
+          />
+          <Stat label="图集" title="图集数" value={optimized ? `${optimized.atlases.length}` : '—'} lastRow />
+          <Stat label="占用" title="占用率" value={optimized ? `${(optimized.occupancy * 100).toFixed(1)}%` : '—'} lastRow />
         </div>
         <p className="text-xs leading-relaxed text-muted-foreground">
-          内存按 RGBA 4 B/像素估算，不含 Canvas、解码缓存和播放器开销。
+          优化前 → 图集后；红色为增加。内存按 RGBA 4 B/px 估算，未计 Canvas 等开销。
         </p>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
@@ -354,7 +505,7 @@ export default function LottiePreviewTool() {
               'relative flex h-[162px] touch-none overflow-hidden rounded-md border-2 border-border select-none',
               optimized && (atlasStagePan.panning ? 'cursor-grabbing' : 'cursor-grab'),
             )}
-            style={{ background: atlasStageView.background }}
+            style={{ background: stageView.background }}
           >
             {optimized
               ? (
@@ -363,8 +514,8 @@ export default function LottiePreviewTool() {
                     style={{ transform: `translate(${atlasStagePan.offset.x}px, ${atlasStagePan.offset.y}px)` }}
                   >
                     <div
-                      className="flex shrink-0 origin-center items-center gap-2 p-2"
-                      style={{ transform: `scale(${atlasZoom})` }}
+                      className="flex shrink-0 origin-center items-center gap-2"
+                      style={{ transform: `scale(${atlasFitScale * atlasZoom})` }}
                     >
                       {optimized.atlases.map(atlas => (
                         <img
@@ -374,7 +525,7 @@ export default function LottiePreviewTool() {
                           width={atlas.width}
                           height={atlas.height}
                           draggable={false}
-                          className={cn('block max-w-none shrink-0', atlasStageView.showBounds && STAGE_BOUNDARY_CLASS)}
+                          className={cn('block max-w-none shrink-0', stageView.showBounds && STAGE_BOUNDARY_CLASS)}
                         />
                       ))}
                     </div>
@@ -389,7 +540,6 @@ export default function LottiePreviewTool() {
                   </div>
                 )}
             <StageZoomIndicator zoom={atlasZoom} visible={atlasStageZoom.zoomIndicatorVisible} />
-            <StageViewControls hasContent={Boolean(optimized)} settings={atlasStageView} />
             {optimized && (atlasStagePan.offset.x !== 0 || atlasStagePan.offset.y !== 0 || atlasZoom !== 1) && (
               <Button
                 type="button"
@@ -683,7 +833,7 @@ export default function LottiePreviewTool() {
           {resourceResult}
         </div>
 
-        <div className="grid min-w-0 items-start gap-6 lg:grid-cols-2">
+        <div className="grid min-w-0 items-stretch gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -804,6 +954,43 @@ export default function LottiePreviewTool() {
 
         </div>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>记录</CardTitle>
+          <CardDescription>保存完整 Lottie 素材包和优化参数，之后可以继续预览与导出。</CardDescription>
+        </CardHeader>
+        <CardContent className="pb-6">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              value={recordName}
+              onChange={event => setRecordName(event.target.value)}
+              placeholder={project?.name ?? '项目名称'}
+              aria-label="项目名称"
+              className={INPUT_CLASS}
+            />
+            <Button type="button" disabled={!project || busy} onClick={() => void saveRecord()}>
+              {busy ? <LoaderCircle className="animate-spin" /> : <Save />}
+              保存当前项目
+            </Button>
+          </div>
+          {records.length > 0 && (
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {records.map(record => (
+                <div key={record.id} className="flex items-center gap-2 rounded-md border-2 border-border bg-muted/30 px-3 py-2">
+                  <button type="button" disabled={busy} className="min-w-0 flex-1 truncate text-left text-sm font-bold hover:underline disabled:opacity-50" title="加载项目" onClick={() => void loadRecord(record.id)}>
+                    {record.recordName}
+                  </button>
+                  <span className="shrink-0 text-xs text-muted-foreground">{record.projectSize}</span>
+                  <Button type="button" variant="ghost" size="icon-sm" disabled={busy} aria-label={`删除项目 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
+                    <Trash2 />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
     </div>
   )

@@ -8,7 +8,7 @@
 
 站点以 SSG 方式构建（每个路由预渲染出静态 HTML），部署到 Cloudflare Workers 静态资产。
 
-**仓库为 pnpm workspace monorepo**：前端在 `apps/web/`（`@web-tools/web`），仓库根只放 workspace 配置、ESLint、husky、wrangler 和仓库级脚本（`scripts/release.mjs`）。未来 `apps/server`（Hono 后端）与 `apps/admin` 见 `docs/BACKEND.md`，暂未创建。
+**仓库为 pnpm workspace monorepo**：前端在 `apps/web/`（`@web-tools/web`），仓库根只放 workspace 配置、ESLint、husky、wrangler 和仓库级脚本（`scripts/release.mjs`）。`apps/server`（Hono 后端 MVP，双运行时：Node/Docker = Postgres + fs，Cloudflare Workers = D1 + R2，生产域名在 CF 控制台配置不进仓库，见 `docs/BACKEND.md` 与 `apps/server/README.md`）已起步，`apps/admin` 暂未创建。
 
 ## 技术栈
 
@@ -119,6 +119,10 @@ apps/web/                 # 前端应用（@web-tools/web）
     lib/
       utils.ts          # cn() 等工具函数
       theme.ts          # useTheme()：偏好存 localStorage，跟随系统联动
+      storage/          # 工具存储 TS 核心层（ToolStore 接口 + IndexedDB 驱动，纯 TS 无 React）
+                        # index.ts 的 createToolStore() 是工厂单例；legacy.ts 管 localStorage 遗产迁移
+      react/
+        use-tool-store.ts # ToolStore 的 React 绑定（唯一 import react 的存储文件）
   vendor/react-router-dom/  # vite-react-ssg 兼容垫片（勿删）
   scripts/
     ssg-build.mjs       # SSG 构建入口（绕过 CLI 的 Node 兼容问题）
@@ -126,7 +130,7 @@ apps/web/                 # 前端应用（@web-tools/web）
 scripts/
   release.mjs           # CalVer 发版脚本（仓库级）
 docs/DESIGN.md          # 设计规范（改 UI 前必读）
-docs/BACKEND.md         # 可选后端架构决策（未实施）
+docs/BACKEND.md         # 可选后端架构决策（MVP 已实施，双运行时）
 wrangler.jsonc          # Workers 静态资产部署配置（仓库根）
 .github/workflows/      # 部署 workflow
 .husky/                 # pre-commit：pnpm lint && pnpm typecheck && pnpm test

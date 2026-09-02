@@ -3,14 +3,19 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
-  "description": "Web 工具集合后端（Hono + Drizzle + Postgres）",
+  "description": "Web 工具集合后端（Hono + Drizzle；双运行时：Node/Docker = Postgres + fs，Cloudflare Workers = D1 + R2）",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "dev:worker": "wrangler dev --config wrangler.jsonc",
+    "deploy:worker": "wrangler deploy --config wrangler.jsonc",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:generate:d1": "drizzle-kit generate --config drizzle.d1.config.ts",
+    "db:migrate:d1:local": "wrangler d1 migrations apply web-tools-db --local --config wrangler.jsonc",
+    "db:migrate:d1:remote": "wrangler d1 migrations apply web-tools-db --remote --config wrangler.jsonc"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.0",
@@ -21,10 +26,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251121.0",
     "@types/node": "^26.2.0",
     "@types/pg": "^8.15.0",
     "drizzle-kit": "^0.31.0",
     "tsx": "^4.20.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "wrangler": "^4.127.0"
   }
 }

@@ -11,6 +11,12 @@ function int(value: string | undefined, fallback: number): number {
   return Number.isFinite(n) ? n : fallback
 }
 
+function bool(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined || value === '')
+    return fallback
+  return value === 'true' || value === '1'
+}
+
 export const env = {
   /** HTTP 端口 */
   port: int(process.env.PORT, 8787),
@@ -24,4 +30,9 @@ export const env = {
    * Docker 部署通常在反代之后，设为 1。
    */
   trustProxy: int(process.env.TRUST_PROXY, 0),
+  /** 允许跨域携带凭证的前端源（CORS），逗号分隔 */
+  corsOrigins: (process.env.CORS_ORIGINS
+    ?? 'https://webtools.pzehrel.com,http://localhost:1420').split(',').map(s => s.trim()).filter(Boolean),
+  /** 是否开放注册（默认否；要注册自己的账号时临时置 true，注册完关回） */
+  allowRegistration: bool(process.env.ALLOW_REGISTRATION, false),
 } as const

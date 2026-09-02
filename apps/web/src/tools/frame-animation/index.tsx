@@ -18,6 +18,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Save,
   Sparkles,
   Trash2,
   TriangleAlert,
@@ -33,13 +34,15 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoFrames } from '../demos/frame-animation'
+import { createFrameAnimationItem, createFrameArchive, extractFrameArchive, useFrameAnimationRecords, type FrameAnimationRecordMeta } from './records'
 
-/** 一帧：图片的 objectURL */
+/** 一帧：Blob 用于记录持久化，objectURL 仅用于当前页面预览 */
 interface FrameItem {
   id: string
   /** 上传序号：导入时分配，重排 / 裁剪后保持不变 */
   seq: number
   name: string
+  blob: Blob
   url: string
   width: number
   height: number
@@ -89,6 +92,7 @@ function loadFrame(name: string, blob: Blob): Promise<Omit<FrameItem, 'seq'> | n
     img.onload = () => resolve({
       id: crypto.randomUUID(),
       name,
+      blob,
       url,
       width: img.naturalWidth,
       height: img.naturalHeight,
@@ -229,7 +233,7 @@ function computeUnionBox(scan: ImageData[], threshold: number): OpaqueBox | null
 async function cropFrameImage(
   frame: FrameItem,
   rect: OpaqueBox,
-): Promise<Pick<FrameItem, 'url' | 'width' | 'height' | 'size'> | null> {
+): Promise<Pick<FrameItem, 'blob' | 'url' | 'width' | 'height' | 'size'> | null> {
   const img = await loadImage(frame.url)
   // 裁剪坐标与各帧自身尺寸取交集（帧尺寸可能不一致）
   const left = Math.min(rect.left, img.naturalWidth)
@@ -250,7 +254,7 @@ async function cropFrameImage(
   const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'))
   if (!blob)
     return null
-  return { url: URL.createObjectURL(blob), width: w, height: h, size: blob.size }
+  return { blob, url: URL.createObjectURL(blob), width: w, height: h, size: blob.size }
 }
 
 /** 把所有帧拼成精灵图：单元格取最大宽 / 高，帧在格内居中 */
@@ -568,6 +572,8 @@ function BrutalCheckbox({
 
 export default function FrameAnimationTool() {
   const [frames, setFrames] = useState<FrameItem[]>([])
+  const { records, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useFrameAnimationRecords()
+  const [recordName, setRecordName] = useState('')
   const [current, setCurrent] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -844,6 +850,88 @@ export default function FrameAnimationTool() {
     setCropResult(null)
     setImportError(null)
   }, [closeCropPreview])
+
+  const saveRecord = useCallback(async () => {
+    if (frames.length === 0)
+      return
+    const archive = await createFrameArchive(frames.map(frame => ({
+      id: frame.id,
+      seq: frame.seq,
+      name: frame.name,
+      blob: frame.blob,
+      selected: selected.has(frame.id),
+    })))
+    const meta: FrameAnimationRecordMeta = {
+      name: recordName.trim() || frames[0].name.replace(/\.[^.]+$/, '') || '帧动画项目',
+      frames: archive.frames,
+      fps,
+      direction,
+      loopInfinite,
+      loopCount,
+      range: rangeRaw,
+      pixelated,
+      alphaThreshold,
+      exportFormat,
+      spriteDimension,
+      exportVars,
+      exportContainer,
+    }
+    await saveRecordItem(createFrameAnimationItem(crypto.randomUUID(), archive.blob, meta))
+    setRecordName('')
+  }, [alphaThreshold, direction, exportContainer, exportFormat, exportVars, fps, frames, loopCount, loopInfinite, pixelated, rangeRaw, recordName, saveRecordItem, selected, spriteDimension])
+
+  const loadRecord = useCallback(async (id: string) => {
+    const item = await getRecordItem(id)
+    if (!item || !(item.payload instanceof Blob))
+      return
+    const meta = item.meta as unknown as Partial<FrameAnimationRecordMeta>
+    if (!Array.isArray(meta.frames))
+      return
+    const archive = await extractFrameArchive(item.payload)
+    const loaded = (await Promise.all(meta.frames.map(async (saved) => {
+      const blob = archive.get(saved.path)
+      if (!blob)
+        return null
+      const frame = await loadFrame(saved.name, blob)
+      return frame ? { ...frame, id: saved.id, seq: saved.seq, selected: saved.selected } : null
+    }))).filter((frame): frame is Omit<FrameItem, 'seq'> & { seq: number, selected: boolean } => frame !== null)
+    if (loaded.length === 0)
+      return
+    setPlaying(false)
+    setCurrent(0)
+    playRef.current = { index: 0, dir: 1, cycles: 0 }
+    finishedRef.current = false
+    setFrames((previous) => {
+      previous.forEach(frame => URL.revokeObjectURL(frame.url))
+      return loaded.map(({ selected: _selected, ...frame }) => frame)
+    })
+    setSelected(new Set(loaded.filter(frame => frame.selected).map(frame => frame.id)))
+    setRangeRaw(meta.range ?? null)
+    if (typeof meta.fps === 'number')
+      setFps(meta.fps)
+    if (meta.direction)
+      setDirection(meta.direction)
+    if (typeof meta.loopInfinite === 'boolean')
+      setLoopInfinite(meta.loopInfinite)
+    if (typeof meta.loopCount === 'number')
+      setLoopCount(meta.loopCount)
+    if (typeof meta.pixelated === 'boolean')
+      setPixelated(meta.pixelated)
+    if (typeof meta.alphaThreshold === 'number')
+      setAlphaThreshold(meta.alphaThreshold)
+    if (meta.exportFormat)
+      setExportFormat(meta.exportFormat)
+    if (meta.spriteDimension)
+      setSpriteDimension(meta.spriteDimension)
+    if (typeof meta.exportVars === 'boolean')
+      setExportVars(meta.exportVars)
+    if (typeof meta.exportContainer === 'boolean')
+      setExportContainer(meta.exportContainer)
+    seqRef.current = Math.max(...loaded.map(frame => frame.seq)) + 1
+    setRecordName(typeof meta.name === 'string' ? meta.name : '')
+    setImportError(null)
+    closeCropPreview()
+  }, [closeCropPreview, getRecordItem])
 
   /** 确认裁剪：按预览的并集矩形裁掉所有帧 */
   const applyCrop = useCallback(async () => {
@@ -1321,7 +1409,7 @@ export default function FrameAnimationTool() {
                           src={sprite.url}
                           alt="精灵图预览"
                           draggable={false}
-                          className="block h-auto max-w-full"
+                          className={cn('block h-auto max-w-full', stageView.showBounds && STAGE_BOUNDARY_CLASS)}
                           style={{ imageRendering: pixelated ? 'pixelated' : 'auto' }}
                         />
                       </div>
@@ -1814,6 +1902,43 @@ export default function FrameAnimationTool() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>记录</CardTitle>
+          <CardDescription>保存整组帧、播放范围和导出参数，之后可以继续编辑。</CardDescription>
+        </CardHeader>
+        <CardContent className="pb-6">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              value={recordName}
+              onChange={event => setRecordName(event.target.value)}
+              placeholder={frames[0]?.name.replace(/\.[^.]+$/, '') || '项目名称'}
+              aria-label="项目名称"
+              className="h-9 min-w-0 flex-1 rounded-md border-2 border-border bg-background px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-ring/40"
+            />
+            <Button type="button" disabled={frames.length === 0} onClick={() => void saveRecord()}>
+              <Save />
+              保存当前项目
+            </Button>
+          </div>
+          {records.length > 0 && (
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {records.map(record => (
+                <div key={record.id} className="flex items-center gap-2 rounded-md border-2 border-border bg-muted/30 px-3 py-2">
+                  <button type="button" className="min-w-0 flex-1 truncate text-left text-sm font-bold hover:underline" title="加载项目" onClick={() => void loadRecord(record.id)}>
+                    {record.recordName}
+                  </button>
+                  <span className="shrink-0 text-xs text-muted-foreground">{record.frameCount} 帧</span>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除项目 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
+                    <Trash2 />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 裁剪确认弹窗：所有帧叠放预览（最后一帧垫底），虚线框出保留区域 */}
       {cropPreview && (

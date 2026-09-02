@@ -1,12 +1,17 @@
-shellEmulator: true
-
-trustPolicy: no-downgrade
-
 allowBuilds:
   '@parcel/watcher': true
   esbuild: true
   # wrangler 的本地模拟运行时（postinstall 下载 workerd 二进制，wrangler dev 需要）
   workerd: true
+
+# wrangler/miniflare 发版节奏快于 minimumReleaseAge 窗口（4.124 在本机 Node 下参数解析损坏，需新版）
+minimumReleaseAgeExclude:
+  - miniflare@5.20260826.0-alpha
+  - wrangler@4.127.0
+
+shellEmulator: true
+
+trustPolicy: no-downgrade
 
 # semver@6.3.1 发布于 npm provenance 机制之前，属 trustPolicy 已知误报
 # （rolldown 等项目同样排除，见 https://github.com/rolldown/rolldown/pull/7302 ）

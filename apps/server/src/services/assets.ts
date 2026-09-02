@@ -2,10 +2,9 @@ import { Readable } from 'node:stream'
 import { and, desc, eq } from 'drizzle-orm'
 
 import type { Db } from '../db/index.ts'
-import { assets } from '../db/schema.ts'
+import type { Tables } from '../deps.ts'
 import { newBlobKey, newId } from '../ids.ts'
 import type { Identity } from '../identity.ts'
-import { FsBlobStore } from '../storage/fs.ts'
 import type { BlobStore } from '../storage/types.ts'
 
 /** 列表项：不含 payload 本体（本体按需单条拉取） */
@@ -36,14 +35,16 @@ interface SaveInput {
   meta?: Record<string, unknown>
 }
 
+type AssetRow = Tables['assets']['$inferSelect']
+
 /** 登录按 userId 查，匿名按 deviceId 查 */
-function ownerCond(owner: Identity) {
+function ownerCond(assets: Tables['assets'], owner: Identity) {
   return owner.userId
     ? eq(assets.userId, owner.userId)
     : eq(assets.deviceId, owner.deviceId!)
 }
 
-function toSummary(r: typeof assets.$inferSelect): AssetSummary {
+function toSummary(r: AssetRow): AssetSummary {
   return {
     id: r.id,
     toolId: r.toolId,
@@ -58,29 +59,34 @@ function toSummary(r: typeof assets.$inferSelect): AssetSummary {
 
 export class AssetService {
   private readonly db: Db
+  private readonly t: Tables
   private readonly blobs: BlobStore
 
-  constructor(db: Db, blobs: BlobStore = new FsBlobStore()) {
+  /** db/tables/blobs 均由组合根注入（双运行时各自装配，见 deps.ts） */
+  constructor(db: Db, tables: Tables, blobs: BlobStore) {
     this.db = db
+    this.t = tables
     this.blobs = blobs
   }
 
   /** 列表；toolId 省略时返回该身份下全部工具的素材（跨工具历史页用） */
   async list(owner: Identity, toolId?: string): Promise<AssetSummary[]> {
+    const { assets } = this.t
     const rows = await this.db
       .select()
       .from(assets)
-      .where(toolId ? and(ownerCond(owner), eq(assets.toolId, toolId)) : ownerCond(owner))
+      .where(toolId ? and(ownerCond(assets, owner), eq(assets.toolId, toolId)) : ownerCond(assets, owner))
       .orderBy(desc(assets.updatedAt))
       .limit(500)
     return rows.map(toSummary)
   }
 
   async get(owner: Identity, toolId: string, id: string): Promise<AssetBody | undefined> {
+    const { assets } = this.t
     const [row] = await this.db
       .select()
       .from(assets)
-      .where(and(ownerCond(owner), eq(assets.toolId, toolId), eq(assets.id, id)))
+      .where(and(ownerCond(assets, owner), eq(assets.toolId, toolId), eq(assets.id, id)))
       .limit(1)
     if (!row)
       return undefined
@@ -92,6 +98,7 @@ export class AssetService {
 
   /** 保存（同 id 覆盖，upsert 语义，与前端 save 对齐） */
   async save(owner: Identity, input: SaveInput): Promise<AssetSummary> {
+    const { assets } = this.t
     const id = input.id ?? newId()
     let blobKey: string | undefined
     let inlinePayload: string | undefined
@@ -101,13 +108,13 @@ export class AssetService {
     if (input.file) {
       const ext = (input.file.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase()
       blobKey = newBlobKey(ext)
-      const written = await this.blobs.put(blobKey, Readable.fromWeb(input.file.stream() as never))
+      const written = await this.blobs.put(blobKey, input.file)
       size = written.size
       mimeType = mimeType ?? (input.file.type || undefined)
     }
     else if (input.payload !== undefined) {
       inlinePayload = input.payload
-      size = Buffer.byteLength(input.payload, 'utf8')
+      size = new TextEncoder().encode(input.payload).length
     }
 
     const [row] = await this.db
@@ -139,9 +146,10 @@ export class AssetService {
   }
 
   async remove(owner: Identity, toolId: string, id: string): Promise<boolean> {
+    const { assets } = this.t
     const [row] = await this.db
       .delete(assets)
-      .where(and(ownerCond(owner), eq(assets.toolId, toolId), eq(assets.id, id)))
+      .where(and(ownerCond(assets, owner), eq(assets.toolId, toolId), eq(assets.id, id)))
       .returning()
     if (!row)
       return false
@@ -152,16 +160,18 @@ export class AssetService {
 
   /** 取 Blob 本体的流（下载用） */
   async raw(owner: Identity, toolId: string, id: string): Promise<{ stream: ReadableStream<Uint8Array>, mimeType: string | undefined } | undefined> {
+    const { assets } = this.t
     const [row] = await this.db
       .select()
       .from(assets)
-      .where(and(ownerCond(owner), eq(assets.toolId, toolId), eq(assets.id, id)))
+      .where(and(ownerCond(assets, owner), eq(assets.toolId, toolId), eq(assets.id, id)))
       .limit(1)
     if (!row?.blobKey)
       return undefined
     const nodeStream = await this.blobs.get(row.blobKey)
     return {
-      stream: Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>,
+      // node:stream/web 与 workers-types 的 ReadableStream 类型定义不同源，运行时兼容
+      stream: Readable.toWeb(nodeStream) as unknown as ReadableStream<Uint8Array>,
       mimeType: row.mimeType ?? undefined,
     }
   }

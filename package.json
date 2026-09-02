@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "pnpm --filter @web-tools/web dev",
     "dev:server": "pnpm --filter @web-tools/server dev",
+    "dev:worker": "pnpm --filter @web-tools/server dev:worker",
     "build": "pnpm --filter @web-tools/web build",
     "preview": "pnpm --filter @web-tools/web preview",
     "lint": "eslint .",
@@ -25,6 +26,6 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
     "husky": "^9.1.7",
-    "wrangler": "^4.124.0"
+    "wrangler": "^4.127.0"
   }
 }

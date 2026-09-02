@@ -1,0 +1,10 @@
+interface:
+  # 中文：编写代码文档
+  display_name: "Write Code Documentation"
+  # 中文：编写准确、清晰的英语加本地化语言双语代码注释、Agent 文档和 Markdown 文档
+  short_description: "Write clear bilingual code and agent docs"
+  # 中文：使用 $write-code-docs 编写或审查这项英语加本地化语言的代码注释、Agent 文档或 Markdown 文档，并从仓库证据确定本地化语言。
+  default_prompt: "Use $write-code-docs to write or review these bilingual code comments, agent docs, or Markdown docs; infer the localized language from repository evidence."
+
+policy:
+  allow_implicit_invocation: true

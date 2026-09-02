@@ -1,0 +1,30 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "web-tools-api",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-18",
+  // node:crypto(scrypt/sha256)、node:stream 由 nodejs_compat 提供
+  "compatibility_flags": ["nodejs_compat"],
+  // 生产仅使用 Cloudflare 控制台配置的自定义域名（与主站同一惯例，域名不进仓库），不开放 workers.dev
+  "workers_dev": false,
+  // 保留 main / PR 的临时版本预览 URL
+  "preview_urls": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "web-tools-db",
+      // TODO(首次部署): `wrangler d1 create web-tools-db` 后替换为真实 ID；
+      // 占位 ID 仅供 wrangler dev 本地模拟使用
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "./drizzle-d1"
+    }
+  ],
+  "r2_buckets": [
+    { "binding": "BUCKET", "bucket_name": "web-tools-assets" }
+  ],
+  "vars": {
+    "CORS_ORIGINS": "https://webtools.pzehrel.com,http://localhost:1420",
+    // 注册开关：默认关闭。要注册自己的账号时临时改 "true"（控制台改 vars 或 wrangler deploy --var），注册完关回
+    "ALLOW_REGISTRATION": "false"
+  }
+}

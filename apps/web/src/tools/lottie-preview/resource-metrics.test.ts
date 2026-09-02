@@ -53,7 +53,7 @@ describe('calculateLottieResourceMetrics', () => {
     })
   })
 
-  it('counts atlas pixels together with an unoptimized image sequence', () => {
+  it('counts an optimized image sequence as part of the atlas texture', () => {
     const atlas: AtlasOutput = {
       blob: new Blob([new Uint8Array(80)]),
       filename: 'atlas-1.png',
@@ -63,6 +63,24 @@ describe('calculateLottieResourceMetrics', () => {
       width: 128,
     }
     const metrics = calculateLottieResourceMetrics(project(still, sequence), optimizedResult(atlas))
+
+    expect(metrics.activeTextureCount).toBe(1)
+    expect(metrics.activeTextureBytes).toBe(128 * 64 * 4)
+    expect(metrics.optimizedResourceBytes).toBeGreaterThan(80)
+  })
+
+  it('keeps an animated image as a separate texture after optimization', () => {
+    const animated = image({ id: 'animated', h: 10, p: 'animated.gif', w: 20 }, 50)
+    animated.isAnimated = true
+    const atlas: AtlasOutput = {
+      blob: new Blob([new Uint8Array(80)]),
+      filename: 'atlas-1.png',
+      height: 64,
+      id: 'atlas',
+      objectUrl: 'blob:atlas',
+      width: 128,
+    }
+    const metrics = calculateLottieResourceMetrics(project(still, animated), optimizedResult(atlas))
 
     expect(metrics.activeTextureCount).toBe(2)
     expect(metrics.activeTextureBytes).toBe((128 * 64 + 20 * 10) * 4)

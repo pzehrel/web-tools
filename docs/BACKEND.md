@@ -1,13 +1,15 @@
 # 后端与存储架构（调研结论）
 
-> 状态：设计定稿，尚未实施。项目当前仍是纯前端 SSG，本文档是未来接入可选后端时的架构依据。
+> 状态：后端 MVP 已实施（`apps/server`），双运行时：Node/Docker（Postgres + fs 卷）与
+> Cloudflare Workers（D1 + R2，生产域名在控制台配置）。前端 HttpToolStore 驱动仍未实施
+> （见 `apps/web/src/lib/storage/index.ts` TODO），当前存储默认走 IndexedDB。
 
 ## 需求背景
 
 - 后端用于存储使用工具时提交的素材，主要目的是**保存历史记录**。
 - 后端是**可选的**：没有后端时用 IndexedDB 保存在浏览器本地。
 - 部分工具配置存 localStorage（现状，维持不变）。
-- 服务器地址由用户在页面上**手动填写**，服务端部署位置不是架构约束（大概率 Docker 自部署）。
+- 服务器地址由用户在页面上**手动填写**，服务端部署位置不是架构约束（Docker 自部署或 Cloudflare Workers 均可，均已支持）。
 - 前端代码架构需要**抹平 Web 数据库（IndexedDB）和服务器数据库的差异**，调用层不感知数据落在哪里。
 
 ## 总体分层
@@ -177,7 +179,7 @@ web-tools/                 (pnpm workspace)
 
 - 轻量：无代码生成步骤、无独立 query engine 二进制，容器镜像小、冷启动快（Prisma 的 client + native engine 架构在 Docker 单机自部署下是实打实的负担）。
 - schema 即 TypeScript，查询长得像 SQL；本项目元数据就一张 `assets` 表，Prisma 的优势（复杂关系、studio 可视化）用不上。
-- 能跑在 Workers 的 D1 上（如果哪天部署到 Cloudflare），Prisma 对边缘运行时支持别扭。
+- 能跑在 Workers 的 D1 上（Cloudflare 部署已落地，见 `apps/server`），Prisma 对边缘运行时支持别扭。
 
 ### 数据库：Postgres（已定）
 
@@ -279,7 +281,7 @@ web-tools/                 (pnpm workspace: apps/*, packages/*)
 
 ### 运行时：Node（已定，因 jobs 而定）
 
-jobs 需要 `child_process` / 流 / 信号处理的成熟度 → Node 22。Bun 的优势（启动快）对常驻进程无感。副作用：Cloudflare Workers 跑不了子进程，**CF 路线降级为「纯存储子集」**（无 jobs）。
+jobs 需要 `child_process` / 流 / 信号处理的成熟度 → Node 22。Bun 的优势（启动快）对常驻进程无感。副作用：Cloudflare Workers 跑不了子进程，**CF 路线为「纯存储子集」**（无 jobs）——已落地为双运行时的 Workers 侧（`apps/server/src/worker.ts`，D1 元数据 + R2 素材），未来 jobs 只存在于 Node 路径。
 
 ## 认证（按需最简化）
 
@@ -303,5 +305,5 @@ jobs 需要 `child_process` / 流 / 信号处理的成熟度 → Node 22。Bun �
 
 - `url-parser` 的 localStorage 历史迁到 IndexedDB adapter（参考 `LEGACY_QR_KEY` 先例）。
 - SSG 约束：读存储的 UI 继续 `<ClientOnly>`，避免 hydration 不一致。
-- 若部署到 Cloudflare Workers：仅支持「纯存储子集」（D1 元数据 + R2 素材，无 jobs——Workers 无法跑子进程）。
+- Cloudflare Workers 部署（已实施）：纯存储子集，D1 元数据 + R2 素材（`apps/server/wrangler.jsonc`），无 jobs——Workers 无法跑子进程。双 schema（pg-core / sqlite-core 同构）改表时两份同步改、两套迁移各跑一次 generate。
 - 自部署 Docker：compose 挂 `./data/files:/data/files` + `postgres:17-alpine`（数据卷 `./data/pg`），第二档时再加 Garage 服务。

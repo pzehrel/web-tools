@@ -31,12 +31,15 @@ const cookieOpts = {
 /**
  * /api/auth 路由。
  * 注册/登录需要 X-Device-ID（用于认领匿名资产），身份中间件在 auth 之外的场景生效。
+ * allowRegistration 为 false 时 /register 一律 403（个人站常态：只临时开放注册自己）。
  */
-export function authRoute(users: UserService) {
+export function authRoute(users: UserService, allowRegistration: boolean) {
   const register = factory.createHandlers(
     authRateLimit,
     zValidator('json', credentialsSchema),
     async (c) => {
+      if (!allowRegistration)
+        return c.json({ error: 'registration disabled' }, 403)
       const { email, password } = c.req.valid('json')
       const deviceId = c.req.header('X-Device-ID')
       const user = await users.register(email, password)

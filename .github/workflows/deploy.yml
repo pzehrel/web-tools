@@ -77,6 +77,46 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: versions upload
 
+      # ---- apps/server：API Worker（D1 + R2；生产自定义域名在 Cloudflare 控制台配置）----
+      # 一次性前置（手动，见 apps/server/README.md）：wrangler d1 create web-tools-db
+      # 并把真实 database_id 填进 apps/server/wrangler.jsonc；wrangler r2 bucket create web-tools-assets
+
+      - name: Ensure API Worker exists
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if ! pnpm exec wrangler deployments list -c apps/server/wrangler.jsonc > /dev/null 2>&1; then
+            echo "API Worker 尚不存在，先执行初始化 deploy"
+            pnpm exec wrangler deploy -c apps/server/wrangler.jsonc
+          else
+            echo "API Worker 已存在"
+          fi
+
+      # 生产发版时先把新迁移应用到远程 D1，再部署 Worker（先库后码，避免新代码访问旧表结构）
+      - name: Apply D1 migrations (remote, tag)
+        if: steps.target.outputs.prod == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler d1 migrations apply web-tools-db --remote -c apps/server/wrangler.jsonc
+
+      - name: Deploy API production (tag)
+        if: steps.target.outputs.prod == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy -c apps/server/wrangler.jsonc
+
+      - name: Upload API preview version (main / PR)
+        if: steps.target.outputs.prod == 'false'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: versions upload -c apps/server/wrangler.jsonc
+
       - name: Comment preview URL on PR
         if: github.event_name == 'pull_request'
         env:

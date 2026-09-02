@@ -38,14 +38,14 @@ describe('Lottie image sequence assets', () => {
   const stillAsset: LottieAsset = { id: 'still', h: 100, p: 'still.png', w: 100 }
   const sequenceAsset: LottieAsset = { id: 'sequence', h: 100, p: 'frame-0.png', t: 'seq', w: 100 }
 
-  it('loads sequence images for preview but excludes them from atlas optimization', () => {
+  it('loads sequence images for preview and includes them in atlas optimization', () => {
     const still = resolvedImage(stillAsset, 'blob:still')
     const sequence = resolvedImage(sequenceAsset, 'blob:sequence')
     const project = projectWith(still, sequence)
 
     expect(isPreviewImageAsset(sequenceAsset)).toBe(true)
-    expect(isAtlasOptimizableImage(sequence)).toBe(false)
-    expect(countAtlasOptimizableImages(project)).toBe(1)
+    expect(isAtlasOptimizableImage(sequence)).toBe(true)
+    expect(countAtlasOptimizableImages(project)).toBe(2)
   })
 
   it('rewrites a sequence image path to its local preview URL', () => {

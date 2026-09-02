@@ -210,3 +210,6 @@ dist
 # server 本地数据卷与 env
 apps/server/data/
 apps/server/.env
+
+# wrangler dev 本地状态（D1/R2 模拟数据）
+apps/server/.wrangler/

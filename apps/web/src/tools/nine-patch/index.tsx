@@ -10,6 +10,7 @@ import {
   Link2,
   Link2Off,
   RotateCcw,
+  Save,
   Sparkles,
   Trash2,
   TriangleAlert,
@@ -22,14 +23,16 @@ import { Seo } from '@/components/seo'
 import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoImage } from '../demos/nine-patch'
+import { createNinePatchItem, useNinePatchRecords, type NinePatchRecordMeta } from './records'
 
-/** 已加载的源图：objectURL 或内置示例的 dataURL */
+/** 已加载的源图：Blob 用于记录持久化，objectURL 仅用于当前页面预览 */
 interface SourceImage {
   name: string
+  blob: Blob
   url: string
   width: number
   height: number
@@ -57,17 +60,29 @@ const SIDES: { side: Side, label: string }[] = [
 const EXPORT_IMAGE_NAME = 'YOUR-IMAGE-PATH.EXT'
 
 /** 读取用户选择的图片文件；解码失败返回 null */
-function loadImageFile(file: File): Promise<SourceImage | null> {
+function loadImageBlob(name: string, blob: Blob): Promise<SourceImage | null> {
   return new Promise((resolve) => {
-    const url = URL.createObjectURL(file)
+    const url = URL.createObjectURL(blob)
     const img = new Image()
-    img.onload = () => resolve({ name: file.name, url, width: img.naturalWidth, height: img.naturalHeight })
+    img.onload = () => resolve({ name, blob, url, width: img.naturalWidth, height: img.naturalHeight })
     img.onerror = () => {
       URL.revokeObjectURL(url)
       resolve(null)
     }
     img.src = url
   })
+}
+
+function loadImageFile(file: File): Promise<SourceImage | null> {
+  return loadImageBlob(file.name, file)
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, encoded] = dataUrl.split(',', 2)
+  const mime = header.match(/^data:([^;]+)/)?.[1] ?? 'application/octet-stream'
+  const binary = atob(encoded ?? '')
+  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0))
+  return new Blob([bytes], { type: mime })
 }
 
 /** 默认切片：短边的 1/4，四边相同 */
@@ -278,6 +293,8 @@ const RESIZE_CORNERS: { corner: ResizeCorner, hit: string, lShape: string, label
 
 export default function NinePatchTool() {
   const [image, setImage] = useState<SourceImage | null>(null)
+  const { records, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useNinePatchRecords()
+  const [recordName, setRecordName] = useState('')
   const [slice, setSlice] = useState<Slice>({ top: 24, right: 24, bottom: 24, left: 24 })
   /** border-image-width 四边值：解绑时可独立调整 */
   const [imageWidth, setImageWidth] = useState<Slice>({ top: 24, right: 24, bottom: 24, left: 24 })
@@ -306,11 +323,32 @@ export default function NinePatchTool() {
   /** 中心保留尺寸（图像 px）：默认 1×1 即最小图 */
   const [cropKeep, setCropKeep] = useState({ w: 1, h: 1 })
 
+  const makeRecordMeta = useCallback((): NinePatchRecordMeta | null => {
+    if (!image)
+      return null
+    return {
+      name: recordName.trim() || image.name,
+      imageName: image.name,
+      width: image.width,
+      height: image.height,
+      slice,
+      imageWidth,
+      outset,
+      fill,
+      linkWidth,
+      repeatH,
+      repeatV,
+      cropEnabled,
+      cropKeep,
+      codeFormat,
+      codeStyle,
+    }
+  }, [codeFormat, codeStyle, cropEnabled, cropKeep, fill, image, imageWidth, linkWidth, outset, recordName, repeatH, repeatV, slice])
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editorStageRef = useRef<HTMLDivElement>(null)
   const previewStageRef = useRef<HTMLDivElement>(null)
   const editorStageView = useStageViewSettings()
-  const previewStageView = useStageViewSettings()
   /** 切线拖拽快照：指针 id + 边 + 起始指针坐标 + 起始边距（图像 px） */
   const lineDragRef = useRef<{ pointerId: number, side: Side, startClient: number, startValue: number } | null>(null)
   /** 预览框缩边拖拽快照：起始指针 / 尺寸 / 缩放 + 锚定边（对边或对角的屏幕坐标，拖拽全程保持不动） */
@@ -354,11 +392,61 @@ export default function NinePatchTool() {
     setZoom(fitZoom(img.width, img.height))
   }, [])
 
+  const saveRecord = useCallback(async () => {
+    if (!image)
+      return
+    const meta = makeRecordMeta()
+    if (!meta)
+      return
+    const id = crypto.randomUUID()
+    await saveRecordItem(createNinePatchItem(id, image.blob, meta))
+    setRecordName('')
+  }, [image, makeRecordMeta, saveRecordItem])
+
+  const loadRecord = useCallback(async (id: string) => {
+    const item = await getRecordItem(id)
+    if (!item || !(item.payload instanceof Blob))
+      return
+    const meta = item.meta as Partial<NinePatchRecordMeta>
+    const loaded = await loadImageBlob(typeof meta.imageName === 'string' ? meta.imageName : 'image', item.payload)
+    if (!loaded)
+      return
+    applyImage(loaded)
+    if (meta.slice)
+      setSlice(meta.slice)
+    if (meta.imageWidth)
+      setImageWidth(meta.imageWidth)
+    if (typeof meta.outset === 'number')
+      setOutset(meta.outset)
+    if (typeof meta.fill === 'boolean')
+      setFill(meta.fill)
+    if (typeof meta.linkWidth === 'boolean')
+      setLinkWidth(meta.linkWidth)
+    if (meta.repeatH)
+      setRepeatH(meta.repeatH)
+    if (meta.repeatV)
+      setRepeatV(meta.repeatV)
+    if (typeof meta.cropEnabled === 'boolean')
+      setCropEnabled(meta.cropEnabled)
+    if (meta.cropKeep)
+      setCropKeep(meta.cropKeep)
+    if (meta.codeFormat)
+      setCodeFormat(meta.codeFormat)
+    if (meta.codeStyle)
+      setCodeStyle(meta.codeStyle)
+    setRecordName(typeof meta.name === 'string' ? meta.name : '')
+  }, [applyImage, getRecordItem])
+
   /** 载入内置示例图（canvas 只有客户端可用，用户点「试试示例」时现场生成） */
   const loadDemo = useCallback(() => {
     const demo = createDemoImage()
-    if (demo)
-      applyImage(demo)
+    if (demo) {
+      void loadImageBlob(demo.name, dataUrlToBlob(demo.url))
+        .then((img) => {
+          if (img)
+            applyImage(img)
+        })
+    }
   }, [applyImage])
 
   /** 清除图片：回收 objectURL，回到空状态 */
@@ -916,7 +1004,7 @@ export default function NinePatchTool() {
                   'flex h-72 touch-none overflow-hidden rounded-md border-2 border-border p-8 select-none',
                   previewPan.panning ? 'cursor-grabbing' : 'cursor-grab',
                 )}
-                style={{ background: previewStageView.background }}
+                style={{ background: editorStageView.background }}
               >
                 {image
                   ? (
@@ -938,7 +1026,7 @@ export default function NinePatchTool() {
                             transformOrigin: '0 0',
                           }}
                         >
-                          <div className={cn('group/preview relative m-3', previewStageView.showBounds && STAGE_BOUNDARY_CLASS)} style={{ width: previewSize.w, height: previewSize.h }}>
+                          <div className={cn('group/preview relative m-3', editorStageView.showBounds && STAGE_BOUNDARY_CLASS)} style={{ width: previewSize.w, height: previewSize.h }}>
                             <div
                               className="flex size-full items-center justify-center"
                               style={{
@@ -998,7 +1086,6 @@ export default function NinePatchTool() {
                     )}
               </div>
               <StageZoomIndicator zoom={previewZoom} visible={previewStageZoom.zoomIndicatorVisible} />
-              <StageViewControls hasContent={Boolean(image)} settings={previewStageView} />
               {/* 平移 / 缩放 / 缩边补偿后：悬浮「重置视图」回到居中 */}
               {(previewPan.offset.x !== 0 || previewPan.offset.y !== 0 || previewZoom !== 1 || resizeOffset.x !== 0 || resizeOffset.y !== 0) && (
                 <Button
@@ -1257,6 +1344,43 @@ export default function NinePatchTool() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>记录</CardTitle>
+          <CardDescription>把当前图片和切片参数保存到本机，之后可以继续编辑。</CardDescription>
+        </CardHeader>
+        <CardContent className="pb-6">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              value={recordName}
+              onChange={e => setRecordName(e.target.value)}
+              placeholder={image?.name ?? '记录名称'}
+              aria-label="记录名称"
+              className="h-9 min-w-0 flex-1 rounded-md border-2 border-border bg-background px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-ring/40"
+            />
+            <Button type="button" disabled={!image} onClick={() => void saveRecord()}>
+              <Save />
+              保存当前记录
+            </Button>
+          </div>
+          {records.length > 0 && (
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {records.map(record => (
+                <div key={record.id} className="flex items-center gap-2 rounded-md border-2 border-border bg-muted/30 px-3 py-2">
+                  <button type="button" className="min-w-0 flex-1 truncate text-left text-sm font-bold hover:underline" onClick={() => void loadRecord(record.id)} title="加载记录">
+                    {record.recordName}
+                  </button>
+                  <span className="shrink-0 text-xs text-muted-foreground">{record.size > 0 ? `${Math.round(record.size / 1024)} KB` : ''}</span>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除记录 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
+                    <Trash2 />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
     </div>
