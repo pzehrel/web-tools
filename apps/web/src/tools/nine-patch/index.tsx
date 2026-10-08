@@ -24,7 +24,6 @@ import { Seo } from '@/components/seo'
 import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoImage } from '../demos/nine-patch'
@@ -189,7 +188,7 @@ function selectCodeOnShortcut(e: ReactKeyboardEvent<HTMLPreElement>): void {
 }
 
 /** 数字小输入框的统一样式 */
-const NUM_INPUT_CLASS = 'w-full rounded-md border-2 border-border bg-background px-1.5 py-1 text-center font-mono text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+const NUM_INPUT_CLASS = 'w-full rounded-md border border-border bg-background px-1.5 py-1 text-center font-mono text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
 
 /** 单选按钮组：描边分段控件，选中项用主色填充 */
 function OptionGroup<T extends string | number>({
@@ -206,7 +205,7 @@ function OptionGroup<T extends string | number>({
   className?: string
 }) {
   return (
-    <div className={cn('flex overflow-hidden rounded-md border-2 border-border shadow-hard-xs', className)} role="radiogroup" aria-label={label}>
+    <div className={cn('flex overflow-hidden rounded-md border border-border', className)} role="radiogroup" aria-label={label}>
       {options.map((opt) => {
         const Icon = opt.icon
         return (
@@ -217,7 +216,7 @@ function OptionGroup<T extends string | number>({
             aria-checked={value === opt.value}
             onClick={() => onChange(opt.value)}
             className={cn(
-              'flex flex-1 items-center justify-center gap-1 px-1 py-1.5 text-xs font-bold whitespace-nowrap transition-colors',
+              'flex flex-1 items-center justify-center gap-1 px-1 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
               value === opt.value
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-background hover:bg-secondary',
@@ -232,7 +231,7 @@ function OptionGroup<T extends string | number>({
   )
 }
 
-/** 新粗野主义勾选框：2px 描边 + 硬阴影 + 抬起/压实，选中填充主色 */
+/** 平面勾选框：1px 描边，选中主色填充 */
 function BrutalCheckbox({
   checked,
   onChange,
@@ -254,8 +253,7 @@ function BrutalCheckbox({
       />
       <span
         className={cn(
-          'flex size-5 shrink-0 items-center justify-center rounded-sm border-2 border-border shadow-hard-xs transition-all',
-          'hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
+          'flex size-5 shrink-0 items-center justify-center rounded-sm border border-border transition-colors',
           'peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50',
           checked ? 'bg-primary text-primary-foreground' : 'bg-background',
         )}
@@ -888,7 +886,7 @@ export default function NinePatchTool() {
         />
         <span
           className={cn(
-            'absolute rounded-sm border-2 border-border bg-primary px-1 font-mono text-[10px] leading-4 font-bold text-primary-foreground shadow-hard-xs select-none',
+            'absolute rounded-sm border border-border bg-primary px-1 font-mono text-[10px] leading-4 font-medium text-primary-foreground select-none',
             // 徽章骑在延长线的图外端点上（中心对齐线头），不遮挡图片
             horizontal ? 'left-0 top-1/2 -translate-x-1/2 -translate-y-1/2' : 'top-0 left-1/2 -translate-x-1/2 -translate-y-1/2',
           )}
@@ -906,41 +904,36 @@ export default function NinePatchTool() {
         description="上传图片并拖动四条切线定义九宫格切片，实时预览 border-image 的拉伸 / 平铺效果，一键复制 CSS / SCSS / Less 代码，并可裁剪中心区域导出最小体积的 PNG。"
         path="/tools/nine-patch"
       />
-      {/* 顶栏（紧凑：纵向空间尽量让给画布） */}
-      <header className="flex min-h-16 items-center gap-3 py-3">
+      {/* 顶栏（紧凑：纵向空间尽量让给画布；底边发丝线与工作区分隔） */}
+      <header className="flex min-h-16 items-center gap-3 border-b border-border py-3">
         <Button asChild variant="outline" size="icon">
           <Link to="/" aria-label="返回首页">
             <ArrowLeft className="size-5" />
           </Link>
         </Button>
-        <div className="flex size-10 items-center justify-center rounded-md border-2 border-border bg-chart-4 shadow-hard-xs">
-          <Frame className="size-5 text-foreground" />
-        </div>
         <div>
-          <h1 className="text-lg font-black tracking-tight">点九图工具</h1>
+          <h1 className="font-mono text-lg font-semibold tracking-tight">点九图工具</h1>
           <p className="hidden text-sm text-muted-foreground sm:block">拖动四条切线定义九宫格，实时预览 border-image 效果，导出 CSS 与裁剪后的最小 PNG</p>
         </div>
       </header>
 
-      {/* 主工作区（左中右）：左列记录库（贯穿全高），中列编辑 + 预览双舞台同列上下扫描，
+      {/* 主工作区（左中右）：去卡片分栏——列间垂直发丝线、同列上下水平线，无卡片间距浪费。
+          左列记录库（贯穿全高），中列编辑 + 预览双舞台同列上下扫描，
           右列参数贴着画布——拖切线时数值就在余光里，代码紧随其下 */}
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[13rem_minmax(0,1fr)_320px]">
+      <div className="grid min-w-0 gap-x-6 gap-y-10 pt-6 lg:grid-cols-[13rem_minmax(0,1fr)_20rem]">
         {/* 切片编辑 */}
-        <Card className="min-w-0 lg:col-start-2 lg:row-start-1">
-          <CardHeader>
-            <CardTitle>切片编辑</CardTitle>
-            <CardAction>
-              {image && (
-                <span
-                  className="rounded-sm border-2 border-border bg-muted px-2 py-0.5 font-mono text-xs font-bold text-muted-foreground"
-                  title={`原图尺寸：${image.name}`}
-                >
-                  原图 {image.width} × {image.height}
-                </span>
-              )}
-            </CardAction>
-          </CardHeader>
-          <CardContent className="min-w-0 pb-6">
+        <section className="min-w-0 lg:col-start-2 lg:row-start-1 lg:border-l lg:border-border lg:pl-6">
+          <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">切片编辑</h2>
+            {image && (
+              <span
+                className="font-mono text-xs text-muted-foreground"
+                title={`原图尺寸：${image.name}`}
+              >
+                原图 {image.width} × {image.height}
+              </span>
+            )}
+          </div>
             {/* 相对定位容器：高度外层定死（lg 跟随视口，clamp 在 30~42rem），舞台 absolute inset-0
                 脱离文档流——放大后的内容不会把卡片撑高；悬浮按钮挂在舞台外面 */}
             <div className="relative h-[22rem] lg:h-[calc(100svh-14rem)] lg:max-h-[42rem] lg:min-h-[30rem]">
@@ -954,7 +947,7 @@ export default function NinePatchTool() {
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
                 className={cn(
-                  'absolute inset-0 flex touch-none overflow-hidden rounded-md border-2 p-6 transition-colors select-none',
+                  'absolute inset-0 flex touch-none overflow-hidden border p-3 transition-colors select-none',
                   editorPan.panning ? 'cursor-grabbing' : 'cursor-grab',
                   !image && 'border-dashed',
                   dragOver ? 'border-primary' : 'border-border',
@@ -990,7 +983,7 @@ export default function NinePatchTool() {
                               />
                             ))}
                             <div
-                              className="pointer-events-none absolute border-2 border-primary"
+                              className="pointer-events-none absolute border border-primary"
                               style={{ left: keepRect.x * scale, top: keepRect.y * scale, width: keepRect.w * scale, height: keepRect.h * scale }}
                             />
                           </>
@@ -1000,11 +993,9 @@ export default function NinePatchTool() {
                     )
                   : (
                       <div className="m-auto flex flex-col items-center gap-3 px-6 text-center">
-                        <div className="flex size-12 items-center justify-center rounded-md border-2 border-border bg-chart-4 shadow-hard-xs -rotate-2">
-                          <Frame className="size-6 text-foreground" />
-                        </div>
+                        <Frame className="size-8 text-muted-foreground" />
                         <div>
-                          <p className="font-bold">拖拽图片到此处，或</p>
+                          <p className="font-medium">拖拽图片到此处，或</p>
                           <p className="mt-1 text-sm text-muted-foreground">PNG / SVG / WebP 均可</p>
                         </div>
                         <div className="flex gap-2">
@@ -1069,21 +1060,20 @@ export default function NinePatchTool() {
                 {importError}
               </p>
             )}
-          </CardContent>
-        </Card>
+        </section>
 
-        {/* 实时预览：与编辑舞台同列，改完切线向下扫一眼即可验证 */}
-        <Card className="flex min-w-0 flex-col lg:col-start-2 lg:row-start-2 lg:h-[32rem]">
-          <CardHeader>
-            <CardTitle>实时预览</CardTitle>
-          </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col pb-6">
+        {/* 实时预览：与编辑舞台同列，改完切线向下扫一眼即可验证；水平线与上方编辑区分隔 */}
+        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:col-start-2 lg:row-start-2 lg:h-[32rem] lg:border-l lg:pl-6">
+          <div className="pb-3">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">实时预览</h2>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="relative h-80 lg:h-auto lg:flex-1">
               <div
                 ref={previewStageRef}
                 {...previewPan.panHandlers}
                 className={cn(
-                  'absolute inset-0 flex touch-none overflow-hidden rounded-md border-2 border-border p-8 select-none',
+                  'absolute inset-0 flex touch-none overflow-hidden rounded-md border border-border p-8 select-none',
                   previewPan.panning ? 'cursor-grabbing' : 'cursor-grab',
                 )}
                 style={{ background: editorStageView.background }}
@@ -1121,7 +1111,7 @@ export default function NinePatchTool() {
                                 borderImageRepeat: repeatValue(codeParams),
                               }}
                             >
-                              <span className="rounded-sm bg-card px-2 py-0.5 text-xs font-bold text-card-foreground">
+                              <span className="rounded-sm bg-background/85 px-2 py-0.5 font-mono text-xs tabular-nums">
                                 {previewSize.w}
                                 {' × '}
                                 {previewSize.h}
@@ -1187,14 +1177,13 @@ export default function NinePatchTool() {
                 </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
         {/* 参数 */}
-        <Card className="lg:col-start-3 lg:row-start-1">
-          <CardHeader>
-            <CardTitle>参数</CardTitle>
-            <CardAction>
+        <section className="lg:col-start-3 lg:row-start-1 lg:border-l lg:border-border lg:pl-6">
+          <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">参数</h2>
               <Button
                 type="button"
                 variant="outline"
@@ -1209,12 +1198,11 @@ export default function NinePatchTool() {
               <Button type="button" variant="outline" size="icon-sm" title="重置切片" aria-label="重置切片" onClick={resetSlice} disabled={!image}>
                 <RotateCcw />
               </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 pb-6">
+          </div>
+          <div className="flex flex-col gap-4">
             {/* 切片边距 */}
             <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">切片边距（px）</p>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">切片边距（px）</p>
               <div className="grid grid-cols-4 gap-1.5">
                 {SIDES.map(({ side, label }) => (
                   <label key={side} className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
@@ -1241,7 +1229,7 @@ export default function NinePatchTool() {
             </div>
             {/* border-image-width：与切片边距同构的四边输入 */}
             <div>
-              <p className="mb-1.5 flex items-center justify-between text-xs font-bold text-muted-foreground">
+              <p className="mb-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
                 边框宽度（border-image-width）
                 <button
                   type="button"
@@ -1251,8 +1239,8 @@ export default function NinePatchTool() {
                   title={linkWidth ? '已绑定：宽度跟随切片边距（点击解绑）' : '已解绑：可独立调整宽度（点击绑定）'}
                   onClick={() => setLinkWidth(v => !v)}
                   className={cn(
-                    'flex size-5 items-center justify-center rounded-sm border-2 border-border shadow-hard-xs transition-all outline-none',
-                    'hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
+                    'flex size-5 items-center justify-center rounded-sm border border-border transition-all outline-none',
+                    'transition-colors',
                     'focus-visible:ring-[3px] focus-visible:ring-ring/50',
                     linkWidth ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground',
                   )}
@@ -1281,7 +1269,7 @@ export default function NinePatchTool() {
             {/* 外扩 + 填充：同一行；勾选框包一层与输入框等高（h-8）的居中容器，保证水平对齐 */}
             <div className="flex items-end justify-between gap-3">
               <label className="flex w-24 shrink-0 flex-col gap-1 text-xs text-muted-foreground">
-                <span className="font-bold">外扩 outset</span>
+                <span className="font-medium">外扩 outset</span>
                 <input
                   type="number"
                   min={0}
@@ -1302,7 +1290,7 @@ export default function NinePatchTool() {
             </div>
             {/* 重复方式 */}
             <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">横向重复</p>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">横向重复</p>
               <OptionGroup
                 label="横向重复方式"
                 value={repeatH}
@@ -1311,7 +1299,7 @@ export default function NinePatchTool() {
               />
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">纵向重复</p>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">纵向重复</p>
               <OptionGroup
                 label="纵向重复方式"
                 value={repeatV}
@@ -1322,7 +1310,7 @@ export default function NinePatchTool() {
             {/* 中心裁剪：导出更小体积的 PNG，不改任何 CSS 值 */}
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <p className="text-xs font-bold text-muted-foreground">中心裁剪</p>
+                <p className="text-xs font-medium text-muted-foreground">中心裁剪</p>
                 <BrutalCheckbox
                   checked={cropEnabled}
                   onChange={setCropEnabled}
@@ -1391,20 +1379,18 @@ export default function NinePatchTool() {
                     <p className="text-xs text-muted-foreground">删除中心多余行列得到最小图，CSS 代码无需修改</p>
                   )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        {/* 样式代码：与实时预览等高，代码区填满剩余高度 */}
-        <Card className="flex min-w-0 flex-col lg:col-start-3 lg:row-start-2 lg:h-[32rem]">
-          <CardHeader>
-            <CardTitle>样式代码</CardTitle>
-            <CardAction>
+        {/* 样式代码：与实时预览等高，代码区填满剩余高度；水平线与上方参数区分隔 */}
+        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:col-start-3 lg:row-start-2 lg:h-[32rem] lg:border-l lg:pl-6">
+          <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">样式代码</h2>
               <Button type="button" variant="outline" size="icon-sm" title="复制" aria-label="复制" onClick={copyCode}>
                 {copied ? <Check /> : <Copy />}
               </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pb-6">
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
             <div className="grid grid-cols-2 gap-2">
               <OptionGroup
                 label="代码格式"
@@ -1428,7 +1414,7 @@ export default function NinePatchTool() {
             <pre
               tabIndex={0}
               onKeyDown={selectCodeOnShortcut}
-              className="min-h-40 min-w-0 flex-1 overflow-auto rounded-md border-2 border-border bg-muted p-3 font-mono text-xs leading-5 whitespace-pre outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="min-h-40 min-w-0 flex-1 overflow-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-5 whitespace-pre outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               {exportText.split(/(url\("[^"]*"\))/g).map(part => (
                 part.startsWith('url(')
@@ -1436,7 +1422,7 @@ export default function NinePatchTool() {
                       <mark
                         key={part}
                         title="下载 PNG 后，把这里换成项目里的实际路径"
-                        className="rounded-sm bg-chart-3/40 px-0.5 font-bold text-foreground"
+                        className="rounded-sm bg-chart-3/40 px-0.5 font-medium text-foreground"
                       >
                         {part}
                       </mark>
@@ -1444,23 +1430,23 @@ export default function NinePatchTool() {
                   : part
               ))}
             </pre>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
         {/* 记录：左列贯穿全高——保存 / 加载是低频操作，放视线边缘不抢主工作区 */}
-        <Card className="flex min-w-0 flex-col lg:col-start-1 lg:row-span-2 lg:row-start-1">
-          <CardHeader>
-            <CardTitle>记录</CardTitle>
-            <CardDescription>保存图片与切片参数到本机，之后继续编辑</CardDescription>
-          </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col pb-6">
+        <section className="flex min-w-0 flex-col lg:col-start-1 lg:row-span-2 lg:row-start-1">
+          <div className="pb-1">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">记录</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">保存图片与切片参数到本机，之后继续编辑</p>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
               <input
                 value={recordName}
                 onChange={e => setRecordName(e.target.value)}
                 placeholder={image?.name ?? '记录名称'}
                 aria-label="记录名称"
-                className="h-9 min-w-0 flex-1 rounded-md border-2 border-border bg-background px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-ring/40"
+                className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
               />
               <Button type="button" className="shrink-0" disabled={!image} onClick={() => void saveRecord()}>
                 <Save />
@@ -1468,13 +1454,13 @@ export default function NinePatchTool() {
               </Button>
             </div>
             {records.length > 0 && (
-              <div className="mt-4 grid min-h-0 flex-1 content-start gap-2 lg:overflow-y-auto">
+              <div className="mt-3 grid min-h-0 flex-1 content-start lg:overflow-y-auto">
                 {records.map(record => (
-                  <div key={record.id} className="flex items-center gap-2 rounded-md border-2 border-border bg-muted/30 px-3 py-2">
-                    <button type="button" className="min-w-0 flex-1 truncate text-left text-sm font-bold hover:underline" onClick={() => void loadRecord(record.id)} title="加载记录">
+                  <div key={record.id} className="flex items-center gap-2 border-b border-border py-2">
+                    <button type="button" className="min-w-0 flex-1 truncate text-left text-sm hover:underline" onClick={() => void loadRecord(record.id)} title="加载记录">
                       {record.recordName}
                     </button>
-                    <span className="shrink-0 text-xs text-muted-foreground">{record.size > 0 ? `${Math.round(record.size / 1024)} KB` : ''}</span>
+                    <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{record.size > 0 ? `${Math.round(record.size / 1024)} KB` : ''}</span>
                     <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除记录 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
                       <Trash2 />
                     </Button>
@@ -1482,8 +1468,8 @@ export default function NinePatchTool() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
 
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
