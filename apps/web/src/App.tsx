@@ -6,7 +6,7 @@ function App() {
   const visible = tools.filter(tool => tool.status !== 'hidden')
 
   return (
-    <div className="mx-auto min-h-dvh max-w-5xl px-4">
+    <div className="mx-auto min-h-dvh max-w-7xl px-4">
       <Seo
         title={null}
         description="纯前端实现的 Web 工具集合：URL 参数解析、二维码互转、Lottie 预览优化等。"

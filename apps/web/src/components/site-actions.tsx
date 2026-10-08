@@ -4,7 +4,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 export function SiteActions() {
   return (
     <nav aria-label="站点操作" className="pointer-events-none absolute inset-x-0 top-5 z-50">
-      <div className="mx-auto flex max-w-5xl justify-end px-4">
+      <div className="mx-auto flex max-w-7xl justify-end px-4">
         <div className="pointer-events-auto flex h-10 items-center gap-3">
           <ThemeToggle />
           <a
