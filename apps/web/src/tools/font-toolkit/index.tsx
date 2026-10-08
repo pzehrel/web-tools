@@ -18,7 +18,6 @@ import { Link } from 'react-router'
 
 import { Seo } from '@/components/seo'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { ASCII_CHARSET, HANZI_TIERS, PUNCTUATION_CHARSET } from './charsets'
 import { buildCheckReport, convertFont, detectFormat, parseFont, registerPreviewFont, subsetFont } from './font-engine'
@@ -54,7 +53,7 @@ const FORMAT_EXT: Record<FontFormat, string> = { ttf: 'ttf', otf: 'otf', woff: '
 
 const SAMPLE_TEXT = '永东国爱 in 0123 ABC 调和字韵，字体之美！The quick brown fox jumps over the lazy dog.'
 
-const INPUT_CLASS = 'h-9 w-full rounded-md border-2 border-border bg-background px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50'
+const INPUT_CLASS = 'h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50'
 
 /** 每页渲染的字符数（网格分页，避免上万 glyph 一次进 DOM） */
 const GLYPH_PAGE_SIZE = 600
@@ -97,10 +96,9 @@ function Checkbox({ checked, label, onChange }: { checked: boolean, label: strin
       />
       <span
         className={cn(
-          'pointer-events-none flex size-6 shrink-0 items-center justify-center rounded-sm border-2 border-border shadow-hard-xs transition-all',
+          'pointer-events-none flex size-6 shrink-0 items-center justify-center rounded-sm border border-border transition-all',
           'peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50',
-          'peer-hover:-translate-x-px peer-hover:-translate-y-px peer-hover:shadow-hard-sm',
-          'peer-active:translate-x-0.5 peer-active:translate-y-0.5 peer-active:shadow-none',
+          'transition-colors',
           checked ? 'bg-primary text-primary-foreground' : 'bg-background',
         )}
       >
@@ -112,9 +110,9 @@ function Checkbox({ checked, label, onChange }: { checked: boolean, label: strin
 
 function Stat({ label, value, hint }: { label: string, value: string, hint?: string }) {
   return (
-    <div className="rounded-md border-2 border-border bg-muted/40 px-3 py-2">
+    <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
       <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">{label}</p>
-      <p className="font-mono text-sm font-black">{value}</p>
+      <p className="font-mono text-sm font-semibold">{value}</p>
       {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   )
@@ -126,7 +124,7 @@ function SegmentedControl<T extends string>({ value, options, onChange }: {
   onChange: (v: T) => void
 }) {
   return (
-    <div role="radiogroup" className="flex w-full overflow-hidden rounded-md border-2 border-border">
+    <div role="radiogroup" className="flex w-full overflow-hidden rounded-md border border-border">
       {options.map(opt => (
         <button
           key={opt.value}
@@ -135,7 +133,7 @@ function SegmentedControl<T extends string>({ value, options, onChange }: {
           aria-checked={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
-            'flex-1 px-2 py-1.5 text-xs font-bold transition-colors',
+            'flex-1 px-2 py-1.5 text-xs font-medium transition-colors',
             value === opt.value
               ? 'bg-primary text-primary-foreground'
               : 'bg-background text-foreground hover:bg-muted',
@@ -173,15 +171,15 @@ function GlyphGrid({ codePoints, previewFamily, onAddToCustom }: {
     <div className="space-y-4">
       {/* 选中详情 */}
       {selectedChar && selected !== null && (
-        <div className="flex flex-wrap items-center gap-5 rounded-md border-2 border-border bg-muted/40 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-5 rounded-md border border-border bg-muted/40 px-5 py-4">
           <div
-            className="flex size-24 shrink-0 items-center justify-center rounded-md border-2 border-border bg-background text-6xl leading-none"
+            className="flex size-24 shrink-0 items-center justify-center rounded-md border border-border bg-background text-6xl leading-none"
             style={{ fontFamily: `"${previewFamily}", sans-serif` }}
           >
             {selectedChar}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-sm font-black">
+            <p className="font-mono text-sm font-semibold">
               U+
               {selected.toString(16).toUpperCase().padStart(4, '0')}
             </p>
@@ -215,7 +213,7 @@ function GlyphGrid({ codePoints, previewFamily, onAddToCustom }: {
       {/* 网格 */}
       <div
         ref={gridRef}
-        className="max-h-[26rem] overflow-y-auto rounded-md border-2 border-border bg-background p-2"
+        className="max-h-[26rem] overflow-y-auto rounded-md border border-border bg-background p-2"
       >
         {visible.length === 0
           ? (
@@ -230,7 +228,7 @@ function GlyphGrid({ codePoints, previewFamily, onAddToCustom }: {
                     title={`U+${cp.toString(16).toUpperCase().padStart(4, '0')}`}
                     onClick={() => setSelected(cp === selected ? null : cp)}
                     className={cn(
-                      'flex h-11 items-center justify-center rounded-sm border-2 text-xl leading-none transition-colors',
+                      'flex h-11 items-center justify-center rounded-sm border text-xl leading-none transition-colors',
                       cp === selected
                         ? 'border-border bg-primary text-primary-foreground'
                         : 'border-transparent text-foreground hover:border-border hover:bg-muted',
@@ -491,18 +489,15 @@ export default function FontToolkitTool() {
       />
 
       {/* 顶部导航 */}
-      <div className="flex items-center gap-3 py-5">
+      <div className="flex min-h-16 items-center gap-3 border-b border-border py-3">
         <Button variant="outline" size="icon-sm" asChild>
           <Link to="/" aria-label="返回首页"><ArrowLeft className="size-4" /></Link>
         </Button>
         <div className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-md bg-chart-2 text-primary-foreground">
-            <Type className="size-4" />
-          </span>
-          <h1 className="text-2xl font-black tracking-tight">字体工具箱</h1>
+          <h1 className="font-mono text-lg font-semibold tracking-tight">字体工具箱</h1>
         </div>
         {font && (
-          <span className="ml-auto hidden max-w-[45%] truncate font-mono text-xs font-bold text-muted-foreground sm:block">
+          <span className="ml-auto hidden max-w-[45%] truncate font-mono text-xs font-medium text-muted-foreground sm:block">
             {font.report.familyName}
             {' '}
             ·
@@ -517,8 +512,8 @@ export default function FontToolkitTool() {
       {/* 字体导入（未导入时大卡；已导入后折叠成一行） */}
       {!font
         ? (
-            <Card
-              className={cn('mb-5', dragOver && 'ring-[3px] ring-ring/50')}
+            <section
+              className={cn('mb-6 border border-dashed border-border py-14 text-center transition-colors', dragOver && 'border-primary ring-[3px] ring-ring/50')}
               onDragOver={(e) => {
                 e.preventDefault()
                 setDragOver(true)
@@ -526,8 +521,8 @@ export default function FontToolkitTool() {
               onDragLeave={() => setDragOver(false)}
               onDrop={onDrop}
             >
-              <CardContent className="flex flex-col items-center gap-4 px-6 py-14 text-center">
-                <span className="flex size-14 items-center justify-center rounded-md border-2 border-border bg-muted/40 shadow-hard-sm">
+              <div className="flex flex-col items-center gap-4 px-6 text-center">
+                <span className="flex size-14 items-center justify-center rounded-md border border-border bg-muted/40">
                   <FileType className="size-7 text-muted-foreground" />
                 </span>
                 <div>
@@ -541,13 +536,13 @@ export default function FontToolkitTool() {
                     : <FileType className="size-4" />}
                   选择文件
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )
         : (
             <div
               className={cn(
-                'mb-5 flex flex-wrap items-center gap-3 rounded-md border-2 border-border bg-card px-4 py-3 shadow-hard-sm',
+                'mb-5 flex flex-wrap items-center gap-3 rounded-md border border-border bg-card px-4 py-3',
                 dragOver && 'ring-[3px] ring-ring/50',
               )}
               onDragOver={(e) => {
@@ -557,7 +552,7 @@ export default function FontToolkitTool() {
               onDragLeave={() => setDragOver(false)}
               onDrop={onDrop}
             >
-              <span className="max-w-[14rem] truncate rounded-sm border-2 border-border bg-muted px-2 py-1 font-mono text-xs font-bold">
+              <span className="max-w-[14rem] truncate rounded-sm border border-border bg-muted px-2 py-1 font-mono text-xs font-medium">
                 {font.file.name}
               </span>
               <span className="text-xs text-muted-foreground">
@@ -593,7 +588,7 @@ export default function FontToolkitTool() {
           )}
 
       {error && (
-        <div className="mb-5 flex items-center gap-2 rounded-md border-2 border-destructive/50 bg-destructive/10 px-4 py-3 text-sm font-bold text-destructive">
+        <div className="mb-5 flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm font-bold text-destructive">
           <TriangleAlert className="size-4 shrink-0" />
           {error}
         </div>
@@ -611,10 +606,10 @@ export default function FontToolkitTool() {
                 aria-selected={tab === id}
                 onClick={() => setTab(id)}
                 className={cn(
-                  'flex shrink-0 items-center gap-1.5 rounded-md border-2 border-border px-4 py-2 text-sm font-bold transition-all',
+                  'flex shrink-0 items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm font-bold transition-all',
                   tab === id
-                    ? 'translate-x-0.5 translate-y-0.5 bg-primary text-primary-foreground shadow-none'
-                    : 'bg-card shadow-hard-xs hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-hard-sm active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-card',
                 )}
               >
                 <Icon className="size-4" />
@@ -625,13 +620,14 @@ export default function FontToolkitTool() {
 
           {/* 预览 */}
           {tab === 'preview' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>文本预览</CardTitle>
-                <CardDescription>用导入的字体渲染任意文本；想逐字浏览全部字符请切到「字符浏览」。</CardDescription>
-                <CardAction>
+            <section>
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
+                <div>
+                  <h2 className="font-mono text-sm font-semibold tracking-tight">文本预览</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">用导入的字体渲染任意文本；想逐字浏览全部字符请切到「字符浏览」。</p>
+                </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-muted-foreground">字号</span>
+                    <span className="text-xs font-medium text-muted-foreground">字号</span>
                     <input
                       type="range"
                       min={16}
@@ -641,11 +637,10 @@ export default function FontToolkitTool() {
                       className="w-28"
                       aria-label="预览字号"
                     />
-                    <span className="w-8 font-mono text-xs font-bold">{previewSize}</span>
+                    <span className="w-8 font-mono text-xs font-medium">{previewSize}</span>
                   </div>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="space-y-3 pb-6">
+              </div>
+              <div className="space-y-3">
                 <input
                   className={INPUT_CLASS}
                   value={previewText}
@@ -653,7 +648,7 @@ export default function FontToolkitTool() {
                   placeholder="输入要预览的文字…"
                 />
                 <div
-                  className="overflow-hidden rounded-md border-2 border-border bg-muted/30 p-4 leading-relaxed"
+                  className="overflow-hidden rounded-md border border-border bg-muted/30 p-4 leading-relaxed"
                   style={{ fontFamily: fontStack, fontSize: previewSize, overflowWrap: 'break-word' }}
                 >
                   {previewText || SAMPLE_TEXT}
@@ -661,33 +656,33 @@ export default function FontToolkitTool() {
                 <p className="text-xs text-muted-foreground">
                   也可以直接拖拽字体到本页继续更换；预览使用 FontFace 本地注册，不会上传。
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
 
           {/* 字符浏览 */}
           {tab === 'glyphs' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>字符浏览</CardTitle>
-                <CardDescription>
-                  字体里的
-                  {' '}
-                  {allCodePoints.length.toLocaleString()}
-                  {' '}
-                  个字符，按分类筛选或搜索定位，点击查看大图。
-                </CardDescription>
-                <CardAction>
+            <section>
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
+                <div>
+                  <h2 className="font-mono text-sm font-semibold tracking-tight">字符浏览</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    字体里的
+                    {' '}
+                    {allCodePoints.length.toLocaleString()}
+                    {' '}
+                    个字符，按分类筛选或搜索定位，点击查看大图。
+                  </p>
+                </div>
                   <input
-                    className="h-9 w-44 rounded-md border-2 border-border bg-background px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-ring/40"
+                    className="h-9 w-44 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     placeholder="搜字符或 U+4E2D"
                     aria-label="搜索字符"
                   />
-                </CardAction>
-              </CardHeader>
-              <CardContent className="space-y-4 pb-6">
+              </div>
+              <div className="space-y-4">
                 {/* 分类筛选 */}
                 <div role="radiogroup" className="flex flex-wrap gap-2">
                   {(Object.keys(CATEGORY_LABELS) as CharCategory[]).map(cat => (
@@ -698,7 +693,7 @@ export default function FontToolkitTool() {
                       aria-checked={category === cat}
                       onClick={() => setCategory(cat)}
                       className={cn(
-                        'rounded-sm border-2 border-border px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-40',
+                        'rounded-sm border border-border px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-40',
                         category === cat
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-background hover:bg-muted',
@@ -715,21 +710,19 @@ export default function FontToolkitTool() {
                   previewFamily={font.previewFamily}
                   onAddToCustom={addToCustom}
                 />
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
 
           {/* 体检 */}
           {tab === 'checkup' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="size-4" />
-                  体检报告
-                </CardTitle>
-                <CardDescription>字数构成与字符集覆盖情况，子集化前先看看家底。</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 pb-6">
+            <section>
+              <div className="flex min-h-8 items-center gap-2 pb-3">
+                <Activity className="size-4 text-muted-foreground" />
+                <h2 className="font-mono text-sm font-semibold tracking-tight">体检报告</h2>
+                <p className="text-xs text-muted-foreground">字数构成与字符集覆盖情况，子集化前先看看家底。</p>
+              </div>
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <Stat label="Glyph 总数" value={font.report.glyphCount.toLocaleString()} />
                   <Stat label="汉字 Glyph" value={font.report.charset.hanGlyphs.toLocaleString()} hint={font.report.charset.hanGlyphs > 0 ? '含 CJK 统一表意' : '无中文字形'} />
@@ -738,15 +731,15 @@ export default function FontToolkitTool() {
                 </div>
                 <div className="space-y-2">
                   {font.report.coverage.map(row => (
-                    <div key={row.label} className="flex items-center gap-3 rounded-md border-2 border-border/50 px-3 py-2">
-                      <span className="w-28 shrink-0 text-xs font-bold">{row.label}</span>
-                      <div className="h-3 flex-1 overflow-hidden rounded-sm border-2 border-border bg-muted">
+                    <div key={row.label} className="flex items-center gap-3 rounded-md border border-border/50 px-3 py-2">
+                      <span className="w-28 shrink-0 text-xs font-medium">{row.label}</span>
+                      <div className="h-3 flex-1 overflow-hidden rounded-sm border border-border bg-muted">
                         <div
                           className="h-full bg-chart-2"
                           style={{ width: `${row.total ? Math.round(row.covered / row.total * 100) : 0}%` }}
                         />
                       </div>
-                      <span className="w-24 shrink-0 text-right font-mono text-xs font-bold">
+                      <span className="w-24 shrink-0 text-right font-mono text-xs font-medium">
                         {row.covered}
                         /
                         {row.total}
@@ -754,24 +747,22 @@ export default function FontToolkitTool() {
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
 
           {/* 子集化 + 转换 */}
           {tab === 'subset' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Scissors className="size-4" />
-                  子集化与转换
-                </CardTitle>
-                <CardDescription>按分类勾选需要的字符，导出瘦身后的字体。</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 pb-6">
+            <section>
+              <div className="flex min-h-8 items-center gap-2 pb-3">
+                <Scissors className="size-4 text-muted-foreground" />
+                <h2 className="font-mono text-sm font-semibold tracking-tight">子集化与转换</h2>
+                <p className="text-xs text-muted-foreground">按分类勾选需要的字符，导出瘦身后的字体。</p>
+              </div>
+              <div className="space-y-4">
                 {/* 中文分级 */}
                 <div>
-                  <p className="mb-1.5 text-xs font-bold text-muted-foreground">中文常用字（按字频分级）</p>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">中文常用字（按字频分级）</p>
                   <div role="radiogroup" className="grid gap-2 sm:grid-cols-3">
                     {HAN_TIERS.map(t => (
                       <button
@@ -781,13 +772,13 @@ export default function FontToolkitTool() {
                         aria-checked={hanTier === t.id}
                         onClick={() => setHanTier(t.id)}
                         className={cn(
-                          'rounded-md border-2 border-border p-3 text-left transition-all shadow-hard-xs',
-                          'hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-hard-sm',
-                          'active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
+                          'rounded-md border border-border p-3 text-left transition-all',
+                          
+                          '',
                           hanTier === t.id ? 'bg-primary text-primary-foreground' : 'bg-background',
                         )}
                       >
-                        <span className="block text-sm font-black">{t.label}</span>
+                        <span className="block text-sm font-semibold">{t.label}</span>
                         <span className={cn('block text-xs', hanTier === t.id ? 'text-primary-foreground/80' : 'text-muted-foreground')}>
                           {t.description}
                         </span>
@@ -798,22 +789,22 @@ export default function FontToolkitTool() {
 
                 {/* 其他字符集 */}
                 <div className="space-y-2">
-                  <p className="mb-1.5 text-xs font-bold text-muted-foreground">其他字符集</p>
-                  <div className="flex items-center gap-3 rounded-md border-2 border-border px-3 py-2.5">
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">其他字符集</p>
+                  <div className="flex items-center gap-3 rounded-md border border-border px-3 py-2.5">
                     <Checkbox checked={useAscii} label="英文与数字" onChange={setUseAscii} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold">英文与数字</p>
                       <p className="text-xs text-muted-foreground">ASCII 可打印字符（含空格），95 个</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 rounded-md border-2 border-border px-3 py-2.5">
+                  <div className="flex items-center gap-3 rounded-md border border-border px-3 py-2.5">
                     <Checkbox checked={usePunct} label="标点与符号" onChange={setUsePunct} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold">标点与符号</p>
                       <p className="text-xs text-muted-foreground">中文全角标点 + 常用符号</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 rounded-md border-2 border-border px-3 py-2.5">
+                  <div className="flex items-start gap-3 rounded-md border border-border px-3 py-2.5">
                     <div className="pt-0.5"><Checkbox checked={useCustom} label="自定义文本" onChange={setUseCustom} /></div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold">自定义文本</p>
@@ -832,7 +823,7 @@ export default function FontToolkitTool() {
                 {/* 导出选项 */}
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
-                    <p className="mb-1.5 text-xs font-bold text-muted-foreground">输出格式</p>
+                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">输出格式</p>
                     <SegmentedControl
                       value={outputFormat}
                       onChange={setOutputFormat}
@@ -861,7 +852,7 @@ export default function FontToolkitTool() {
 
                 {/* 缺字提示 */}
                 {missingChars && (
-                  <div className="rounded-md border-2 border-border bg-muted/40 px-3 py-2 text-xs">
+                  <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
                     <span className="font-bold">
                       所选字符中有
                       {missingChars.length}
@@ -876,7 +867,7 @@ export default function FontToolkitTool() {
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center gap-3 border-t-2 border-border/20 pt-4">
+                <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
                   <Button onClick={() => runExport('subset')} disabled={busy || selection.total === 0}>
                     {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Scissors className="size-4" />}
                     子集化导出（
@@ -892,14 +883,14 @@ export default function FontToolkitTool() {
                 {/* 结果 */}
                 {result && (
                   <div className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border-2 border-border bg-muted/40 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-4 py-3">
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                        <span className="font-mono text-sm font-black">
+                        <span className="font-mono text-sm font-semibold">
                           {formatSize(result.sourceSize)}
                           <span className="mx-1.5 text-muted-foreground">→</span>
                           <span className="text-chart-2">{formatSize(result.buffer.byteLength)}</span>
                         </span>
-                        <span className="rounded-sm border-2 border-border bg-background px-1.5 py-0.5 text-xs font-bold">
+                        <span className="rounded-sm border border-border bg-background px-1.5 py-0.5 text-xs font-medium">
                           -
                           {sizeDelta}
                           %
@@ -919,8 +910,8 @@ export default function FontToolkitTool() {
                       </Button>
                     </div>
                     <div>
-                      <p className="mb-1.5 text-xs font-bold text-muted-foreground">@font-face 代码</p>
-                      <pre className="overflow-x-auto rounded-md border-2 border-border bg-muted/40 p-4 font-mono text-xs leading-relaxed">
+                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">@font-face 代码</p>
+                      <pre className="overflow-x-auto rounded-md border border-border bg-muted/40 p-4 font-mono text-xs leading-relaxed">
                         {`@font-face {
   font-family: '${result.family}';
   src: url('${result.family}-subset.${FORMAT_EXT[result.format]}') format('${result.format}');
@@ -931,8 +922,8 @@ export default function FontToolkitTool() {
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
         </>
       )}

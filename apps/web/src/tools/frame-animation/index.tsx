@@ -10,7 +10,6 @@ import {
   Copy,
   Crop,
   FileImage,
-  Film,
   FolderOpen,
   ImagePlus,
   Images,
@@ -30,7 +29,6 @@ import { Seo } from '@/components/seo'
 import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoFrames } from '../demos/frame-animation'
@@ -482,7 +480,7 @@ const EXPORT_BUILDERS: Record<ExportFormat, (p: ExportParams) => string> = {
 }
 
 /** 数字小输入框的统一样式 */
-const NUM_INPUT_CLASS = 'w-14 shrink-0 rounded-md border-2 border-border bg-background px-1.5 py-1 text-center font-mono text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50'
+const NUM_INPUT_CLASS = 'w-14 shrink-0 rounded-md border border-border bg-background px-1.5 py-1 text-center font-mono text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50'
 
 /** 单选按钮组：描边分段控件，选中项用主色填充 */
 function OptionGroup<T extends string | number>({
@@ -499,7 +497,7 @@ function OptionGroup<T extends string | number>({
   className?: string
 }) {
   return (
-    <div className={cn('flex overflow-hidden rounded-md border-2 border-border shadow-hard-xs', className)} role="radiogroup" aria-label={label}>
+    <div className={cn('flex overflow-hidden rounded-md border border-border', className)} role="radiogroup" aria-label={label}>
       {options.map((opt) => {
         const Icon = opt.icon
         return (
@@ -510,7 +508,7 @@ function OptionGroup<T extends string | number>({
             aria-checked={value === opt.value}
             onClick={() => onChange(opt.value)}
             className={cn(
-              'flex flex-1 items-center justify-center gap-1 px-1 py-1.5 text-xs font-bold whitespace-nowrap transition-colors',
+              'flex flex-1 items-center justify-center gap-1 px-1 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
               value === opt.value
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-background hover:bg-secondary',
@@ -531,8 +529,8 @@ function OptionGroup<T extends string | number>({
  */
 const RANGE_INPUT_CLASS = cn(
   'pointer-events-none absolute inset-x-0 top-1/2 h-4 -translate-y-1/2 appearance-none bg-transparent disabled:opacity-50',
-  '[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-border [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-hard-xs [&::-webkit-slider-thumb]:cursor-grab',
-  '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-border [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:cursor-grab',
+  '[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-border [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-grab',
+  '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-border [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:cursor-grab',
 )
 
 /** 新粗野主义勾选框：2px 描边 + 硬阴影 + 抬起/压实，选中填充主色 */
@@ -557,8 +555,8 @@ function BrutalCheckbox({
       />
       <span
         className={cn(
-          'flex size-5 shrink-0 items-center justify-center rounded-sm border-2 border-border shadow-hard-xs transition-all',
-          'hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
+          'flex size-5 shrink-0 items-center justify-center rounded-sm border border-border transition-all',
+          'transition-colors',
           'peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50',
           checked ? 'bg-primary text-primary-foreground' : 'bg-background',
         )}
@@ -1224,34 +1222,32 @@ export default function FrameAnimationTool() {
         description="导入多张图片逐帧预览动画效果，可调帧率、播放方向、循环次数、缩放与背景。"
         path="/tools/frame-animation"
       />
-      {/* 顶栏 */}
-      <header className="flex h-24 items-center gap-3">
+      {/* 顶栏（底边发丝线与工作区分隔） */}
+      <header className="flex min-h-16 items-center gap-3 border-b border-border py-3">
         <Button asChild variant="outline" size="icon">
           <Link to="/" aria-label="返回首页">
             <ArrowLeft className="size-5" />
           </Link>
         </Button>
-        <div className="flex size-10 items-center justify-center rounded-md border-2 border-border bg-chart-1 shadow-hard-xs">
-          <Film className="size-5 text-foreground" />
-        </div>
         <div>
-          <h1 className="text-lg font-black tracking-tight">帧动画预览</h1>
+          <h1 className="font-mono text-lg font-semibold tracking-tight">帧动画预览</h1>
           <p className="text-sm text-muted-foreground">导入多张图片逐帧播放，帧率 / 方向 / 循环 / 缩放可调</p>
         </div>
       </header>
 
-      {/* 预览 + 参数（导入已融入预览：舞台即拖放区，添加按钮在舞台里） */}
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle>预览</CardTitle>
+      {/* 预览 + 参数（导入已融入预览：舞台即拖放区，添加按钮在舞台里）；
+          去卡片分栏——列间垂直发丝线，无卡片间距浪费 */}
+      <div className="grid min-w-0 gap-x-6 gap-y-10 pt-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="flex min-w-0 flex-col">
+          <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">预览</h2>
             {frameCount > 0 && (
-              <CardDescription>
+              <span className="text-xs text-muted-foreground">
                 {`入选 ${activeCount}/${frameCount} 帧 · 空格播放/暂停，← → 逐帧`}
-              </CardDescription>
+              </span>
             )}
-          </CardHeader>
-          <CardContent className="min-w-0 flex flex-1 flex-col gap-4 pb-6">
+          </div>
+          <div className="flex min-w-0 flex flex-1 flex-col gap-4">
             {/* 舞台：本身就是拖放区；滚轮 / 双指缩放，按住拖动平移（与点九图工具同一套手势） */}
             {/* 相对定位容器：舞台绝对定位脱离文档流（高度由卡片剩余空间决定），悬浮按钮不随内容滚动 */}
             <div className="relative min-h-64 flex-1">
@@ -1265,7 +1261,7 @@ export default function FrameAnimationTool() {
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
                 className={cn(
-                  'absolute inset-0 flex touch-none overflow-hidden rounded-md border-2 p-4 transition-colors select-none',
+                  'absolute inset-0 flex touch-none overflow-hidden border p-3 transition-colors select-none',
                   frame && (stagePan.panning ? 'cursor-grabbing' : 'cursor-grab'),
                   frameCount === 0 && 'border-dashed',
                   dragOver ? 'border-primary' : 'border-border',
@@ -1301,11 +1297,9 @@ export default function FrameAnimationTool() {
                           )
                         : (
                             <div className="m-auto flex flex-col items-center gap-3 px-6 text-center">
-                              <div className="flex size-12 items-center justify-center rounded-md border-2 border-border bg-chart-1 shadow-hard-xs -rotate-2">
-                                <Images className="size-6 text-foreground" />
-                              </div>
+                              <Images className="size-8 text-muted-foreground" />
                               <div>
-                                <p className="font-bold">拖拽图片 / ZIP 到此处，或</p>
+                                <p className="font-medium">拖拽图片 / ZIP 到此处，或</p>
                                 <p className="mt-1 text-sm text-muted-foreground">
                                   可多选，按文件名自然排序
                                 </p>
@@ -1400,7 +1394,7 @@ export default function FrameAnimationTool() {
                 ）
               </span>
               <div
-                className="min-h-24 max-w-full overflow-hidden rounded-md border-2 border-border"
+                className="min-h-24 max-w-full overflow-hidden rounded-md border border-border"
                 style={{ background: stageView.background }}
               >
                 {sprite && sprite.key === spriteKey && spriteKey !== ''
@@ -1423,7 +1417,7 @@ export default function FrameAnimationTool() {
               </div>
             </div>
             {importError && (
-              <p className="text-sm font-bold text-destructive">{importError}</p>
+              <p className="text-sm font-medium text-destructive">{importError}</p>
             )}
             <input
               ref={fileInputRef}
@@ -1478,7 +1472,7 @@ export default function FrameAnimationTool() {
                   {frame
                     ? (
                         <>
-                          <span className="font-mono font-bold text-foreground">{safeIndex + 1}</span>
+                          <span className="font-mono text-foreground">{safeIndex + 1}</span>
                           {' / '}
                           {activeCount}
                           <span className="mx-2">·</span>
@@ -1503,19 +1497,19 @@ export default function FrameAnimationTool() {
                 下载精灵图
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        {/* 参数：统一「左标签 + 右控件」行式布局 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>动画参数</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 pb-6">
+        {/* 参数：统一「左标签 + 右控件」行式布局；左缘发丝线与预览列分隔 */}
+        <section className="lg:border-l lg:border-border lg:pl-6">
+          <div className="pb-3">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">动画参数</h2>
+          </div>
+          <div className="flex flex-col gap-4">
             {/* 帧率 + 一轮时长（双向换算） */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between">
-                <label htmlFor="fps" className="text-xs font-bold text-muted-foreground">帧率</label>
+                <label htmlFor="fps" className="text-xs font-medium text-muted-foreground">帧率</label>
                 <span className="text-xs text-muted-foreground">
                   {Number(fps.toFixed(2))}
                   {' fps · 每帧 '}
@@ -1566,7 +1560,7 @@ export default function FrameAnimationTool() {
             {/* 帧范围：双头滑块，播放与导出都按范围截断 */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between">
-                <span className="text-xs font-bold text-muted-foreground">帧范围</span>
+                <span className="text-xs font-medium text-muted-foreground">帧范围</span>
                 <span className="flex items-center gap-2 text-xs text-muted-foreground">
                   {activeCount > 0 ? `第 ${rangeStart + 1} → ${rangeEnd + 1} 帧` : '—'}
                   {rangeRaw !== null && (
@@ -1621,7 +1615,7 @@ export default function FrameAnimationTool() {
 
             {/* 方向 / 循环 / 缩放：左标签单行 */}
             <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">方向</p>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">方向</p>
               <OptionGroup<Direction>
                 label="播放方向"
                 value={direction}
@@ -1634,7 +1628,7 @@ export default function FrameAnimationTool() {
               />
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">循环</p>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">循环</p>
               <div className="flex items-center gap-2">
                 <OptionGroup<string>
                   label="循环方式"
@@ -1664,7 +1658,7 @@ export default function FrameAnimationTool() {
               </div>
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">排列</p>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">排列</p>
               <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                 <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                   <input
@@ -1704,23 +1698,21 @@ export default function FrameAnimationTool() {
               />
             </div>
 
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
 
       {/* 样式代码 + 帧序列：与上方「预览 + 参数」同列对齐（帧序列 300px 与动画参数一致） */}
-      <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        {/* 样式导出（常驻；无入选帧时按钮禁用、代码区占位）；高度基准：两个板块等高对齐 */}
-        <Card className="min-w-0 lg:h-[35rem]">
-          <CardHeader>
-            <CardTitle>样式代码</CardTitle>
-            <CardAction>
-              <Button type="button" variant="outline" size="icon-sm" disabled={!exportText} title="复制" aria-label="复制" onClick={() => copyCss(exportText)}>
-                {copiedCss ? <Check /> : <Copy />}
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pb-6">
+      <div className="mt-10 grid min-w-0 gap-x-6 gap-y-10 lg:grid-cols-[minmax(0,1fr)_300px]">
+        {/* 样式导出（常驻；无入选帧时按钮禁用、代码区占位）；高度基准：两个板块等高对齐；水平线与上方网格分隔 */}
+        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:h-[35rem]">
+          <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">样式代码</h2>
+            <Button type="button" variant="outline" size="icon-sm" disabled={!exportText} title="复制" aria-label="复制" onClick={() => copyCss(exportText)}>
+              {copiedCss ? <Check /> : <Copy />}
+            </Button>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
               <OptionGroup<ExportFormat>
                 label="导出格式"
@@ -1750,7 +1742,7 @@ export default function FrameAnimationTool() {
               tabIndex={0}
               aria-label="导出样式代码"
               onKeyDown={selectCodeOnShortcut}
-              className="max-h-96 min-w-0 flex-1 overflow-auto rounded-md border-2 border-border bg-background px-4 py-3 font-mono text-sm leading-relaxed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="max-h-96 min-w-0 flex-1 overflow-auto rounded-md border border-border bg-background px-4 py-3 font-mono text-sm leading-relaxed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               {exportText
                 ? exportText.split(/(url\("[^"]*"\))/g).map(part => (
@@ -1759,7 +1751,7 @@ export default function FrameAnimationTool() {
                           <mark
                             key={part}
                             title="下载精灵图后，把这里换成项目里的实际路径"
-                            className="rounded-sm bg-chart-3/40 px-0.5 font-bold text-foreground"
+                            className="rounded-sm bg-chart-3/40 px-0.5 font-medium text-foreground"
                           >
                             {part}
                           </mark>
@@ -1768,19 +1760,21 @@ export default function FrameAnimationTool() {
                   ))
                 : '// 导入帧后生成样式代码'}
             </pre>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        {/* 帧列表（常驻）：列表一行一帧；勾选 = 入选预览，不提供删除（防误操作）；高度跟随样式代码板块 */}
-        <Card className="flex min-w-0 flex-col lg:h-[35rem]">
-          <CardHeader>
-            <CardTitle>
+        {/* 帧列表（常驻）：列表一行一帧；勾选 = 入选预览，不提供删除（防误操作）；高度跟随样式代码板块；
+            左缘发丝线与样式代码列分隔 */}
+        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:h-[35rem] lg:border-l lg:border-border lg:pl-6">
+          <div className="flex min-h-8 items-center justify-between gap-2">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">
               帧序列（
               {frameCount}
               ）
-            </CardTitle>
-            {/* 窄卡片：按钮组换行到标题下方；裁剪独占一行，全选 / 排序同一行 */}
-            <CardAction className="col-start-1 row-start-3 flex w-full flex-col gap-2">
+            </h2>
+          </div>
+          {/* 窄列：按钮组换行到标题下方；裁剪独占一行，全选 / 排序同一行 */}
+          <div className="flex w-full flex-col gap-2 pb-3">
               <Button
                 type="button"
                 variant="secondary"
@@ -1802,11 +1796,10 @@ export default function FrameAnimationTool() {
                   排序
                 </Button>
               </div>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="min-h-0 flex-1 overflow-y-auto pb-6">
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {cropResult && (
-              <p className="mb-3 rounded-md border-2 border-border bg-secondary px-3 py-2 text-sm font-bold">
+              <p className="mb-3 rounded-md border border-border bg-secondary px-3 py-2 text-sm font-medium">
                 {cropResult}
               </p>
             )}
@@ -1848,7 +1841,7 @@ export default function FrameAnimationTool() {
                       setDropTarget(null)
                     }}
                     className={cn(
-                      'flex items-center gap-1.5 overflow-hidden rounded-md border-2 px-2 py-1.5 transition-colors',
+                      'flex items-center gap-1.5 border px-2 py-1.5 transition-colors',
                       isActive ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-40',
                       'border-border/40 hover:border-border',
                       // 插入指示线：横向内阴影，颜色走令牌
@@ -1884,7 +1877,7 @@ export default function FrameAnimationTool() {
                     />
                     {/* 文件名（去扩展名）+ 尺寸/体积（两行） */}
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="truncate text-sm font-bold">
+                      <span className="truncate text-sm">
                         {f.name.replace(/\.[^.]+$/, '')}
                       </span>
                       <span className="truncate font-mono text-xs text-muted-foreground">
@@ -1892,7 +1885,7 @@ export default function FrameAnimationTool() {
                       </span>
                     </span>
                     {/* 上传序号：最右，重排不变 */}
-                    <span className="shrink-0 rounded-sm border-2 border-border bg-background px-1 font-mono text-[10px] leading-4 font-bold">
+                    <span className="shrink-0 rounded-sm border border-border bg-background px-1 font-mono text-[10px] leading-4 font-medium">
                       #
                       {f.seq}
                     </span>
@@ -1900,23 +1893,24 @@ export default function FrameAnimationTool() {
                 )
               })}
             </ul>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>记录</CardTitle>
-          <CardDescription>保存整组帧、播放范围和导出参数，之后可以继续编辑。</CardDescription>
-        </CardHeader>
-        <CardContent className="pb-6">
+      {/* 记录：水平线与上方工作区分隔 */}
+      <section className="mt-10 border-t border-border pt-4">
+        <div className="pb-1">
+          <h2 className="font-mono text-sm font-semibold tracking-tight">记录</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">保存整组帧、播放范围和导出参数，之后可以继续编辑。</p>
+        </div>
+        <div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
               value={recordName}
               onChange={event => setRecordName(event.target.value)}
               placeholder={frames[0]?.name.replace(/\.[^.]+$/, '') || '项目名称'}
               aria-label="项目名称"
-              className="h-9 min-w-0 flex-1 rounded-md border-2 border-border bg-background px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-ring/40"
+              className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
             />
             <Button type="button" disabled={frames.length === 0} onClick={() => void saveRecord()}>
               <Save />
@@ -1926,8 +1920,8 @@ export default function FrameAnimationTool() {
           {records.length > 0 && (
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {records.map(record => (
-                <div key={record.id} className="flex items-center gap-2 rounded-md border-2 border-border bg-muted/30 px-3 py-2">
-                  <button type="button" className="min-w-0 flex-1 truncate text-left text-sm font-bold hover:underline" title="加载项目" onClick={() => void loadRecord(record.id)}>
+                <div key={record.id} className="flex items-center gap-2 border-b border-border py-2">
+                  <button type="button" className="min-w-0 flex-1 truncate text-left text-sm hover:underline" title="加载项目" onClick={() => void loadRecord(record.id)}>
                     {record.recordName}
                   </button>
                   <span className="shrink-0 text-xs text-muted-foreground">{record.frameCount} 帧</span>
@@ -1938,8 +1932,8 @@ export default function FrameAnimationTool() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       {/* 裁剪确认弹窗：所有帧叠放预览（最后一帧垫底），虚线框出保留区域 */}
       {cropPreview && (
@@ -1951,12 +1945,12 @@ export default function FrameAnimationTool() {
             role="dialog"
             aria-modal="true"
             aria-label="裁剪公共透明边"
-            className="w-full max-w-lg rounded-lg border-2 border-border bg-card p-6 shadow-hard-lg"
+            className="w-full max-w-lg border border-border bg-popover p-6"
             onClick={e => e.stopPropagation()}
           >
-            <h2 className="text-lg font-black tracking-tight">裁剪公共透明边</h2>
+            <h2 className="font-mono text-lg font-semibold tracking-tight">裁剪公共透明边</h2>
             {cropPreview.mixedSize && (
-              <p className="mt-2 flex items-start gap-1.5 rounded-md border-2 border-border bg-secondary px-2 py-1.5 text-xs text-muted-foreground">
+              <p className="mt-2 flex items-start gap-1.5 rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-muted-foreground">
                 <TriangleAlert className="mt-px size-3.5 shrink-0" />
                 <span>
                   图片宽高不一致：框线以最大画布
@@ -1984,7 +1978,7 @@ export default function FrameAnimationTool() {
                 : '当前阈值下所有帧均为透明，无法裁剪'}
             </p>
             <div className="mt-3 flex items-center gap-2">
-              <label htmlFor="alpha-threshold" className="shrink-0 text-sm font-bold">透明阈值</label>
+              <label htmlFor="alpha-threshold" className="shrink-0 text-sm font-medium">透明阈值</label>
               <input
                 id="alpha-threshold"
                 type="range"
@@ -2007,7 +2001,7 @@ export default function FrameAnimationTool() {
             </div>
             <div className="mt-4 flex justify-center">
               <div
-                className="rounded-md border-2 border-border p-2"
+                className="rounded-md border border-border p-2"
                 style={{ background: stageView.checkerBackground }}
               >
                 <div className="relative w-fit">
