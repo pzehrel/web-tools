@@ -6,24 +6,23 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * 新粗野主义按钮：2px 墨色描边 + 硬阴影。
- * 交互语言：悬停「抬起」（阴影增大），按下「压实」（阴影消失并位移）。
+ * 瑞士极简按钮：1px 描边、无阴影、无位移。
+ * 交互语言：悬停只做颜色变化（填充加深 / 边框加重），150ms 过渡。
  */
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border-2 border-border text-sm font-bold transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*=\'size-\'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive shadow-hard-xs hover:shadow-hard-sm hover:-translate-x-px hover:-translate-y-px active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border bg-background text-sm font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*=\'size-\'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        default: 'border-transparent bg-primary text-primary-foreground hover:bg-primary/85',
         destructive:
-          'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-        outline:
-          'bg-background hover:bg-secondary hover:text-secondary-foreground',
+          'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/85',
+        outline: 'hover:border-foreground hover:bg-secondary/60',
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+          'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/70',
         ghost:
-          'border-transparent shadow-none hover:border-border hover:bg-accent hover:text-accent-foreground hover:shadow-hard-xs',
-        link: 'border-transparent shadow-none text-primary underline-offset-4 hover:underline hover:shadow-none hover:translate-x-0 hover:translate-y-0',
+          'border-transparent hover:bg-accent hover:text-accent-foreground',
+        link: 'border-transparent text-primary underline-offset-4 hover:underline',
       },
       size: {
         'default': 'h-9 px-4 py-2 has-[>svg]:px-3',

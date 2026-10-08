@@ -4,16 +4,18 @@ import { Link } from 'react-router'
 
 import { cn } from '@/lib/utils'
 
-interface ToolCardProps {
+interface ToolRowProps {
   tool: ToolMeta
+  /** 目录序号，首页从 01 开始编号 */
+  index: number
 }
 
 /**
- * 首页工具卡片：可交互时整体「抬起」，筹备中的工具降低存在感。
- * 新工具页可复用此卡片的视觉语言作为页面头部。
+ * 首页工具条目：目录索引式整行布局，用上下发丝线分割，
+ * 不做卡片。悬停整行出现浅灰洗刷与箭头位移；
+ * 筹备中的工具降低存在感且不可进入。
  */
-export function ToolCard({ tool }: ToolCardProps) {
-  const Icon = tool.icon
+export function ToolRow({ tool, index }: ToolRowProps) {
   const ready = tool.status === 'ready'
 
   return (
@@ -22,38 +24,33 @@ export function ToolCard({ tool }: ToolCardProps) {
       onClick={ready ? undefined : e => e.preventDefault()}
       aria-disabled={!ready}
       className={cn(
-        'group flex flex-col gap-4 rounded-lg border-2 border-border bg-card p-5 transition-all',
+        'group grid grid-cols-[3rem_1fr_auto] items-baseline gap-4 border-b border-border py-5 transition-colors duration-150',
         ready
-          ? 'shadow-hard-sm cursor-pointer hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-hard active:translate-x-0.5 active:translate-y-0.5 active:shadow-hard-xs'
-          : 'cursor-not-allowed opacity-60',
+          ? 'cursor-pointer hover:bg-muted/60'
+          : 'cursor-not-allowed opacity-55',
       )}
     >
-      {/* 图标居左，标题和描述在图标右边；筹备中徽章保持在右上角 */}
-      <div className="flex flex-1 items-start gap-4">
-        <div
-          className={cn(
-            'flex size-12 shrink-0 items-center justify-center rounded-md border-2 border-border',
-            tool.accentClass,
+      <span className="font-mono text-sm tabular-nums text-muted-foreground">
+        {String(index).padStart(2, '0')}
+      </span>
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-baseline gap-x-3">
+          <h3 className="font-mono text-base font-semibold tracking-tight">
+            {tool.name}
+          </h3>
+          {!ready && (
+            <span className="text-xs text-muted-foreground">筹备中</span>
           )}
-        >
-          <Icon className="size-6 text-foreground" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-bold">{tool.name}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{tool.description}</p>
-        </div>
-        {!ready && (
-          <span className="shrink-0 rounded-full border-2 border-border bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">
-            筹备中
-          </span>
-        )}
-      </div>
-      {ready && (
-        <div className="flex items-center gap-1 self-end text-sm font-bold text-primary">
-          打开
-          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-        </div>
-      )}
+        </span>
+        <p className="mt-1 text-sm text-muted-foreground">{tool.description}</p>
+      </span>
+      {ready
+        ? (
+            <span className="text-muted-foreground transition-transform duration-150 group-hover:translate-x-1">
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </span>
+          )
+        : <span aria-hidden="true" />}
     </Link>
   )
 }

@@ -1,16 +1,19 @@
 # Web Tools 设计规范
 
-## 风格定位：新粗野主义（Neo-Brutalism）
+## 风格定位：瑞士极简 / 编辑风（Swiss Minimal）
 
-本项目是一套「打开即用」的浏览器小工具集合。视觉上刻意与后台管理系统风格保持距离：
-不做侧边栏、不做数据表格、不做灰扑扑的密集表单，而是像一盒摆在桌上的实体工具——
-**粗描边、硬阴影、大标题、高饱和点缀色**，带一点玩具感和印刷感。
+本项目是一套「打开即用」的浏览器小工具集合。视觉上刻意与后台管理系统、
+与「一眼 AI」的模板站保持距离：**没有卡片盒子、没有阴影层级、没有渐变**，
+层级靠分割线、留白与字阶表达——像一份排印考究的工具目录。
 
 三个关键词：
 
-- **扎实**：所有元素有明确的「边界」和「重量」（2px 描边 + 无模糊硬阴影）
-- **直白**：层级靠字号和色块区分，不依赖灰度渐变和投影层级
-- **顽皮**：徽章可以轻微旋转，按钮按下去有「压实」的物理反馈
+- **直白**：黑白灰 + 单一 teal 强调色，内容即界面
+- **分割**：板块用 1px 发丝线分割，不用卡片底色差、不用阴影浮起
+- **精密**：等宽字体做标题与数值（JetBrains Mono），IBM Plex Sans 做正文
+
+候选风格检索依据见 `design-system/webtools/MASTER.md`（ui-ux-pro-max 数据库：
+`minimalism-and-swiss-style` + `Developer Mono` 字体配对 + `portfolio-grid` 布局）。
 
 ## 换肤机制（必须遵守）
 
@@ -20,63 +23,63 @@
 | ---------------------- | ---------------------------------------- |
 | 页面底色 / 正文        | `bg-background` / `text-foreground`      |
 | 主行动色（按钮、强调） | `bg-primary` / `text-primary-foreground` |
-| 点缀色（徽章、贴纸）   | `bg-secondary`、`bg-accent`              |
-| 卡片底色               | `bg-card`                                |
-| 描边 / 硬阴影          | `border-border`（联动 `--shadow-color`） |
+| 悬停洗刷底             | `bg-secondary`、`bg-accent`              |
+| 板块底色（同背景）     | `bg-card`                                |
+| 分割线 / 边框          | `border-border`（1px 发丝线）            |
 | 弱化文本               | `text-muted-foreground`                  |
-| 装饰性色块（如图标底） | `bg-chart-1` ~ `bg-chart-5`              |
+| 装饰性色块（图表等）   | `bg-chart-1` ~ `bg-chart-5`              |
 
 换肤 = 只改 `src/index.scss` 中 `:root` / `.dark` 两张色板，组件零改动。
 
 ## 风格专属令牌
 
-在标准令牌之外，主题定义了硬阴影工具类（`@theme inline`）：
+- 圆角基准 `--radius: 0`（直角）；如需过渡可用 `calc(var(--radius) + 2px)` 以内的折中。
+- **无阴影**：历史遗留的 `shadow-hard-*` 工具类已在 `@theme inline` 中
+  中和为透明无操作（工具页仍有类名引用），**新代码一律不写阴影**。
+- 唯一彩色：`--ring`（teal 焦点环）。除 chart-* 装饰色与 destructive 外，
+  界面不允许出现第三种色相。
 
-```
-shadow-hard-xs  2px 2px 0 0   徽章、logo 印章、小按钮
-shadow-hard-sm  3px 3px 0 0   卡片默认态、Hero 高亮块
-shadow-hard     5px 5px 0 0   卡片悬停态
-shadow-hard-lg  8px 8px 0 0   弹窗等需要「浮起」的层级
-```
+## 交互语言：颜色变化
 
-阴影颜色跟随 `--shadow-color`（亮色=墨黑，暗色=纸白），换肤时同步调整。
+可交互元素的统一动效（已内置于 `Button` 与 `ToolRow`，新组件应复用）：
 
-圆角基准 `--radius: 0.375rem`（小圆角），通过 `rounded-md` 等标准类使用。
-
-## 交互语言：抬起与压实
-
-可交互元素的统一动效（已内置于 `Button` 与 `ToolCard`，新组件应复用）：
-
-- **悬停 = 抬起**：`hover:-translate-x-0.5 hover:-translate-y-0.5`，阴影加大一级
-- **按下 = 压实**：`active:translate-x-0.5 active:translate-y-0.5`，阴影收回或消失
-- 过渡统一 `transition-all`，时长用默认（150ms），不加花哨缓动
+- **悬停 = 变色**：填充加深（`hover:bg-primary/85`）或边框加重（`hover:border-foreground`），
+  或浅灰洗刷（`hover:bg-muted/60`）
+- **按下**：无位移、无 scale、无阴影变化，只保持颜色态
+- 过渡统一 `transition-colors`，时长 150ms
+- 禁止 `hover:scale-105`、`translate-y` 抬升等位移反馈（layout-shifting hover）
 
 ## 排版
 
-- 标题：`font-black`（900）+ `tracking-tight`，Hero 可用 `text-4xl/5xl`
-- 卡片标题、按钮文字：`font-bold`
+- 字体：标题/数值/代码用 `font-mono`（JetBrains Mono），正文用 `font-sans`（IBM Plex Sans），
+  已在 `index.scss` 的 `@layer base` 中全局设定
+- 标题：`font-semibold`（600）+ `tracking-tight`，Hero 可用 `text-4xl/5xl`；不用 `font-black`
 - 正文/辅助：`text-sm text-muted-foreground`
-- 字标、徽章中的短词可以 `-rotate-2` 等轻微倾斜制造手工感，**一处页面最多一两个**
+- 行宽：长正文 `max-w-prose`（65ch）
+- 数字对齐：编号、百分比等用 `tabular-nums`
+- 不用渐变文字、不用字距拉开的全大写 eyebrow
 
 ## 布局规则
 
+- **去卡片化**：板块分割用 `border-b border-border` 发丝线 + 留白，
+  不用「圆角盒子 + 底色差 + 阴影」的卡片范式
+- 列表条目用整行布局（`grid` + `border-b`），行内悬停洗刷，不做一格格卡片
 - 页面容器：`mx-auto max-w-5xl px-4`（内容集中，不做满宽后台式布局）
-- 工具网格：`grid sm:grid-cols-2 lg:grid-cols-3 gap-5`
-- 分隔用 `border-t-2 border-border` 的实线，不用 1px 灰线
+- 分隔一律 `border border-border`；区块顶部可以用 2px 实线做主分割（印刷感），
+  但组件内部边框保持 1px
 - 不做侧边栏导航；工具页之间通过首页和面包屑往返
 
 ## 表单排版
 
 参数面板的字段统一「标签在上、控件在下」，不做左标签右控件的密排行：
 
-- 字段标签：`mb-1.5 text-xs font-bold text-muted-foreground`（弱化小字，不做主色大标题）
-- 单选 / 枚举：用描边分段控件（`OptionGroup` 模式：`role="radiogroup"` + `role="radio"`，
-  选中项主色填充），默认占满整行宽度
-- 数字输入：等宽字体居中 + `border-2` + 聚焦 `ring-[3px] ring-ring/50`；
+- 字段标签：`mb-1.5 text-xs font-medium text-muted-foreground`
+- 单选 / 枚举：用分段控件（`role="radiogroup"` + `role="radio"`，
+  选中项 `bg-primary` 填充），默认占满整行宽度
+- 数字输入：等宽字体 + 1px 边框 + 聚焦 teal 焦点环；
   成组的四边值（上/右/下/左）用 `grid grid-cols-4` 平铺，输入在上、方位小字在下
-- 勾选：`BrutalCheckbox` 模式（sr-only 原生 input + 2px 描边方块 + 硬阴影抬起/压实）
-- 短行内组合（如「外扩 + 填充」）：底边对齐 `items-end`，较矮的控件包一层与输入框等高的
-  `items-center` 容器，保证视觉中心对齐
+- 勾选：原生 input（可 sr-only）+ 1px 描边方块，选中用 `bg-primary` 填充 + 对勾
+- 短行内组合：底边对齐 `items-end`，保证视觉中心对齐
 
 ## 画布舞台（图像类工具）
 
@@ -112,13 +115,22 @@ shadow-hard-lg  8px 8px 0 0   弹窗等需要「浮起」的层级
 
 **Do**
 
-- 新组件优先复用 `Button` / `Card` 的描边 + 阴影组合
+- 板块分割用发丝线 + 留白；列表用整行条目
+- 新组件优先复用 `Button`（平面变色交互）
 - 装饰色用 `chart-*` 令牌，保证主题联动
-- 暗色模式必须同样成立（描边和阴影会自动反白）
+- 暗色模式必须同样成立（色板自动反白）
 
 **Don't**
 
-- 不用柔和弥散阴影（`shadow-lg`、`drop-shadow` 等默认柔影一律不用）
-- 不用 1px 边框，描边统一 `border-2`
-- 不用大面积渐变、玻璃拟态、模糊背景
+- 不用卡片盒子做板块分割（圆角 + 底色差 + 阴影的组合是 AI slop 标志）
+- 不用任何阴影（`shadow-*` 柔影与遗留 `shadow-hard-*` 均不新增引用）
+- 不用紫色/靛蓝主色、渐变、玻璃拟态、发光装饰、emoji 图标
+- 不用位移类悬停反馈（`scale` / `translate` 抬升）
 - 不把页面做成「左侧菜单 + 右侧表格」的后台范式
+
+## 待办：工具页清理
+
+工具页（`apps/web/src/tools/*/`）中仍残留旧粗野主义的 `border-2`、
+`shadow-hard-*` 类名（阴影已全局中和为无操作）。后续迭代工具页时
+顺手改为 1px 边框并移除 `shadow-hard-*` 引用，全部清理完成后可删除
+`index.scss` 中的四个中和令牌。

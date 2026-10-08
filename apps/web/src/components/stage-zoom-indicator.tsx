@@ -11,7 +11,7 @@ export function StageZoomIndicator({ visible, zoom }: StageZoomIndicatorProps) {
       aria-hidden="true"
       data-stage-zoom-indicator
       className={cn(
-        'pointer-events-none absolute bottom-2 left-2 z-20 rounded-sm border-2 border-border bg-background/90 px-2 py-0.5 font-mono text-[10px] font-black shadow-hard-xs transition-opacity duration-300',
+        'pointer-events-none absolute bottom-2 left-2 z-20 rounded-sm border border-border bg-background/90 px-2 py-0.5 font-mono text-[10px] font-medium tabular-nums transition-opacity duration-300',
         visible ? 'opacity-100' : 'opacity-0',
       )}
     >

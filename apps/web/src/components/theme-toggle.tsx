@@ -23,7 +23,7 @@ export function ThemeToggle() {
         <div
           role="radiogroup"
           aria-label="主题"
-          className="flex h-10 overflow-hidden rounded-md border-2 border-border bg-card shadow-hard-sm"
+          className="flex h-10 overflow-hidden rounded-md border border-border bg-card"
         >
           {OPTIONS.map(({ value, label, icon: Icon }) => (
             <button
@@ -35,7 +35,7 @@ export function ThemeToggle() {
               onClick={() => setTheme(value)}
               className={cn(
                 'flex cursor-pointer items-center gap-1.5 px-2.5 text-xs font-bold transition-colors',
-                'not-last:border-r-2 not-last:border-border',
+                'not-last:border-r not-last:border-border',
                 theme === value
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-card text-muted-foreground hover:bg-secondary hover:text-foreground',

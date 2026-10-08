@@ -1,47 +1,49 @@
-import { Wrench, Zap } from 'lucide-react'
-
 import { Seo } from '@/components/seo'
-import { ToolCard } from '@/components/tool-card'
+import { ToolRow } from '@/components/tool-card'
 import { tools } from '@/tools'
 
 function App() {
+  const visible = tools.filter(tool => tool.status !== 'hidden')
+
   return (
-    <div className="mx-auto max-w-5xl px-4">
+    <div className="mx-auto min-h-dvh max-w-5xl px-4">
       <Seo
         title={null}
         description="纯前端实现的 Web 工具集合：URL 参数解析、二维码互转、Lottie 预览优化等。"
       />
-      {/* 顶栏：印章式 logo + 字标 */}
-      <header className="flex h-24 items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-md border-2 border-border bg-primary shadow-hard-xs">
-          <Wrench className="size-5 text-primary-foreground" />
-        </div>
-        <span className="text-lg font-black tracking-tight">Web Tools</span>
+
+      {/* 报头：字标 + 一句定位，发丝线与正文分割 */}
+      <header className="flex h-20 items-end border-b border-border pb-4">
+        <h1 className="font-mono text-xl font-semibold tracking-tight">
+          Web Tools
+        </h1>
+        <p className="ml-4 hidden text-sm text-muted-foreground sm:block">
+          浏览器本地运行 · 数据不上传
+        </p>
       </header>
 
-      {/* Hero：大标题 + 贴纸徽章 */}
-      <section className="py-12">
-        <div className="inline-flex items-center gap-1.5 rounded-full border-2 border-border bg-secondary px-3 py-1 text-xs font-bold text-secondary-foreground shadow-hard-xs">
-          <Zap className="size-3.5" />
-          打开即用 · 无需安装
-        </div>
-        <h1 className="mt-4 text-4xl font-black leading-tight tracking-tight sm:text-5xl">
-          趁手的
-          <span className="mx-1 inline-block -rotate-2 rounded-md border-2 border-border bg-primary px-2 text-primary-foreground shadow-hard-sm">
-            网页小工具
-          </span>
-        </h1>
-        <p className="mt-4 text-muted-foreground">
-          像从工具箱里拿扳手一样，拿来就用。
+      {/* Hero：大标题 + 副题，纯排版 */}
+      <section className="border-b border-border py-16 sm:py-20">
+        <h2 className="max-w-2xl font-mono text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
+          趁手的网页小工具
+        </h2>
+        <p className="mt-4 max-w-prose text-muted-foreground">
+          像从工具箱里拿扳手一样，拿来就用。所有计算都在你的浏览器里完成，没有后端，没有上传。
         </p>
       </section>
 
-      {/* 工具网格（hidden 工具不在首页露出，直链可访问） */}
-      <section className="grid grid-cols-1 gap-5 pb-16 sm:grid-cols-2 lg:grid-cols-3">
-        {tools.filter(tool => tool.status !== 'hidden').map(tool => (
-          <ToolCard key={tool.id} tool={tool} />
+      {/* 工具索引：目录式整行条目，发丝线分割（hidden 工具不露出，直链可访问） */}
+      <nav aria-label="工具索引" className="py-2">
+        {visible.map((tool, i) => (
+          <ToolRow key={tool.id} tool={tool} index={i + 1} />
         ))}
-      </section>
+      </nav>
+
+      {/* 页脚：极简 */}
+      <footer className="mt-16 flex items-baseline justify-between border-t border-border py-6 text-sm text-muted-foreground">
+        <span>Web Tools</span>
+        <span className="font-mono text-xs">本地运行 / 无追踪</span>
+      </footer>
     </div>
   )
 }

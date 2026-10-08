@@ -104,12 +104,12 @@ export function StageViewControls({ hasContent, settings }: { hasContent: boolea
       </div>
       {settings.backgroundOpen && (
         <div
-          className="absolute top-12 left-2 z-30 w-56 rounded-md border-2 border-border bg-background/95 p-2 shadow-hard-sm"
+          className="absolute top-12 left-2 z-30 w-56 rounded-md border border-border bg-background/95 p-2"
           role="dialog"
           aria-label="画布背景设置"
           data-stage-background-panel
         >
-          <div className="flex overflow-hidden rounded-md border-2 border-border shadow-hard-xs" role="radiogroup" aria-label="画布背景">
+          <div className="flex overflow-hidden rounded-md border border-border" role="radiogroup" aria-label="画布背景">
             {([
               ['checker', '棋盘格'],
               ['solid', '纯色'],
@@ -153,10 +153,10 @@ export function StageViewControls({ hasContent, settings }: { hasContent: boolea
                       settings.setSolidIndex(index)
                   }}
                   className={cn(
-                    'aspect-square w-full rounded-sm border-2 shadow-hard-xs transition-[transform,box-shadow]',
+                    'aspect-square w-full rounded-sm border-2 transition-colors duration-150',
                     activePalette === index
                       ? 'border-primary ring-2 ring-ring/50'
-                      : 'border-border hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
+                      : 'border-border hover:border-foreground',
                   )}
                   style={{ background: settings.stageBackground === 'checker' ? checkerBackground(colors.a, colors.b) : colors.a }}
                 />

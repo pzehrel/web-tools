@@ -2,13 +2,16 @@ import * as React from 'react'
 
 import { cn } from '@/lib/utils'
 
-/** 新粗野主义卡片：纸面白底 + 2px 描边 + 硬阴影 */
+/**
+ * 瑞士极简面板：1px 发丝边框、无阴影、无底色差。
+ * 板块分割靠边框线 + 留白；Card 本体不再表达「浮起」层级。
+ */
 function Card({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card"
       className={cn(
-        'bg-card text-card-foreground flex flex-col gap-6 rounded-lg border-2 border-border shadow-hard-sm',
+        'bg-card text-card-foreground flex flex-col gap-6 rounded-lg border border-border',
         className,
       )}
       {...props}
