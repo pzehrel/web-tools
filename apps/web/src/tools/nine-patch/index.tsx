@@ -14,6 +14,7 @@ import {
   Sparkles,
   Trash2,
   TriangleAlert,
+  Wand2,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
@@ -24,9 +25,10 @@ import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useStagePan, useStageZoom } from '@/lib/stage'
+import { useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoImage } from '../demos/nine-patch'
+import { analyzeNineSlice, readImagePixels } from './nine-slice'
 import { createNinePatchItem, useNinePatchRecords, type NinePatchRecordMeta } from './records'
 
 /** 已加载的源图：Blob 用于记录持久化，objectURL 仅用于当前页面预览 */
@@ -48,6 +50,14 @@ interface Slice {
 
 type Side = keyof Slice
 type RepeatMode = 'stretch' | 'repeat' | 'round' | 'space'
+/** 中心裁剪轴：both = 横竖都裁；x = 只裁横向（高度全保留）；y = 只裁纵向 */
+type CropAxes = 'both' | 'x' | 'y'
+
+const CROP_AXES_OPTIONS: { value: CropAxes, label: string }[] = [
+  { value: 'both', label: '两轴' },
+  { value: 'x', label: '仅 X' },
+  { value: 'y', label: '仅 Y' },
+]
 
 const SIDES: { side: Side, label: string }[] = [
   { side: 'top', label: '上' },
@@ -257,10 +267,7 @@ function BrutalCheckbox({
   )
 }
 
-/** 默认视图缩放：小图放大到 200% 便于看清，大图 100% */
-function fitZoom(w: number, h: number): number {
-  return Math.min(w, h) < 200 ? 2 : 1
-}
+/** 编辑 / 预览舞台的视图缩放：加载内容后自动适配完整展示，手动缩放后跟随用户 */
 
 /** 裁剪遮罩：前景 / 背景色交叉斜纹——图片内容色不可控，双向条纹保证任意图上至少一组可辨 */
 const CROP_MASK_STYLE = {
@@ -303,9 +310,7 @@ export default function NinePatchTool() {
   const [linkWidth, setLinkWidth] = useState(true)
   const [repeatH, setRepeatH] = useState<RepeatMode>('stretch')
   const [repeatV, setRepeatV] = useState<RepeatMode>('stretch')
-  /** 编辑 / 预览舞台的视图缩放（1 = 100%）：滚轮或双指调整，不影响导出 */
-  const [zoom, setZoom] = useState(1)
-  const [previewZoom, setPreviewZoom] = useState(1)
+  /** 编辑 / 预览舞台的视图缩放（不影响导出）：滚轮或双指调整，加载内容后默认完整适配 */
   const [dragOver, setDragOver] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   /** 预览框尺寸（px）：拖拽四边 / 四角调整 */
@@ -322,6 +327,11 @@ export default function NinePatchTool() {
   const [cropEnabled, setCropEnabled] = useState(false)
   /** 中心保留尺寸（图像 px）：默认 1×1 即最小图 */
   const [cropKeep, setCropKeep] = useState({ w: 1, h: 1 })
+  /** 裁剪轴：选择只裁某一轴时，另一轴整条保留 */
+  const [cropAxes, setCropAxes] = useState<CropAxes>('both')
+  /** 自动识别切片：进行中 / 结果提示 */
+  const [detecting, setDetecting] = useState(false)
+  const [detectInfo, setDetectInfo] = useState<{ ok: boolean, text: string } | null>(null)
 
   const makeRecordMeta = useCallback((): NinePatchRecordMeta | null => {
     if (!image)
@@ -340,10 +350,11 @@ export default function NinePatchTool() {
       repeatV,
       cropEnabled,
       cropKeep,
+      cropAxes,
       codeFormat,
       codeStyle,
     }
-  }, [codeFormat, codeStyle, cropEnabled, cropKeep, fill, image, imageWidth, linkWidth, outset, recordName, repeatH, repeatV, slice])
+  }, [codeFormat, codeStyle, cropAxes, cropEnabled, cropKeep, fill, image, imageWidth, linkWidth, outset, recordName, repeatH, repeatV, slice])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editorStageRef = useRef<HTMLDivElement>(null)
@@ -368,6 +379,11 @@ export default function NinePatchTool() {
   const imageRef = useRef<SourceImage | null>(null)
   imageRef.current = image
 
+  // 适配缩放：内容完整进舞台并留边（编辑舞台 p-6 = 24px 内边距；预览舞台 p-8 = 32px，内容另含 24px 外边距）
+  const editorFit = useStageFitScale(editorStageRef, image?.width ?? 0, image?.height ?? 0, Boolean(image), 32)
+  const [zoom, setZoom, resetEditorZoom] = useAutoFitZoom(editorFit, image?.url ?? null)
+  const previewFit = useStageFitScale(previewStageRef, previewSize.w + 24, previewSize.h + 24, Boolean(image), 40)
+  const [previewZoom, setPreviewZoom, resetPreviewZoom] = useAutoFitZoom(previewFit, image?.url ?? null)
   const editorStageZoom = useStageZoom(editorStageRef, zoom, setZoom, Boolean(image))
   const previewStageZoom = useStageZoom(previewStageRef, previewZoom, setPreviewZoom, Boolean(image))
   const editorPan = useStagePan(editorStageRef, () => lineDragRef.current !== null)
@@ -388,8 +404,8 @@ export default function NinePatchTool() {
     // 裁剪与上一张图的中心尺寸绑定，换图后回到默认
     setCropEnabled(false)
     setCropKeep({ w: 1, h: 1 })
-    // 小图默认放大，切线更好拖
-    setZoom(fitZoom(img.width, img.height))
+    setCropAxes('both')
+    // 视图缩放随换图自动回到适配（useAutoFitZoom 的 resetKey 变化）
   }, [])
 
   const saveRecord = useCallback(async () => {
@@ -430,6 +446,8 @@ export default function NinePatchTool() {
       setCropEnabled(meta.cropEnabled)
     if (meta.cropKeep)
       setCropKeep(meta.cropKeep)
+    if (meta.cropAxes)
+      setCropAxes(meta.cropAxes)
     if (meta.codeFormat)
       setCodeFormat(meta.codeFormat)
     if (meta.codeStyle)
@@ -460,6 +478,7 @@ export default function NinePatchTool() {
     // 与换图同理：裁剪状态随图片一并清掉
     setCropEnabled(false)
     setCropKeep({ w: 1, h: 1 })
+    setCropAxes('both')
   }, [])
 
   // 卸载时回收 objectURL
@@ -579,14 +598,65 @@ export default function NinePatchTool() {
     setSlice(defaultSlice(image.width, image.height))
   }, [image])
 
+  /* ---------- 自动识别：从像素分析最小可用切片 ---------- */
+
+  /**
+   * 自动识别切片：分析引擎返回的 slice 相对裁掉透明留白后的图，
+   * 这里按 crop 偏移换算回原图坐标；同时把中心裁剪设为分析出的最小保留尺寸。
+   */
+  const autoDetect = useCallback(async () => {
+    if (!image || detecting)
+      return
+    setDetecting(true)
+    setDetectInfo(null)
+    try {
+      // 让「识别中」状态先渲染一帧，再进入同步的重计算
+      await new Promise(resolve => setTimeout(resolve, 50))
+      const pixels = await readImagePixels(image.blob)
+      const result = analyzeNineSlice(pixels)
+      const { crop, slice: s } = result
+      const next: Slice = {
+        top: crop.y + s.top,
+        right: crop.x + s.right,
+        bottom: crop.y + s.bottom,
+        left: crop.x + s.left,
+      }
+      setSlice(next)
+      setImageWidth(next)
+      // 中心裁剪同步到分析出的最小中心（compact 尺寸 - 两侧切片）
+      setCropEnabled(true)
+      setCropAxes('both')
+      setCropKeep({
+        w: Math.max(1, result.compact.width - s.left - s.right),
+        h: Math.max(1, result.compact.height - s.top - s.bottom),
+      })
+      const trimmed = crop.width !== pixels.width || crop.height !== pixels.height
+      setDetectInfo(result.accepted
+        ? {
+            ok: true,
+            text: `已识别最小切片（评估 ${result.candidatesEvaluated} 个候选，还原误差在阈值内${trimmed ? '；已补偿透明留白' : ''}）`,
+          }
+        : {
+            ok: false,
+            text: '未找到满足误差阈值的最小切片，已应用最接近的候选，请手动微调切线',
+          })
+    }
+    catch (error) {
+      setDetectInfo({ ok: false, text: error instanceof Error ? error.message : '识别失败' })
+    }
+    finally {
+      setDetecting(false)
+    }
+  }, [detecting, image])
+
   /* ---------- 中心裁剪：删行列得到最小图，导出时生效 ---------- */
 
   /** 中心区域尺寸（图像 px）：四条切线围出的可拉伸区 */
   const centerW = image ? Math.max(0, image.width - slice.left - slice.right) : 0
   const centerH = image ? Math.max(0, image.height - slice.top - slice.bottom) : 0
-  /** 实际保留尺寸：不超过当前中心区 */
-  const keepW = Math.min(cropKeep.w, Math.max(1, centerW))
-  const keepH = Math.min(cropKeep.h, Math.max(1, centerH))
+  /** 实际保留尺寸：不超过当前中心区；只裁单轴时另一轴整条保留（= 中心区全高 / 全宽） */
+  const keepW = cropAxes === 'y' ? Math.max(1, centerW) : Math.min(cropKeep.w, Math.max(1, centerW))
+  const keepH = cropAxes === 'x' ? Math.max(1, centerH) : Math.min(cropKeep.h, Math.max(1, centerH))
   /** 裁剪后的图片尺寸：边距不动，只缩中心 */
   const croppedW = slice.left + keepW + slice.right
   const croppedH = slice.top + keepH + slice.bottom
@@ -830,14 +900,14 @@ export default function NinePatchTool() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pb-16">
       <Seo
         title="点九图工具"
         description="上传图片并拖动四条切线定义九宫格切片，实时预览 border-image 的拉伸 / 平铺效果，一键复制 CSS / SCSS / Less 代码，并可裁剪中心区域导出最小体积的 PNG。"
         path="/tools/nine-patch"
       />
-      {/* 顶栏 */}
-      <header className="flex h-24 items-center gap-3">
+      {/* 顶栏（紧凑：纵向空间尽量让给画布） */}
+      <header className="flex min-h-16 items-center gap-3 py-3">
         <Button asChild variant="outline" size="icon">
           <Link to="/" aria-label="返回首页">
             <ArrowLeft className="size-5" />
@@ -848,19 +918,32 @@ export default function NinePatchTool() {
         </div>
         <div>
           <h1 className="text-lg font-black tracking-tight">点九图工具</h1>
-          <p className="text-sm text-muted-foreground">拖动四条切线定义九宫格，实时预览 border-image 效果，导出 CSS 与裁剪后的最小 PNG</p>
+          <p className="hidden text-sm text-muted-foreground sm:block">拖动四条切线定义九宫格，实时预览 border-image 效果，导出 CSS 与裁剪后的最小 PNG</p>
         </div>
       </header>
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-2">
+      {/* 主工作区（左中右）：左列记录库（贯穿全高），中列编辑 + 预览双舞台同列上下扫描，
+          右列参数贴着画布——拖切线时数值就在余光里，代码紧随其下 */}
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[13rem_minmax(0,1fr)_320px]">
         {/* 切片编辑 */}
-        <Card className="min-w-0">
+        <Card className="min-w-0 lg:col-start-2 lg:row-start-1">
           <CardHeader>
             <CardTitle>切片编辑</CardTitle>
+            <CardAction>
+              {image && (
+                <span
+                  className="rounded-sm border-2 border-border bg-muted px-2 py-0.5 font-mono text-xs font-bold text-muted-foreground"
+                  title={`原图尺寸：${image.name}`}
+                >
+                  原图 {image.width} × {image.height}
+                </span>
+              )}
+            </CardAction>
           </CardHeader>
           <CardContent className="min-w-0 pb-6">
-            {/* 相对定位容器：悬浮按钮挂在滚动舞台外面，不随内容滚动 */}
-            <div className="relative">
+            {/* 相对定位容器：高度外层定死（lg 跟随视口，clamp 在 30~42rem），舞台 absolute inset-0
+                脱离文档流——放大后的内容不会把卡片撑高；悬浮按钮挂在舞台外面 */}
+            <div className="relative h-[22rem] lg:h-[calc(100svh-14rem)] lg:max-h-[42rem] lg:min-h-[30rem]">
               <div
                 ref={editorStageRef}
                 {...editorPan.panHandlers}
@@ -871,8 +954,7 @@ export default function NinePatchTool() {
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
                 className={cn(
-                  // 固定高度：overflow-auto 只在有确定高度时才裁剪，min-h 会被放大后的内容撑高
-                  'flex h-72 touch-none overflow-hidden rounded-md border-2 p-6 transition-colors select-none',
+                  'absolute inset-0 flex touch-none overflow-hidden rounded-md border-2 p-6 transition-colors select-none',
                   editorPan.panning ? 'cursor-grabbing' : 'cursor-grab',
                   !image && 'border-dashed',
                   dragOver ? 'border-primary' : 'border-border',
@@ -943,16 +1025,16 @@ export default function NinePatchTool() {
               {/* 有图后：操作按钮悬浮在舞台右上角（与帧动画工具一致）；平移后出现「回到居中」 */}
               {image && (
                 <div className="absolute top-2 right-2 flex gap-1.5">
-                  {(editorPan.offset.x !== 0 || editorPan.offset.y !== 0 || zoom !== fitZoom(image.width, image.height)) && (
+                  {(editorPan.offset.x !== 0 || editorPan.offset.y !== 0 || zoom !== editorFit) && (
                     <Button
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      title="重置视图（居中并恢复默认缩放）"
+                      title="重置视图（居中并完整适配）"
                       aria-label="重置视图"
                       onClick={() => {
                         editorPan.resetPan()
-                        setZoom(fitZoom(image.width, image.height))
+                        resetEditorZoom()
                       }}
                     >
                       <RotateCcw />
@@ -990,18 +1072,18 @@ export default function NinePatchTool() {
           </CardContent>
         </Card>
 
-        {/* 实时预览 */}
-        <Card>
+        {/* 实时预览：与编辑舞台同列，改完切线向下扫一眼即可验证 */}
+        <Card className="flex min-w-0 flex-col lg:col-start-2 lg:row-start-2 lg:h-[32rem]">
           <CardHeader>
             <CardTitle>实时预览</CardTitle>
           </CardHeader>
-          <CardContent className="pb-6">
-            <div className="relative">
+          <CardContent className="flex min-h-0 flex-1 flex-col pb-6">
+            <div className="relative h-80 lg:h-auto lg:flex-1">
               <div
                 ref={previewStageRef}
                 {...previewPan.panHandlers}
                 className={cn(
-                  'flex h-72 touch-none overflow-hidden rounded-md border-2 border-border p-8 select-none',
+                  'absolute inset-0 flex touch-none overflow-hidden rounded-md border-2 border-border p-8 select-none',
                   previewPan.panning ? 'cursor-grabbing' : 'cursor-grab',
                 )}
                 style={{ background: editorStageView.background }}
@@ -1087,17 +1169,17 @@ export default function NinePatchTool() {
               </div>
               <StageZoomIndicator zoom={previewZoom} visible={previewStageZoom.zoomIndicatorVisible} />
               {/* 平移 / 缩放 / 缩边补偿后：悬浮「重置视图」回到居中 */}
-              {(previewPan.offset.x !== 0 || previewPan.offset.y !== 0 || previewZoom !== 1 || resizeOffset.x !== 0 || resizeOffset.y !== 0) && (
+              {(previewPan.offset.x !== 0 || previewPan.offset.y !== 0 || previewZoom !== previewFit || resizeOffset.x !== 0 || resizeOffset.y !== 0) && (
                 <Button
                   type="button"
                   variant="outline"
                   size="icon-sm"
-                  title="重置视图（居中并恢复默认缩放）"
+                  title="重置视图（居中并完整适配）"
                   aria-label="重置视图"
                   className="absolute top-2 right-2"
                   onClick={() => {
                     previewPan.resetPan()
-                    setPreviewZoom(1)
+                    resetPreviewZoom()
                     setResizeOffset({ x: 0, y: 0 })
                   }}
                 >
@@ -1107,14 +1189,23 @@ export default function NinePatchTool() {
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         {/* 参数 */}
-        <Card>
+        <Card className="lg:col-start-3 lg:row-start-1">
           <CardHeader>
             <CardTitle>参数</CardTitle>
             <CardAction>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                title="从像素分析最小可用切片（自动识别）"
+                disabled={!image || detecting}
+                onClick={() => void autoDetect()}
+              >
+                <Wand2 />
+                {detecting ? '识别中…' : '自动识别'}
+              </Button>
               <Button type="button" variant="outline" size="icon-sm" title="重置切片" aria-label="重置切片" onClick={resetSlice} disabled={!image}>
                 <RotateCcw />
               </Button>
@@ -1141,6 +1232,12 @@ export default function NinePatchTool() {
                   </label>
                 ))}
               </div>
+              {detectInfo && (
+                <p className={cn('mt-2 flex items-start gap-1.5 text-xs', detectInfo.ok ? 'text-muted-foreground' : 'text-destructive')}>
+                  {!detectInfo.ok && <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />}
+                  {detectInfo.text}
+                </p>
+              )}
             </div>
             {/* border-image-width：与切片边距同构的四边输入 */}
             <div>
@@ -1235,6 +1332,12 @@ export default function NinePatchTool() {
               {cropEnabled
                 ? (
                     <div className="flex flex-col gap-2">
+                      <OptionGroup
+                        label="裁剪轴"
+                        value={cropAxes}
+                        onChange={setCropAxes}
+                        options={CROP_AXES_OPTIONS}
+                      />
                       <div className="flex items-end gap-2">
                         <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
                           保留宽（px）
@@ -1243,10 +1346,10 @@ export default function NinePatchTool() {
                             min={1}
                             max={Math.max(1, centerW)}
                             value={keepW}
-                            disabled={!image}
+                            disabled={!image || cropAxes === 'y'}
                             onChange={e => setCropKeepValue('w', Number(e.target.value))}
                             aria-label="中心保留宽"
-                            className={NUM_INPUT_CLASS}
+                            className={cn(NUM_INPUT_CLASS, 'disabled:cursor-not-allowed disabled:opacity-60')}
                           />
                         </label>
                         <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
@@ -1256,10 +1359,10 @@ export default function NinePatchTool() {
                             min={1}
                             max={Math.max(1, centerH)}
                             value={keepH}
-                            disabled={!image}
+                            disabled={!image || cropAxes === 'x'}
                             onChange={e => setCropKeepValue('h', Number(e.target.value))}
                             aria-label="中心保留高"
-                            className={NUM_INPUT_CLASS}
+                            className={cn(NUM_INPUT_CLASS, 'disabled:cursor-not-allowed disabled:opacity-60')}
                           />
                         </label>
                         <Button
@@ -1291,8 +1394,8 @@ export default function NinePatchTool() {
           </CardContent>
         </Card>
 
-        {/* 样式代码 */}
-        <Card>
+        {/* 样式代码：与实时预览等高，代码区填满剩余高度 */}
+        <Card className="flex min-w-0 flex-col lg:col-start-3 lg:row-start-2 lg:h-[32rem]">
           <CardHeader>
             <CardTitle>样式代码</CardTitle>
             <CardAction>
@@ -1301,7 +1404,7 @@ export default function NinePatchTool() {
               </Button>
             </CardAction>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3 pb-6">
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pb-6">
             <div className="grid grid-cols-2 gap-2">
               <OptionGroup
                 label="代码格式"
@@ -1325,7 +1428,7 @@ export default function NinePatchTool() {
             <pre
               tabIndex={0}
               onKeyDown={selectCodeOnShortcut}
-              className="overflow-auto rounded-md border-2 border-border bg-muted p-3 font-mono text-xs leading-5 whitespace-pre outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="min-h-40 min-w-0 flex-1 overflow-auto rounded-md border-2 border-border bg-muted p-3 font-mono text-xs leading-5 whitespace-pre outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               {exportText.split(/(url\("[^"]*"\))/g).map(part => (
                 part.startsWith('url(')
@@ -1343,44 +1446,45 @@ export default function NinePatchTool() {
             </pre>
           </CardContent>
         </Card>
-      </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>记录</CardTitle>
-          <CardDescription>把当前图片和切片参数保存到本机，之后可以继续编辑。</CardDescription>
-        </CardHeader>
-        <CardContent className="pb-6">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              value={recordName}
-              onChange={e => setRecordName(e.target.value)}
-              placeholder={image?.name ?? '记录名称'}
-              aria-label="记录名称"
-              className="h-9 min-w-0 flex-1 rounded-md border-2 border-border bg-background px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-ring/40"
-            />
-            <Button type="button" disabled={!image} onClick={() => void saveRecord()}>
-              <Save />
-              保存当前记录
-            </Button>
-          </div>
-          {records.length > 0 && (
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {records.map(record => (
-                <div key={record.id} className="flex items-center gap-2 rounded-md border-2 border-border bg-muted/30 px-3 py-2">
-                  <button type="button" className="min-w-0 flex-1 truncate text-left text-sm font-bold hover:underline" onClick={() => void loadRecord(record.id)} title="加载记录">
-                    {record.recordName}
-                  </button>
-                  <span className="shrink-0 text-xs text-muted-foreground">{record.size > 0 ? `${Math.round(record.size / 1024)} KB` : ''}</span>
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除记录 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
-                    <Trash2 />
-                  </Button>
-                </div>
-              ))}
+        {/* 记录：左列贯穿全高——保存 / 加载是低频操作，放视线边缘不抢主工作区 */}
+        <Card className="flex min-w-0 flex-col lg:col-start-1 lg:row-span-2 lg:row-start-1">
+          <CardHeader>
+            <CardTitle>记录</CardTitle>
+            <CardDescription>保存图片与切片参数到本机，之后继续编辑</CardDescription>
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col pb-6">
+            <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
+              <input
+                value={recordName}
+                onChange={e => setRecordName(e.target.value)}
+                placeholder={image?.name ?? '记录名称'}
+                aria-label="记录名称"
+                className="h-9 min-w-0 flex-1 rounded-md border-2 border-border bg-background px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-ring/40"
+              />
+              <Button type="button" className="shrink-0" disabled={!image} onClick={() => void saveRecord()}>
+                <Save />
+                保存当前记录
+              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            {records.length > 0 && (
+              <div className="mt-4 grid min-h-0 flex-1 content-start gap-2 lg:overflow-y-auto">
+                {records.map(record => (
+                  <div key={record.id} className="flex items-center gap-2 rounded-md border-2 border-border bg-muted/30 px-3 py-2">
+                    <button type="button" className="min-w-0 flex-1 truncate text-left text-sm font-bold hover:underline" onClick={() => void loadRecord(record.id)} title="加载记录">
+                      {record.recordName}
+                    </button>
+                    <span className="shrink-0 text-xs text-muted-foreground">{record.size > 0 ? `${Math.round(record.size / 1024)} KB` : ''}</span>
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除记录 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
+                      <Trash2 />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
     </div>

@@ -17,6 +17,8 @@ export interface NinePatchRecordMeta {
   repeatV: 'stretch' | 'repeat' | 'round' | 'space'
   cropEnabled: boolean
   cropKeep: { w: number, h: number }
+  /** 裁剪轴：both = 横竖都裁；x = 只裁横向（保留整列高度）；y = 只裁纵向 */
+  cropAxes: 'both' | 'x' | 'y'
   codeFormat: 'scss' | 'less' | 'css'
   codeStyle: 'longhand' | 'shorthand'
 }

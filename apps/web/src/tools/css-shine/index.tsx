@@ -320,7 +320,7 @@ export default function CssShineTool() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pb-16">
       <Seo
         title="CSS 扫光动效"
         description="在线调整扫光方向、速度、宽度和亮度，实时预览并复制可直接使用的 CSS。"

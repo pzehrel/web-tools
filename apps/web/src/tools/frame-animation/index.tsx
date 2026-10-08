@@ -31,7 +31,7 @@ import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useStagePan, useStageZoom } from '@/lib/stage'
+import { useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoFrames } from '../demos/frame-animation'
 import { createFrameAnimationItem, createFrameArchive, extractFrameArchive, useFrameAnimationRecords, type FrameAnimationRecordMeta } from './records'
@@ -586,11 +586,8 @@ export default function FrameAnimationTool() {
   const [loopInfinite, setLoopInfinite] = useState(true)
   const [loopCount, setLoopCount] = useState(3)
   const stageView = useStageViewSettings()
-  /** 舞台视图缩放（1 = 100%）：滚轮或双指调整，不影响导出 */
-  const [zoom, setZoom] = useState(0.75)
   const [pixelated, setPixelated] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
-  const stageZoom = useStageZoom(stageRef, zoom, setZoom, frames.length > 0)
   const stagePan = useStagePan(stageRef, () => false)
   /** 入选的帧（按 id）：勾选 = 参与预览 / 播放 / 导出；不提供删除，防误操作 */
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
@@ -642,6 +639,10 @@ export default function FrameAnimationTool() {
   /** 渲染用游标：勾选变化后 current 可能短暂越界，这里收敛 */
   const safeIndex = activeCount === 0 ? 0 : Math.min(current, activeCount - 1)
   const frame = activeFrames[safeIndex] ?? null
+  /** 舞台视图缩放：加载帧后自动完整适配（留边），手动缩放后跟随用户 */
+  const stageFit = useStageFitScale(stageRef, frame?.width ?? 0, frame?.height ?? 0, Boolean(frame), 24)
+  const [zoom, setZoom, resetStageZoom] = useAutoFitZoom(stageFit, frameCount > 0 ? 'content' : null)
+  const stageZoom = useStageZoom(stageRef, zoom, setZoom, frameCount > 0)
   /** 播放范围（收敛后）：在入选帧里截取；帧数变化时自动夹回有效区间 */
   const maxIdx = Math.max(0, activeCount - 1)
   const rangeStart = rangeRaw ? Math.min(rangeRaw[0], maxIdx) : 0
@@ -1217,7 +1218,7 @@ export default function FrameAnimationTool() {
     ? EXPORT_BUILDERS[exportFormat](exportParams)
     : ''
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pb-16">
       <Seo
         title="帧动画预览"
         description="导入多张图片逐帧预览动画效果，可调帧率、播放方向、循环次数、缩放与背景。"
@@ -1332,16 +1333,16 @@ export default function FrameAnimationTool() {
               {/* 有帧时：添加按钮悬浮在舞台右上角；平移后出现「回到居中」 */}
               {frame && (
                 <div className="absolute top-2 right-2 flex gap-1.5">
-                  {(stagePan.offset.x !== 0 || stagePan.offset.y !== 0 || zoom !== 0.75) && (
+                  {(stagePan.offset.x !== 0 || stagePan.offset.y !== 0 || zoom !== stageFit) && (
                     <Button
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      title="重置视图（居中并恢复默认缩放）"
+                      title="重置视图（居中并完整适配）"
                       aria-label="重置视图"
                       onClick={() => {
                         stagePan.resetPan()
-                        setZoom(0.75)
+                        resetStageZoom()
                       }}
                     >
                       <RotateCcw />

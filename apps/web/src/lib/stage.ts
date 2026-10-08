@@ -65,6 +65,45 @@ export function useStageFitScale(
 }
 
 /**
+ * 自动适配缩放：用户未手动缩放（滚轮 / 捏合）时，zoom 始终跟随传入的适配值——
+ * 内容加载、舞台尺寸变化都会重新完整展示内容；resetKey 变化（换内容）时
+ * 清除手动标记回到适配。resetToFit 供「重置视图」按钮使用。
+ */
+export function useAutoFitZoom(
+  fit: number,
+  resetKey: unknown,
+): [number, Dispatch<SetStateAction<number>>, () => void] {
+  const [zoom, setZoomState] = useState(fit)
+  const [touched, setTouched] = useState(false)
+  const fitRef = useRef(fit)
+  fitRef.current = fit
+
+  /** 手动缩放入口：标记 touched 后不再自动适配 */
+  const setZoom = useCallback<Dispatch<SetStateAction<number>>>((update) => {
+    setTouched(true)
+    setZoomState(update)
+  }, [])
+
+  useEffect(() => {
+    if (!touched)
+      setZoomState(clampZoom(fit))
+  }, [fit, touched])
+
+  // 换内容：回到适配视图（fit 可能尚未更新，交给上面的 effect 纠正）
+  useEffect(() => {
+    setTouched(false)
+    setZoomState(clampZoom(fitRef.current))
+  }, [resetKey])
+
+  const resetToFit = useCallback(() => {
+    setTouched(false)
+    setZoomState(clampZoom(fitRef.current))
+  }, [])
+
+  return [zoom, setZoom, resetToFit]
+}
+
+/**
  * 舞台缩放手势：滚轮 + 触控板捏合（浏览器里表现为 ctrl+wheel）+ 触屏双指。
  * 注意 React 的 onWheel 是 passive 监听，preventDefault 无效，必须挂原生监听。
  * 舞台需配 touch-none，否则触屏双指会被浏览器页面缩放接管。

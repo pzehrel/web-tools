@@ -1125,7 +1125,7 @@ function UrlParserTool() {
   }, [])
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pb-16">
       <Seo
         title="URL 与二维码"
         description="解析任意协议的 URL 与路径，递归展开嵌套参数，并与二维码双向转换；支持编辑、拖拽、变量代码预览和历史记录。"

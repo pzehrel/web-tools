@@ -29,7 +29,7 @@ import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-import { useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
+import { clampZoom, useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoProject } from '../demos/lottie-preview'
 import { countAtlasOptimizableImages, disposeOptimizedResult, exportOptimizedProject, optimizeLottie } from './atlas-optimizer'
@@ -200,12 +200,10 @@ export default function LottiePreviewTool() {
   const [optimizing, setOptimizing] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [zoom, setZoom] = useState(1)
   const [atlasZoom, setAtlasZoom] = useState(1)
   const stageView = useStageViewSettings()
   const stageRef = useRef<HTMLDivElement>(null)
   const atlasStageRef = useRef<HTMLDivElement>(null)
-  const stageZoom = useStageZoom(stageRef, zoom, setZoom, Boolean(project))
   const atlasStageZoom = useStageZoom(atlasStageRef, atlasZoom, setAtlasZoom, Boolean(optimized))
   const stagePan = useStagePan(stageRef, () => false)
   const atlasStagePan = useStagePan(atlasStageRef, () => false)
@@ -222,6 +220,17 @@ export default function LottiePreviewTool() {
     width: optimized ? optimized.atlases.reduce((total, atlas) => total + atlas.width, 0) + Math.max(0, optimized.atlases.length - 1) * 8 : 0,
   }), [optimized])
   const atlasFitScale = useStageFitScale(atlasStageRef, atlasContentSize.width, atlasContentSize.height, Boolean(optimized))
+  /**
+   * 主舞台视图缩放：内容层是舞台等尺寸的画布（内部 meet 适配），缩放值是相对
+   * meet 基线的倍率——完整适配 + 留边 = (留边适配比例 ÷ meet 比例)，恒 ≤ 1。
+   */
+  const animationWidth = project?.animation.w ?? 0
+  const animationHeight = project?.animation.h ?? 0
+  const meetScale = useStageFitScale(stageRef, animationWidth, animationHeight, Boolean(project), 0)
+  const marginFitScale = useStageFitScale(stageRef, animationWidth, animationHeight, Boolean(project), 24)
+  const stageFitZoom = meetScale > 0 ? clampZoom(marginFitScale / meetScale) : 1
+  const [zoom, setZoom, resetStageZoom] = useAutoFitZoom(stageFitZoom, project)
+  const stageZoom = useStageZoom(stageRef, zoom, setZoom, Boolean(project))
   const resourceSizeComparison = formatSizeComparison(project?.sourceBytes ?? null, optimized ? resourceMetrics?.optimizedResourceBytes ?? null : null)
   const texturePixelComparison = formatPixelComparison(resourceMetrics?.sourcePixels ?? null, optimized && resourceMetrics ? resourceMetrics.activeTextureBytes / 4 : null)
   const textureMemoryComparison = formatSizeComparison(resourceMetrics?.sourceDecodedBytes ?? null, optimized ? resourceMetrics?.activeTextureBytes ?? null : null)
@@ -243,7 +252,6 @@ export default function LottiePreviewTool() {
     setCurrentFrame(0)
     setSeekToken(value => value + 1)
     setError(null)
-    setZoom(1)
     resetStagePan()
     if (previous)
       window.setTimeout(disposeProject, 0, previous)
@@ -259,7 +267,6 @@ export default function LottiePreviewTool() {
     setCurrentFrame(0)
     setSeekToken(value => value + 1)
     setError(null)
-    setZoom(1)
     resetStagePan()
     if (previous)
       window.setTimeout(disposeProject, 0, previous)
@@ -573,7 +580,7 @@ export default function LottiePreviewTool() {
   )
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pb-16">
       <Seo
         title="Lottie 预览与图集优化"
         description="使用 lottie-web 或 lottie-react 预览动画，把分散的图片素材打包为纹理图集，并导出仍由 Lottie 播放的资源包。"
@@ -748,7 +755,7 @@ export default function LottiePreviewTool() {
                   <>
                     {/* 加载内容后：导入按钮悬浮在画布右上角（与九宫格工具一致）；平移/缩放后出现「重置视图」 */}
                     <div className="absolute top-2 right-2 flex gap-1.5">
-                      {(stagePan.offset.x !== 0 || stagePan.offset.y !== 0 || zoom !== 1) && (
+                      {(stagePan.offset.x !== 0 || stagePan.offset.y !== 0 || zoom !== stageFitZoom) && (
                         <Button
                           type="button"
                           variant="outline"
@@ -758,7 +765,7 @@ export default function LottiePreviewTool() {
                           className="bg-background/90"
                           onClick={() => {
                             stagePan.resetPan()
-                            setZoom(1)
+                            resetStageZoom()
                           }}
                         >
                           <RotateCcw />

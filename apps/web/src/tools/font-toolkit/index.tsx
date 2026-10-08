@@ -483,7 +483,7 @@ export default function FontToolkitTool() {
   const fontStack = font ? `"${font.previewFamily}", sans-serif` : undefined
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pb-16">
       <Seo
         title="字体工具箱"
         description="字体预览、体检、子集化与格式转换：常用汉字 3000/5000/7000 分级选择，本地运行不上传。"
