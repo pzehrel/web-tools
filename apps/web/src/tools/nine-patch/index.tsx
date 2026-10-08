@@ -917,12 +917,12 @@ export default function NinePatchTool() {
         </div>
       </header>
 
-      {/* 主工作区（左中右）：去卡片分栏——列间垂直发丝线、同列上下水平线，无卡片间距浪费。
-          左列记录库（贯穿全高），中列编辑 + 预览双舞台同列上下扫描，
-          右列参数贴着画布——拖切线时数值就在余光里，代码紧随其下 */}
-      <div className="grid min-w-0 gap-x-6 gap-y-10 pt-6 lg:grid-cols-[13rem_minmax(0,1fr)_20rem]">
+      {/* 主工作区（左右）：去卡片分栏——列间垂直发丝线、同列上下水平线，无卡片间距浪费。
+          中列编辑 + 预览双舞台同列上下扫描，右列参数贴着画布——拖切线时数值就在余光里，
+          代码紧随其下；记录是低频操作，放页面底部通栏 */}
+      <div className="grid min-w-0 gap-x-6 gap-y-10 pt-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* 切片编辑 */}
-        <section className="min-w-0 lg:col-start-2 lg:row-start-1 lg:border-l lg:border-border lg:pl-6">
+        <section className="min-w-0 lg:col-start-1 lg:row-start-1">
           <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
             <h2 className="font-mono text-sm font-semibold tracking-tight">切片编辑</h2>
             {image && (
@@ -1063,7 +1063,7 @@ export default function NinePatchTool() {
         </section>
 
         {/* 实时预览：与编辑舞台同列，改完切线向下扫一眼即可验证；水平线与上方编辑区分隔 */}
-        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:col-start-2 lg:row-start-2 lg:h-[32rem] lg:border-l lg:pl-6">
+        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:col-start-1 lg:row-start-2 lg:h-[32rem]">
           <div className="pb-3">
             <h2 className="font-mono text-sm font-semibold tracking-tight">实时预览</h2>
           </div>
@@ -1181,7 +1181,7 @@ export default function NinePatchTool() {
         </section>
 
         {/* 参数 */}
-        <section className="lg:col-start-3 lg:row-start-1 lg:border-l lg:border-border lg:pl-6">
+        <section className="lg:col-start-2 lg:row-start-1 lg:border-l lg:border-border lg:pl-6">
           <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
             <h2 className="font-mono text-sm font-semibold tracking-tight">参数</h2>
               <Button
@@ -1383,7 +1383,7 @@ export default function NinePatchTool() {
         </section>
 
         {/* 样式代码：与实时预览等高，代码区填满剩余高度；水平线与上方参数区分隔 */}
-        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:col-start-3 lg:row-start-2 lg:h-[32rem] lg:border-l lg:pl-6">
+        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:col-start-2 lg:row-start-2 lg:h-[32rem] lg:border-l lg:pl-6">
           <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
             <h2 className="font-mono text-sm font-semibold tracking-tight">样式代码</h2>
               <Button type="button" variant="outline" size="icon-sm" title="复制" aria-label="复制" onClick={copyCode}>
@@ -1432,45 +1432,45 @@ export default function NinePatchTool() {
             </pre>
           </div>
         </section>
-
-        {/* 记录：左列贯穿全高——保存 / 加载是低频操作，放视线边缘不抢主工作区 */}
-        <section className="flex min-w-0 flex-col lg:col-start-1 lg:row-span-2 lg:row-start-1">
-          <div className="pb-1">
-            <h2 className="font-mono text-sm font-semibold tracking-tight">记录</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">保存图片与切片参数到本机，之后继续编辑</p>
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-              <input
-                value={recordName}
-                onChange={e => setRecordName(e.target.value)}
-                placeholder={image?.name ?? '记录名称'}
-                aria-label="记录名称"
-                className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-              />
-              <Button type="button" className="shrink-0" disabled={!image} onClick={() => void saveRecord()}>
-                <Save />
-                保存当前记录
-              </Button>
-            </div>
-            {records.length > 0 && (
-              <div className="mt-3 grid min-h-0 flex-1 content-start lg:overflow-y-auto">
-                {records.map(record => (
-                  <div key={record.id} className="flex items-center gap-2 border-b border-border py-2">
-                    <button type="button" className="min-w-0 flex-1 truncate text-left text-sm hover:underline" onClick={() => void loadRecord(record.id)} title="加载记录">
-                      {record.recordName}
-                    </button>
-                    <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{record.size > 0 ? `${Math.round(record.size / 1024)} KB` : ''}</span>
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除记录 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
-                      <Trash2 />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
       </div>
+
+      {/* 记录：页面底部通栏——保存 / 加载是低频操作，不占主工作区 */}
+      <section className="mt-10 border-t border-border pt-4">
+        <div className="pb-1">
+          <h2 className="font-mono text-sm font-semibold tracking-tight">记录</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">保存图片与切片参数到本机，之后继续编辑</p>
+        </div>
+        <div className="flex flex-col">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              value={recordName}
+              onChange={e => setRecordName(e.target.value)}
+              placeholder={image?.name ?? '记录名称'}
+              aria-label="记录名称"
+              className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            />
+            <Button type="button" className="shrink-0" disabled={!image} onClick={() => void saveRecord()}>
+              <Save />
+              保存当前记录
+            </Button>
+          </div>
+          {records.length > 0 && (
+            <div className="mt-3 grid content-start gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
+              {records.map(record => (
+                <div key={record.id} className="flex items-center gap-2 border-b border-border py-2">
+                  <button type="button" className="min-w-0 flex-1 truncate text-left text-sm hover:underline" onClick={() => void loadRecord(record.id)} title="加载记录">
+                    {record.recordName}
+                  </button>
+                  <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{record.size > 0 ? `${Math.round(record.size / 1024)} KB` : ''}</span>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除记录 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
+                    <Trash2 />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
     </div>
