@@ -34,8 +34,8 @@
 ## 风格专属令牌
 
 - 圆角基准 `--radius: 0`（直角）；如需过渡可用 `calc(var(--radius) + 2px)` 以内的折中。
-- **无阴影**：历史遗留的 `shadow-hard-*` 工具类已在 `@theme inline` 中
-  中和为透明无操作（工具页仍有类名引用），**新代码一律不写阴影**。
+- **无阴影**：旧粗野主义的 `shadow-hard-*` 令牌已随工具页清理一并删除，
+  **任何代码一律不写阴影**。
 - 唯一彩色：`--ring`（teal 焦点环）。除 chart-* 装饰色与 destructive 外，
   界面不允许出现第三种色相。
 
@@ -128,9 +128,14 @@
 - 不用位移类悬停反馈（`scale` / `translate` 抬升）
 - 不把页面做成「左侧菜单 + 右侧表格」的后台范式
 
-## 待办：工具页清理
+## 工具页分栏模式（已全站完成）
 
-工具页（`apps/web/src/tools/*/`）中仍残留旧粗野主义的 `border-2`、
-`shadow-hard-*` 类名（阴影已全局中和为无操作）。后续迭代工具页时
-顺手改为 1px 边框并移除 `shadow-hard-*` 引用，全部清理完成后可删除
-`index.scss` 中的四个中和令牌。
+所有工具页已按同一模式去卡片化（`Card` 组件已删除）：
+
+- 页面顶栏带 `border-b border-border` 底边发丝线，标题 `font-mono text-lg font-semibold`
+- 板块用 `<section>` + mono 小字标题行
+  （`<h2 className="font-mono text-sm font-semibold tracking-tight">`，
+  操作按钮内联右侧，描述用 `text-xs text-muted-foreground`）
+- 多列工作台：列间 `lg:border-l lg:border-border lg:pl-6` 垂直发丝线分隔；
+  同列上下板块用 `border-t pt-4` 水平线分隔，不做卡片盒
+- 画布舞台等功能性容器保留 1px 边框，内部留白 `p-3` 左右即可

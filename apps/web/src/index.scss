@@ -127,16 +127,6 @@
   /* 字体：等宽标题（技术感）+ IBM Plex Sans 正文 */
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-
-  /*
-   * 历史遗留：旧粗野主义的硬阴影类名在工具页中仍有引用，
-   * 此处统一中和为透明无操作，保证引用不破坏、视觉归零。
-   * 后续清理工具页时可直接删除这些类名。
-   */
-  --shadow-hard-xs: 0 0 #0000;
-  --shadow-hard-sm: 0 0 #0000;
-  --shadow-hard: 0 0 #0000;
-  --shadow-hard-lg: 0 0 #0000;
 }
 
 @layer base {
