@@ -918,11 +918,11 @@ export default function NinePatchTool() {
       </header>
 
       {/* 主工作区（左右）：去卡片分栏——列间垂直发丝线、同列上下水平线，无卡片间距浪费。
-          中列编辑 + 预览双舞台同列上下扫描，右列参数贴着画布——拖切线时数值就在余光里，
-          代码紧随其下；记录是低频操作，放页面底部通栏 */}
-      <div className="grid min-w-0 gap-x-6 gap-y-10 pt-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        {/* 切片编辑 */}
-        <section className="min-w-0 lg:col-start-1 lg:row-start-1">
+          左列参数 + 样式代码，右列上方紧凑预览、下方编辑舞台占满剩余高度；
+          记录是低频操作，放页面底部通栏 */}
+      <div className="grid min-w-0 gap-x-6 gap-y-10 pt-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        {/* 切片编辑（右列下方，占满剩余高度；DOM 在前保证移动端首屏即是画布） */}
+        <section className="min-w-0 lg:col-start-2 lg:row-start-2">
           <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
             <h2 className="font-mono text-sm font-semibold tracking-tight">切片编辑</h2>
             {image && (
@@ -936,7 +936,7 @@ export default function NinePatchTool() {
           </div>
             {/* 相对定位容器：高度外层定死（lg 跟随视口，clamp 在 30~42rem），舞台 absolute inset-0
                 脱离文档流——放大后的内容不会把卡片撑高；悬浮按钮挂在舞台外面 */}
-            <div className="relative h-[22rem] lg:h-[calc(100svh-14rem)] lg:max-h-[42rem] lg:min-h-[30rem]">
+            <div className="relative h-[22rem] lg:h-[calc(100svh-24rem)] lg:max-h-[52rem] lg:min-h-[34rem]">
               <div
                 ref={editorStageRef}
                 {...editorPan.panHandlers}
@@ -1063,12 +1063,13 @@ export default function NinePatchTool() {
         </section>
 
         {/* 实时预览：与编辑舞台同列，改完切线向下扫一眼即可验证；水平线与上方编辑区分隔 */}
-        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:col-start-1 lg:row-start-2 lg:h-[32rem]">
+        {/* 实时预览（右列上方，紧凑高度——改完切线向上扫一眼即可验证；底边线与编辑区分隔） */}
+        <section className="flex min-w-0 flex-col border-b border-border pb-4 lg:col-start-2 lg:row-start-1 lg:h-80">
           <div className="pb-3">
             <h2 className="font-mono text-sm font-semibold tracking-tight">实时预览</h2>
           </div>
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="relative h-80 lg:h-auto lg:flex-1">
+            <div className="relative h-72 lg:h-auto lg:flex-1">
               <div
                 ref={previewStageRef}
                 {...previewPan.panHandlers}
@@ -1181,7 +1182,8 @@ export default function NinePatchTool() {
         </section>
 
         {/* 参数 */}
-        <section className="lg:col-start-2 lg:row-start-1 lg:border-l lg:border-border lg:pl-6">
+        {/* 参数（左列上方，右边线与画布列分隔——拖切线时数值就在余光里） */}
+        <section className="lg:col-start-1 lg:row-start-1 lg:border-r lg:border-border lg:pr-6">
           <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
             <h2 className="font-mono text-sm font-semibold tracking-tight">参数</h2>
               <Button
@@ -1383,7 +1385,8 @@ export default function NinePatchTool() {
         </section>
 
         {/* 样式代码：与实时预览等高，代码区填满剩余高度；水平线与上方参数区分隔 */}
-        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:col-start-2 lg:row-start-2 lg:h-[32rem] lg:border-l lg:pl-6">
+        {/* 样式代码（左列下方，与参数同列；水平线与上方参数分隔） */}
+        <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:col-start-1 lg:row-start-2 lg:h-[32rem] lg:border-r lg:border-border lg:pr-6">
           <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
             <h2 className="font-mono text-sm font-semibold tracking-tight">样式代码</h2>
               <Button type="button" variant="outline" size="icon-sm" title="复制" aria-label="复制" onClick={copyCode}>
