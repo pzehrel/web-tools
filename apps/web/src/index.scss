@@ -14,9 +14,9 @@
  * 组件全部通过 shadcn 语义令牌（bg-primary、border-border 等）取色。
  */
 :root {
-  --background: oklch(0.968 0.006 85); /* 浅米灰：比纸白更暗一档，长时间注视不刺眼 */
+  --background: oklch(1 0 0); /* 纯白 */
   --foreground: oklch(0.24 0.02 200); /* 青调墨色 */
-  --card: oklch(0.99 0.002 85); /* 面板微亮于底色，配合边框让板块边界一眼可辨 */
+  --card: oklch(0.985 0.003 85); /* 面板微沉于白底，配合边框让板块边界一眼可辨 */
   --card-foreground: oklch(0.24 0.02 200);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.24 0.02 200);
@@ -24,7 +24,7 @@
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.94 0.018 180); /* 浅 teal 洗刷（hover 底） */
   --secondary-foreground: oklch(0.35 0.05 180);
-  --muted: oklch(0.94 0.006 85);
+  --muted: oklch(0.96 0.004 85);
   --muted-foreground: oklch(0.4 0.015 200); /* 弱化文本加深，保证 4.5:1 */
   --accent: oklch(0.93 0.025 180); /* teal 洗刷（ghost hover 底） */
   --accent-foreground: oklch(0.35 0.05 180);
@@ -40,7 +40,7 @@
   --chart-5: oklch(0.55 0.07 150); /* 绿 */
   --radius: 0rem; /* 直角 */
   --shadow-color: transparent; /* 无阴影主题 */
-  --sidebar: oklch(0.968 0.006 85);
+  --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.24 0.02 200);
   --sidebar-primary: oklch(0.48 0.095 180);
   --sidebar-primary-foreground: oklch(0.99 0 0);
