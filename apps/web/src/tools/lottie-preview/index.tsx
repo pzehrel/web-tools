@@ -52,6 +52,35 @@ const DEFAULT_OPTIONS: AtlasOptions = {
   alphaThreshold: 1,
 }
 
+function normalizeRecordSettings(meta: Partial<LottieRecordMeta>) {
+  const saved = meta.options
+  const bounded = (value: unknown, fallback: number, maximum: number) => typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(maximum, Math.max(0, Math.round(value)))
+    : fallback
+  const flag = (value: unknown, fallback: boolean) => typeof value === 'boolean' ? value : fallback
+  const restoredOptions: AtlasOptions = {
+    maxSize: saved?.maxSize === 1024 || saved?.maxSize === 4096 ? saved.maxSize : DEFAULT_OPTIONS.maxSize,
+    padding: bounded(saved?.padding, DEFAULT_OPTIONS.padding, 32),
+    extrude: bounded(saved?.extrude, DEFAULT_OPTIONS.extrude, 8),
+    alphaThreshold: bounded(saved?.alphaThreshold, DEFAULT_OPTIONS.alphaThreshold, 255),
+    allowRotation: flag(saved?.allowRotation, DEFAULT_OPTIONS.allowRotation),
+    allowTrim: flag(saved?.allowTrim, DEFAULT_OPTIONS.allowTrim),
+    detectIdentical: flag(saved?.detectIdentical, DEFAULT_OPTIONS.detectIdentical),
+    powerOfTwo: flag(saved?.powerOfTwo, DEFAULT_OPTIONS.powerOfTwo),
+    square: flag(saved?.square, DEFAULT_OPTIONS.square),
+  }
+  return {
+    options: restoredOptions,
+    optimizationEnabled: flag(meta.optimizationEnabled, true),
+    library: meta.library === 'lottie-react' ? 'lottie-react' as const : 'lottie-web' as const,
+    renderer: meta.renderer === 'svg' ? 'svg' as const : 'canvas' as const,
+    loop: flag(meta.loop, true),
+    speed: [0.25, 0.5, 1, 1.5, 2].includes(meta.speed ?? 0) ? meta.speed! : 1,
+    direction: meta.direction === -1 ? -1 as const : 1 as const,
+    fit: meta.fit === 'slice' ? 'slice' as const : 'meet' as const,
+  }
+}
+
 const INPUT_CLASS = 'h-7 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50'
 
 type LottieLibrary = 'lottie-react' | 'lottie-web'
@@ -441,22 +470,15 @@ export default function LottiePreviewTool() {
         return
       }
       replaceProject(next)
-      if (meta.options)
-        setOptions(meta.options)
-      if (typeof meta.optimizationEnabled === 'boolean')
-        setOptimizationEnabled(meta.optimizationEnabled)
-      if (meta.library)
-        setLibrary(meta.library)
-      if (meta.renderer)
-        setRenderer(meta.renderer)
-      if (typeof meta.loop === 'boolean')
-        setLoop(meta.loop)
-      if (typeof meta.speed === 'number')
-        setSpeed(meta.speed)
-      if (meta.direction)
-        setDirection(meta.direction)
-      if (meta.fit)
-        setFit(meta.fit)
+      const restored = normalizeRecordSettings(meta)
+      setOptions(restored.options)
+      setOptimizationEnabled(restored.optimizationEnabled)
+      setLibrary(restored.library)
+      setRenderer(restored.renderer)
+      setLoop(restored.loop)
+      setSpeed(restored.speed)
+      setDirection(restored.direction)
+      setFit(restored.fit)
       setRecordName(typeof meta.name === 'string' ? meta.name : '')
     }
     catch (reason) {
@@ -468,6 +490,25 @@ export default function LottiePreviewTool() {
         setBusy(false)
     }
   }, [getRecordItem, replaceProject])
+
+  async function deleteRecord(id: string): Promise<void> {
+    if (busy)
+      return
+    const operation = ++operationRef.current
+    setBusy(true)
+    setError(null)
+    try {
+      await removeRecordItem(id)
+    }
+    catch (reason) {
+      if (operation === operationRef.current)
+        setError(reason instanceof Error ? reason.message : '项目删除失败')
+    }
+    finally {
+      if (operation === operationRef.current)
+        setBusy(false)
+    }
+  }
 
   async function loadDemo(): Promise<void> {
     const operation = ++operationRef.current
@@ -950,7 +991,7 @@ export default function LottiePreviewTool() {
                         {record.recordName}
                       </button>
                       <span className="shrink-0 text-xs text-muted-foreground">{record.projectSize}</span>
-                      <Button type="button" variant="ghost" size="icon-sm" disabled={busy} aria-label={`删除项目 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
+                      <Button type="button" variant="ghost" size="icon-sm" disabled={busy} aria-label={`删除项目 ${record.recordName}`} onClick={() => void deleteRecord(record.id)}>
                         <Trash2 />
                       </Button>
                     </div>
