@@ -344,7 +344,10 @@ function resolveSpriteDims(frameCount: number, axis: SpriteDimensionAxis, value:
     : { cols: Math.ceil(count / primary), rows: primary }
 }
 
-/** 语言差异适配：变量引用 / 变量声明 / 注释 / 「末帧偏移 px」表达式 / keyframes 能否嵌进选择器 */
+/**
+ * Language adapters: variable references/declarations, comments, final-frame pixel offsets and nested keyframes.
+ * 语言差异适配：变量引用 / 变量声明 / 注释 / 「末帧偏移 px」表达式 / keyframes 能否嵌进选择器。
+ */
 interface LangSpec {
   v: (name: string) => string
   decl: (name: string, value: string) => string
@@ -1245,8 +1248,8 @@ export default function FrameAnimation() {
         }
       }
       else {
-        // 往返：回到 lo 就完成一轮，避免有限循环多等待一帧。
         // Count a full ping-pong cycle on return, without an extra held tick.
+        // 往返：回到 lo 就完成一轮，避免有限循环多等待一帧。
         index += dir
         if (index >= hi) {
           index = hi
@@ -1684,6 +1687,7 @@ export default function FrameAnimation() {
                         return
                       e.preventDefault()
                       e.dataTransfer.dropEffect = 'move'
+                      // Use the pointer's horizontal half to choose the insertion side.
                       // 横向序列按指针左右半区决定插入位置。
                       const rect = e.currentTarget.getBoundingClientRect()
                       const after = e.clientX > rect.left + rect.width / 2
@@ -1707,6 +1711,7 @@ export default function FrameAnimation() {
                       'relative flex w-28 shrink-0 flex-col gap-2 border p-2 transition-colors',
                       isActive ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-40',
                       'border-border hover:border-foreground',
+                      // Mark the insertion side with the left or right border.
                       // 用左右边框标记插入位置。
                       dropTarget?.index === i && (dropTarget.after
                         ? 'border-r-2 border-r-primary'

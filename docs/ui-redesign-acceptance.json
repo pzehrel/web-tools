@@ -682,7 +682,8 @@
       "kind": "existing-feature",
       "production_acceptance": "passed",
       "evidence": [
-        "evidence-8.md"
+        "evidence-8.md",
+        "evidence-review-fixes.md"
       ]
     },
     {
@@ -809,7 +810,8 @@
       "kind": "existing-feature",
       "production_acceptance": "passed",
       "evidence": [
-        "evidence-9.md"
+        "evidence-9.md",
+        "evidence-review-fixes.md"
       ]
     },
     {
@@ -827,7 +829,8 @@
       "kind": "existing-feature",
       "production_acceptance": "passed",
       "evidence": [
-        "evidence-8.md"
+        "evidence-8.md",
+        "evidence-review-fixes.md"
       ]
     },
     {

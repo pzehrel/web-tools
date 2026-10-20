@@ -560,7 +560,7 @@ export default function LottiePreviewTool() {
     const operation = ++operationRef.current
     setBusy(true)
     try {
-      await exportOptimizedProject(project, optimized)
+      await exportOptimizedProject(project, optimized, () => operation === operationRef.current)
     }
     catch (reason) {
       if (operation === operationRef.current)

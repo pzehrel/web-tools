@@ -454,7 +454,7 @@ function triggerDownload(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export async function exportOptimizedProject(project: LoadedLottieProject, result: OptimizedLottieResult): Promise<void> {
+async function createOptimizedArchive(project: LoadedLottieProject, result: OptimizedLottieResult): Promise<Blob> {
   const entries: Record<string, Uint8Array> = {
     'data.json': new TextEncoder().encode(JSON.stringify(result.animation, null, 2)),
   }
@@ -466,5 +466,19 @@ export async function exportOptimizedProject(project: LoadedLottieProject, resul
     entries[image.sourceName] = new Uint8Array(await image.blob.arrayBuffer())
   }
   const zip = zipSync(entries, { level: 6 })
-  triggerDownload(new Blob([zip as BlobPart], { type: 'application/zip' }), `${project.name}-atlas.zip`)
+  return new Blob([zip as BlobPart], { type: 'application/zip' })
+}
+
+/**
+ * Build the archive, then download only if the caller still owns the operation. Omitted ownership checks allow the download.
+ * 构建归档后，仅在调用方仍拥有任务时下载；未提供所有权检查时允许下载。
+ */
+export async function exportOptimizedProject(
+  project: LoadedLottieProject,
+  result: OptimizedLottieResult,
+  isCurrent: () => boolean = () => true,
+): Promise<void> {
+  const archive = await createOptimizedArchive(project, result)
+  if (isCurrent())
+    triggerDownload(archive, `${project.name}-atlas.zip`)
 }
