@@ -1,7 +1,6 @@
 import type { ChangeEvent, DragEvent, ReactNode } from 'react'
 import type { AtlasOptions, LoadedLottieProject, OptimizedLottieResult } from './types'
 import {
-  ArrowLeft,
   Check,
   Download,
   FileArchive,
@@ -21,7 +20,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { Link } from 'react-router'
 import { Seo } from '@/components/seo'
 import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
@@ -581,15 +579,7 @@ export default function LottiePreviewTool() {
         description="使用 lottie-web 或 lottie-react 预览动画，把分散的图片素材打包为纹理图集，并导出仍由 Lottie 播放的资源包。"
         path="/tools/lottie-preview"
       />
-      <header className="flex min-h-16 items-center gap-3 border-b border-border py-3">
-        <Button asChild variant="outline" size="icon">
-          <Link to="/" aria-label="返回首页"><ArrowLeft className="size-5" /></Link>
-        </Button>
-        <div className="min-w-0 max-w-36 sm:max-w-none">
-          <h1 className="font-mono text-lg font-semibold tracking-tight">Lottie 预览与图集优化</h1>
-          <p className="hidden text-sm text-muted-foreground sm:block">预览优先，按需将小图片合并成 lottie-web 可直接播放的纹理图集</p>
-        </div>
-      </header>
+
 
       {(error || Boolean(project?.warnings.length)) && (
         <section

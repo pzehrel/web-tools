@@ -1,9 +1,8 @@
 import type { ChangeEvent, DragEvent, ReactNode } from 'react'
 import type { UrlRecord } from './url-records'
 import type { UrlNode, UrlTree } from './url-tree'
-import { ArrowLeft, Bookmark, Check, Copy, Download, Ellipsis, Link2, LoaderCircle, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
+import { Bookmark, Check, Copy, Download, Ellipsis, Link2, LoaderCircle, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
 import { ClientOnly } from 'vite-react-ssg'
 
 import { Seo } from '@/components/seo'
@@ -1128,18 +1127,6 @@ function UrlParserTool() {
         description="解析任意协议的 URL 与路径，递归展开嵌套参数，并与二维码双向转换；支持编辑、拖拽、变量代码预览和历史记录。"
         path="/tools/url-qrcode"
       />
-      {/* 顶栏：底边发丝线与工作区分隔 */}
-      <header className="flex min-h-16 items-center gap-3 border-b border-border py-3">
-        <Button asChild variant="outline" size="icon">
-          <Link to="/" aria-label="返回首页">
-            <ArrowLeft className="size-5" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="font-mono text-lg font-semibold tracking-tight">URL 与二维码</h1>
-          <p className="text-sm text-muted-foreground">URL 参数解析与二维码双向转换，支持嵌套参数递归展开、编辑和拖拽</p>
-        </div>
-      </header>
 
       {/* 输入 + 二维码：去卡片分栏——左右两块，垂直发丝线分隔 */}
       <div className="flex flex-col gap-6 pt-6 md:flex-row md:items-stretch md:gap-0">
