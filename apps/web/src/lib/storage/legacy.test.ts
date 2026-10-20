@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { legacyToStoreItems, LEGACY_TOOL_ID, parseLegacyUrlRecords } from './legacy'
+import { LEGACY_TOOL_ID, legacyToStoreItems, parseLegacyUrlRecords } from './legacy'
 
 describe('parseLegacyUrlRecords', () => {
   it('解析合法记录', () => {

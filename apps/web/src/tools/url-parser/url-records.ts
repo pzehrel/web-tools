@@ -4,9 +4,9 @@
  * 组件不感知存储位置。localStorage 旧数据由驱动首次打开时迁移（见 lib/storage/legacy.ts）。
  */
 
-import { useCallback } from 'react'
-
 import type { StoreItemSummary } from '@/lib/storage/types'
+
+import { useCallback } from 'react'
 import { useToolStore } from '@/lib/react/use-tool-store'
 
 const TOOL_ID = 'url-parser'

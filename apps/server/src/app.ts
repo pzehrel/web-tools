@@ -1,14 +1,14 @@
-import { bodyLimit } from 'hono/body-limit'
-import { cors } from 'hono/cors'
-import { Hono } from 'hono'
-import { HTTPException } from 'hono/http-exception'
-import { logger } from 'hono/logger'
-import { secureHeaders } from 'hono/secure-headers'
-
 import type { AppEnv } from './app-env.ts'
 import type { AppDeps } from './deps.ts'
-import { authRoute } from './routes/auth.ts'
+import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
+import { cors } from 'hono/cors'
+import { HTTPException } from 'hono/http-exception'
+
+import { logger } from 'hono/logger'
+import { secureHeaders } from 'hono/secure-headers'
 import { assetsRoute } from './routes/assets.ts'
+import { authRoute } from './routes/auth.ts'
 import { health } from './routes/health.ts'
 import { AssetService } from './services/assets.ts'
 import { AuthError, UserService } from './services/users.ts'
@@ -47,7 +47,7 @@ export function buildApp(deps: AppDeps) {
     console.error('[server] unhandled error:', err)
     return c.json({ error: 'internal error' }, 500)
   })
-  app.notFound((c) => c.json({ error: 'not found' }, 404))
+  app.notFound(c => c.json({ error: 'not found' }, 404))
 
   app.get('/api/health', () => health(deps.ping))
   app.route('/api/auth', authRoute(users, deps.allowRegistration))

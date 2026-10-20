@@ -1,10 +1,10 @@
-import { sql } from 'drizzle-orm'
+import type { Db } from './db/index.ts'
 
+import type { Tables } from './deps.ts'
+import { sql } from 'drizzle-orm'
 import { buildApp } from './app.ts'
 import { createD1Db } from './db/d1.ts'
-import type { Db } from './db/index.ts'
 import * as sqliteSchema from './db/schema.sqlite.ts'
-import type { Tables } from './deps.ts'
 import { R2BlobStore } from './storage/r2.ts'
 
 /** Workers 绑定（与 wrangler.jsonc 对应） */
@@ -31,7 +31,9 @@ export default {
       blobs: new R2BlobStore(env.BUCKET),
       ping: () => db.run(sql`select 1`),
       corsOrigins: (env.CORS_ORIGINS ?? 'https://webtools.pzehrel.com,http://localhost:1420')
-        .split(',').map(s => s.trim()).filter(Boolean),
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean),
       allowRegistration: env.ALLOW_REGISTRATION === 'true' || env.ALLOW_REGISTRATION === '1',
     })
     return app.fetch(request, env, ctx)

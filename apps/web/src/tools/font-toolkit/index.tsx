@@ -626,19 +626,19 @@ export default function FontToolkitTool() {
                   <h2 className="font-mono text-sm font-semibold tracking-tight">文本预览</h2>
                   <p className="mt-0.5 text-xs text-muted-foreground">用导入的字体渲染任意文本；想逐字浏览全部字符请切到「字符浏览」。</p>
                 </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">字号</span>
-                    <input
-                      type="range"
-                      min={16}
-                      max={72}
-                      value={previewSize}
-                      onChange={e => setPreviewSize(Number(e.target.value))}
-                      className="w-28"
-                      aria-label="预览字号"
-                    />
-                    <span className="w-8 font-mono text-xs font-medium">{previewSize}</span>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">字号</span>
+                  <input
+                    type="range"
+                    min={16}
+                    max={72}
+                    value={previewSize}
+                    onChange={e => setPreviewSize(Number(e.target.value))}
+                    className="w-28"
+                    aria-label="预览字号"
+                  />
+                  <span className="w-8 font-mono text-xs font-medium">{previewSize}</span>
+                </div>
               </div>
               <div className="space-y-3">
                 <input
@@ -674,13 +674,13 @@ export default function FontToolkitTool() {
                     个字符，按分类筛选或搜索定位，点击查看大图。
                   </p>
                 </div>
-                  <input
-                    className="h-9 w-44 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="搜字符或 U+4E2D"
-                    aria-label="搜索字符"
-                  />
+                <input
+                  className="h-9 w-44 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="搜字符或 U+4E2D"
+                  aria-label="搜索字符"
+                />
               </div>
               <div className="space-y-4">
                 {/* 分类筛选 */}
@@ -773,7 +773,7 @@ export default function FontToolkitTool() {
                         onClick={() => setHanTier(t.id)}
                         className={cn(
                           'rounded-md border border-border p-3 text-left transition-all',
-                          
+
                           '',
                           hanTier === t.id ? 'bg-primary text-primary-foreground' : 'bg-background',
                         )}

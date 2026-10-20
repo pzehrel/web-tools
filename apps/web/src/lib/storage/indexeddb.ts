@@ -7,7 +7,7 @@
  */
 
 import type { StoreItem, StoreItemSummary, ToolStore } from './types'
-import { legacyToStoreItems, LEGACY_QR_KEY, LEGACY_URL_KEY } from './legacy'
+import { LEGACY_QR_KEY, LEGACY_URL_KEY, legacyToStoreItems } from './legacy'
 
 const DB_NAME = 'web-tools'
 const DB_VERSION = 2
@@ -156,7 +156,7 @@ export class IndexedDbToolStore implements ToolStore {
     const item = await req(db.transaction(STORE).objectStore(STORE).get([toolId, id]) as IDBRequest<ItemRecord | undefined>)
     if (!item)
       return undefined
-    if (!item.hasBlob)
+    if (!item.hasBlob) {
       return {
         id: item.id,
         toolId: item.toolId,
@@ -167,6 +167,7 @@ export class IndexedDbToolStore implements ToolStore {
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }
+    }
     const blobRecord = await req(db.transaction(BLOB_STORE).objectStore(BLOB_STORE).get([toolId, id]) as IDBRequest<BlobRecord | undefined>)
     if (!blobRecord)
       return undefined

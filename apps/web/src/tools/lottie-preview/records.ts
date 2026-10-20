@@ -1,8 +1,8 @@
-import { zipSync } from 'fflate'
+import type { AtlasOptions, LoadedLottieProject } from './types'
 
 import type { StoreItem, StoreItemSummary } from '@/lib/storage/types'
+import { zipSync } from 'fflate'
 import { useToolStore } from '@/lib/react/use-tool-store'
-import type { AtlasOptions, LoadedLottieProject } from './types'
 
 export const LOTTIE_PREVIEW_TOOL_ID = 'lottie-preview'
 
