@@ -1,0 +1,134 @@
+.url-workspace {
+  --url-line: color-mix(in oklch, var(--border) 50%, var(--background));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  align-items: start;
+  align-content: start;
+  gap: 12px;
+  min-height: calc(100dvh - 58px);
+  padding: 10px 20px 100px;
+  background: var(--muted);
+
+  input, textarea { max-width: 100%; }
+  [data-slot='button'] { gap: 5px; > svg { width: 14px; height: 14px; } }
+  button:has(> svg[data-feedback='success']) { color: var(--success-muted-foreground); background: var(--success-muted); }
+
+  .url-workspace-source, .url-workspace-tree, .url-workspace-qr, .url-workspace-records {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--background);
+  }
+
+  .url-workspace-source {
+    display: grid;
+    grid-column: 1;
+    grid-row: 1;
+    align-self: stretch;
+    grid-template-rows: 28px minmax(188px, 1fr) auto;
+    gap: 8px;
+    padding: 8px 10px 10px;
+    > p { margin: 0; }
+    textarea {
+      width: 100%;
+      height: 100%;
+      min-height: 188px;
+      padding: 8px;
+      border: 0;
+      border-radius: 4px;
+      background: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+      &:focus-visible { outline-offset: -3px; }
+    }
+  }
+  .url-source-label { display: flex; align-items: center; gap: 7px; color: var(--muted-foreground); font-size: 12px; font-weight: 500; }
+  .url-source-actions {
+    align-items: center;
+    min-height: 30px;
+    gap: 6px;
+    > button { height: 26px; min-height: 26px; padding-inline: 7px; border: 0; background: transparent; font-size: 12px; &:hover { background: var(--secondary); } }
+    > button:first-child { width: 30px; border-radius: 0; }
+    > button[data-variant='default'] { color: var(--primary-foreground); background: var(--primary); }
+  }
+  .url-source-note { margin-left: auto; padding-right: 6px; color: var(--muted-foreground); font-family: var(--font-mono); font-size: 11px; }
+
+  .url-workspace-tree {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    overflow: hidden;
+    > div:first-child { align-items: center; padding: 9px 10px; border-bottom: 1px solid var(--url-line); p { margin-top: 5px; font-size: 11px; } }
+    > div:last-child { overflow-x: auto; padding: 6px; }
+    pre { margin: 4px; padding: 12px; border: 0; border-radius: 6px; background: var(--muted); font-size: 12px; line-height: 1.8; }
+  }
+  .url-tree-heading {
+    display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
+    > svg { color: var(--primary); }
+    > span { margin-left: 3px; padding: 1px 6px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); font-size: 10px; font-weight: 400; }
+  }
+  .url-workspace-tree-content { overflow-x: auto; }
+  .url-root-row {
+    align-items: center; min-height: 24px; gap: 6px; padding: 1px 6px; border-radius: 6px; background: var(--muted);
+    > svg { width: 15px; height: 15px; }
+    > span { font-size: 12px; }
+    > button { width: 26px; height: 22px; opacity: 1; }
+  }
+  .url-node-row {
+    align-items: center; min-height: 20px; margin-block: 0; padding-block: 0; padding-right: 4px; border-radius: 5px; font-size: 13px; line-height: 20px;
+    > span:not(.url-tree-rails) { align-self: center; }
+    > button[title], [data-drag-key] > button { font-size: 12px; line-height: 20px; white-space: normal; overflow-wrap: anywhere; }
+    [data-drag-key] { max-width: 40%; padding-inline: 3px; border-radius: 4px; overflow-wrap: anywhere; }
+    > input, [data-drag-key] > input { height: 22px; min-height: 22px; border-radius: 4px; font-size: 13px; line-height: 20px; }
+    > button[aria-label], > .relative > button {
+      width: 24px; height: 20px; opacity: 0.55; border: 0; border-radius: 4px;
+      &:hover, &:focus-visible { opacity: 1; background: var(--secondary); }
+    }
+    &:hover > button[aria-label], &:hover > .relative > button, &:focus-within > button[aria-label], &:focus-within > .relative > button { opacity: 1; }
+  }
+  .url-tree-rails {
+    display: inline-flex; align-self: stretch; flex-shrink: 0; min-height: 20px; padding-left: 4px;
+    > i {
+      position: relative; width: 18px; flex-shrink: 0;
+      &.continues::before, &.branch::before { content: ''; position: absolute; top: 0; bottom: 0; left: 8px; border-left: 1px solid var(--border); }
+      &.branch::after { content: ''; position: absolute; top: 50%; left: 8px; right: 0; border-top: 1px solid var(--border); }
+      &.is-last::before { bottom: 50%; }
+    }
+  }
+
+  .url-workspace-qr {
+    grid-column: 2; grid-row: 1; align-self: stretch; padding: 8px 10px 10px;
+    > section { display: grid; height: 100%; grid-template-rows: 28px minmax(188px, 1fr) 30px; gap: 8px; }
+    [aria-label='上传二维码图片识别'] { justify-self: center; width: 188px; height: 100%; min-height: 188px; padding: 8px; aspect-ratio: auto; border: 0; border-radius: 6px; background: var(--muted); }
+  }
+  .url-qr-heading {
+    display: flex; align-items: center; justify-content: space-between;
+    h2 { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+    h2 > svg { color: var(--primary); }
+    > button { width: 26px; height: 28px; }
+  }
+  .url-qr-download { height: 30px; border-radius: 5px; font-size: 12px; }
+  .url-workspace-records {
+    grid-column: 1 / -1; grid-row: 3; padding: 10px;
+    section > div:first-child { min-height: 24px; padding-bottom: 6px; }
+    h2 { font-size: 13px; }
+    p { font-size: 11px; line-height: 1.7; }
+    li { padding-block: 8px; &:last-child { border-bottom: 0; } }
+  }
+}
+
+@media (max-width: 800px) {
+  .url-workspace {
+    display: flex; flex-direction: column; padding: 10px 12px 100px;
+    > section, > div, > aside { width: 100%; }
+    .url-workspace-source { grid-template-rows: 28px minmax(140px, 1fr) auto; textarea { min-height: 140px; font-size: 13px; } }
+    .url-source-label { font-size: 11px; }
+    .url-source-actions { gap: 2px; }
+    .url-source-note { font-size: 10px; }
+    .url-workspace-tree > div:first-child { padding: 10px 12px; }
+    .url-workspace-tree-content { min-width: 34rem; }
+    .url-node-row > button[aria-label], .url-node-row > .relative > button { opacity: 1; }
+    .url-node-row > input, .url-node-row [data-drag-key] > input { font-size: 16px; }
+    .url-workspace-qr > section { height: auto; }
+    .url-workspace-qr [aria-label='上传二维码图片识别'] { height: 188px; }
+  }
+}
