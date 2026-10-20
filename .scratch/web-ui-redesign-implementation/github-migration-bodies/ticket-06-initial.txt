@@ -1,0 +1,43 @@
+<!-- web-tools-ui-redesign-migration:2026-10-20:ticket-06 -->
+
+# 06: Frame sprite/code export and complete project recovery
+
+**What to build:** Turn the edited sequence into the correct sprite PNG and CSS/Less/SCSS, then save and restore the complete project through refresh.
+
+**Blocked by:** [05 — Frame playback, independent progress and canvas inspection](05-frames-playback-canvas.md)
+
+**Status:** ready-for-agent
+
+**Labels:** ready-for-agent
+
+**Approval:** 2026-10-20 — human user: 可以
+
+Context: [full specification](../spec.md); [source index](../sources.md); [ticket index](../tickets.md); [Chinese translation](06-frames-export-records.zh-CN.md).
+
+**Primary requirements:** F15–F18, F20. Operation feedback is also checked in tickets 04–05.
+
+## Acceptance criteria
+
+- [ ] Linked grid controls, actual output preview/metrics, source-max cell dimensions and centered smaller frames; inspect exported pixels.
+- [ ] Generated code preserves selected range, timing, direction, loops, pixel style, variables and relative sizing, with copy feedback and code-only select-all.
+- [ ] Verify archived bytes/order/selection/crop threshold/playback/export settings, naming/load/delete, older records and empty/busy/failure recovery using existing archive tests and real-page workflows.
+
+## Requirement acceptance checklist
+
+- [ ] **F15** — As a designer, I want a PNG sprite sheet using original maximum cell dimensions with smaller frames centered and linked row/column controls, so that exported pixels and layout remain correct.
+- [ ] **F16** — As a designer, I want live sprite preview, frame/cell/grid/output measurements and empty/busy states, so that I can inspect the actual export arrangement.
+- [ ] **F17** — As a developer, I want CSS/Less/SCSS output, variable and relative-size options, matching direction/loops/timing/pixel style, copy feedback and code-only select-all, so that the generated animation is reusable.
+- [ ] **F18** — As a returning user, I want named durable projects restoring bytes, order, selection, range, playback, crop threshold and export settings, with load/delete actions, so that work resumes accurately.
+- [ ] **F20** — As a designer, I want empty-selection, archive/import, crop, export and copying feedback with appropriate busy/disabled states, so that failures and unavailable actions are understandable.
+
+## Cross-ticket checks
+
+- [ ] G06
+
+## Execution and verification constraints
+
+- [ ] Preserve all behavior in the assigned requirement IDs, including defaults, bounds, edge cases and failure handling in the specification. These summaries do not replace its detailed contracts. Reuse the production engines and storage contracts; prototype coverage is not production acceptance.
+- [ ] Each ticket changes a complete real-page workflow and verifies that workflow. Existing controls outside its scope remain available during migration. Any necessary component extraction stays within that ticket and preserves behavior; no separate engine rewrite or infrastructure-only phase is proposed.
+- [ ] Each workflow includes its applicable light/dark states, compact desktop layout, keyboard/focus behavior, phone core operation, empty/busy/error feedback and relevant existing module tests. Export tickets inspect decoded output or archive contents. Record tickets use isolated test data with production identities and verify reload and older records.
+- [ ] Follow reviewed borderless icon actions, semantic colors and floating-workspace decisions. Keep hidden tool entries hidden and retain direct routes. Do not add promotional data-location claims.
+- [ ] Run the required lint, typecheck and build checks for each implementation. Record real product-page evidence; unavailable browser checks remain pending and cannot be replaced by source inspection. Preserve unrelated changes and prototype references. No commit, release or deployment is included.

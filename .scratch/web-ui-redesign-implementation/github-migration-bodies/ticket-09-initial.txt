@@ -1,0 +1,61 @@
+<!-- web-tools-ui-redesign-migration:2026-10-20:ticket-09 -->
+
+# 09: Nine-patch slicing, rendering and independent preview HUD
+
+**What to build:** Load a source, adjust slices numerically/by pointer/by keyboard, inspect live border rendering and move/resize its floating HUD without changing output dimensions accidentally.
+
+**Blocked by:** [01 — Home, navigation and production themes](01-home-navigation-themes.md)
+
+**Status:** ready-for-agent
+
+**Labels:** ready-for-agent
+
+**Approval:** 2026-10-20 — human user: 可以
+
+Context: [full specification](../spec.md); [source index](../sources.md); [ticket index](../tickets.md); [Chinese translation](09-nine-patch-editor-hud.zh-CN.md).
+
+**Primary requirements:** N01–N09, N11–N14, N18–N23, D11–D12; adopts D01–D02. Ticket 10 verifies the high-position center-crop part of D11.
+
+## Acceptance criteria
+
+- [ ] Import cancellation/type/decode recovery, normal example/default/clear paths, normalized noncrossing slices and targeted slice reset.
+- [ ] Preserve bound/unbound widths, outset, fill and both repeat axes.
+- [ ] Verify eight inner logical resize handles versus eight outer HUD handles, separate dimensions/positions, keyboard steps, zoom conversion, fixed anchors, viewport bounds and pointer cleanup.
+- [ ] Source/preview/HUD resets remain distinct; fit/manual takeover and view-only backgrounds work.
+- [ ] Keep center-crop controls high and existing output/records available during migration.
+
+## Requirement acceptance checklist
+
+- [ ] **N01** — As a designer, I want image selection or first-file dropping into the editor with filename and source dimensions, so that I can begin slicing the intended image.
+- [ ] **N02** — As a designer, I want cancellation to preserve my image, invalid-type/decode errors distinguished and valid replacement to clear errors, so that import recovery is predictable.
+- [ ] **N03** — As a designer, I want the generated example to use the normal load/default-parameter path, so that example behavior represents the real workflow.
+- [ ] **N04** — As a designer, I want replacement to restore the existing image-derived slice/width, outset and crop defaults and refit the source, so that previous geometry does not corrupt a new image.
+- [ ] **N05** — As a designer, I want clearing the image to return to import state and remove import/crop feedback, so that the workspace resets consistently.
+- [ ] **N06** — As a designer, I want four nonnegative integer source-pixel slices normalized against opposite edges and restored dimensions, so that cut lines cannot cross.
+- [ ] **N07** — As a designer, I want captured-pointer cut-line dragging converted through current zoom to source pixels with end/cancel handling, so that numeric slices and lines stay synchronized.
+- [ ] **N08** — As a keyboard user, I want focusable cut-line sliders with bounds and directional 1-pixel/Shift-10-pixel adjustments, so that precise slicing does not depend on dragging.
+- [ ] **N09** — As a designer, I want slice reset to restore image-derived defaults without resetting unrelated parameters, so that a targeted reset stays safe.
+- [ ] **N11** — As a designer, I want bound border widths and independently editable unbound widths with rebinding, so that rendering width remains distinct from source slices.
+- [ ] **N12** — As a designer, I want the existing integer outset control reflected in preview and CSS, so that external border extension remains adjustable.
+- [ ] **N13** — As a designer, I want center filling to remain an explicit setting with the existing default, so that preview and CSS agree.
+- [ ] **N14** — As a designer, I want independent horizontal and vertical stretch/repeat/round/space choices, so that preview and CSS preserve both repeat axes.
+- [ ] **N18** — As a designer, I want a separate live border-image preview reflecting slices, widths, outset, fill and repeat axes with dimensions, so that output behavior can be inspected.
+- [ ] **N19** — As a designer, I want all eight logical preview-size handles and existing corner keyboard steps with zoom-correct movement and fixed opposite anchors, so that stretch testing remains precise.
+- [ ] **N20** — As a designer, I want source pan, wheel/trackpad/touch zoom and transient scale feedback without changing export data, so that inspection stays separate from editing.
+- [ ] **N21** — As a designer, I want independent preview viewing and reset with resize/pan guards and compensation cleanup, so that preview gestures remain predictable.
+- [ ] **N22** — As a designer, I want both stages to fit initially and react to available-size changes until manual takeover, with replacement/reset restoring fit, so that content remains accessible.
+- [ ] **N23** — As a designer, I want source/preview boundary controls and the existing six themed checker/solid palettes to affect viewing only, so that exports preserve original image data.
+- [ ] **D11** — As a nine-patch user, I want center cropping near the top and a movable, resizable stretch-preview HUD, so that frequent cropping and preview comparison remain convenient.
+- [ ] **D12** — As a nine-patch user, I want independent source-view, preview-view and HUD resets, so that restoring a view does not accidentally change output parameters.
+
+## Cross-ticket checks
+
+- [ ] D01, D02, G07
+
+## Execution and verification constraints
+
+- [ ] Preserve all behavior in the assigned requirement IDs, including defaults, bounds, edge cases and failure handling in the specification. These summaries do not replace its detailed contracts. Reuse the production engines and storage contracts; prototype coverage is not production acceptance.
+- [ ] Each ticket changes a complete real-page workflow and verifies that workflow. Existing controls outside its scope remain available during migration. Any necessary component extraction stays within that ticket and preserves behavior; no separate engine rewrite or infrastructure-only phase is proposed.
+- [ ] Each workflow includes its applicable light/dark states, compact desktop layout, keyboard/focus behavior, phone core operation, empty/busy/error feedback and relevant existing module tests. Export tickets inspect decoded output or archive contents. Record tickets use isolated test data with production identities and verify reload and older records.
+- [ ] Follow reviewed borderless icon actions, semantic colors and floating-workspace decisions. Keep hidden tool entries hidden and retain direct routes. Do not add promotional data-location claims.
+- [ ] Run the required lint, typecheck and build checks for each implementation. Record real product-page evidence; unavailable browser checks remain pending and cannot be replaced by source inspection. Preserve unrelated changes and prototype references. No commit, release or deployment is included.

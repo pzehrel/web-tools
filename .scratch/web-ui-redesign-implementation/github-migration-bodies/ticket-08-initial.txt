@@ -1,0 +1,51 @@
+<!-- web-tools-ui-redesign-migration:2026-10-20:ticket-08 -->
+
+# 08: Lottie atlas optimization, inspected ZIP and project recovery
+
+**What to build:** Optimize a real project, inspect independent floating atlases and before/after resource metrics, export a usable ZIP and restore the complete saved project.
+
+**Blocked by:** [07 — Lottie project import, playback and narrow task workspace](07-lottie-import-playback.md)
+
+**Status:** ready-for-agent
+
+**Labels:** ready-for-agent
+
+**Approval:** 2026-10-20 — human user: 可以
+
+Context: [full specification](../spec.md); [source index](../sources.md); [ticket index](../tickets.md); [Chinese translation](08-lottie-atlas-export-records.zh-CN.md).
+
+**Primary requirements:** L10–L18, D09. Completes atlas behavior in D10 and all related L19–L20 states.
+
+## Acceptance criteria
+
+- [ ] Optimization/playback/project-record tabs with comparison and export always reachable.
+- [ ] Retain every packing option/default/bound, rebuild toggle and valid-original fallback, animated-image exclusions, increases and detailed metrics.
+- [ ] Inspect multiple atlases with independent gestures/reset.
+- [ ] Unzip output to verify rewritten references, atlas PNGs and required original/embedded assets.
+- [ ] Verify named durable complete projects and settings, old-record compatibility, load/delete and asynchronous failure recovery.
+- [ ] Reuse asset, animation-detection, metrics and record-archive tests; no new optimizer or storage format is required.
+
+## Requirement acceptance checklist
+
+- [ ] **L10** — As a designer, I want optimization toggling and automatic rebuilding after option changes, with original assets used while rebuilding or disabled, so that the preview represents a valid current state.
+- [ ] **L11** — As a designer, I want the existing maximum atlas sizes, padding and extrusion settings with their defaults and bounds, so that packing controls remain complete.
+- [ ] **L12** — As a designer, I want rotation, transparent trimming with animation-position preservation and identical-pixel merging, so that existing optimization choices remain available.
+- [ ] **L13** — As a designer, I want advanced power-of-two, square-atlas and alpha-threshold controls, so that detailed atlas constraints remain adjustable.
+- [ ] **L14** — As a designer, I want supported animated image resources detected, excluded from atlas packing and explained, so that optimization does not flatten animation.
+- [ ] **L15** — As a designer, I want before/after bytes, texture counts, pixels and estimated RGBA memory with increases identified, plus atlas occupancy and deduplication statistics, so that I can assess actual results.
+- [ ] **L16** — As a designer, I want single/multiple atlas viewing with independent fitting, zoom/pinch, pan, scale feedback, boundaries and reset, so that atlas inspection does not disturb the main animation.
+- [ ] **L17** — As a designer, I want the existing optimized ZIP with rewritten data.json, numbered atlas PNGs and required original non-optimizable assets, so that exported projects remain usable.
+- [ ] **L18** — As a returning user, I want named durable complete projects restoring optimization, library, renderer, loop, speed, direction and fitting settings, with load/delete actions, so that inspection can resume.
+- [ ] **D09** — As a Lottie user, I want atlas optimization, playback settings and project-record tabs with persistent resource comparison and export, so that I can switch tasks without losing the result context.
+
+## Cross-ticket checks
+
+- [ ] D10, L19, L20, G06, G07
+
+## Execution and verification constraints
+
+- [ ] Preserve all behavior in the assigned requirement IDs, including defaults, bounds, edge cases and failure handling in the specification. These summaries do not replace its detailed contracts. Reuse the production engines and storage contracts; prototype coverage is not production acceptance.
+- [ ] Each ticket changes a complete real-page workflow and verifies that workflow. Existing controls outside its scope remain available during migration. Any necessary component extraction stays within that ticket and preserves behavior; no separate engine rewrite or infrastructure-only phase is proposed.
+- [ ] Each workflow includes its applicable light/dark states, compact desktop layout, keyboard/focus behavior, phone core operation, empty/busy/error feedback and relevant existing module tests. Export tickets inspect decoded output or archive contents. Record tickets use isolated test data with production identities and verify reload and older records.
+- [ ] Follow reviewed borderless icon actions, semantic colors and floating-workspace decisions. Keep hidden tool entries hidden and retain direct routes. Do not add promotional data-location claims.
+- [ ] Run the required lint, typecheck and build checks for each implementation. Record real product-page evidence; unavailable browser checks remain pending and cannot be replaced by source inspection. Preserve unrelated changes and prototype references. No commit, release or deployment is included.

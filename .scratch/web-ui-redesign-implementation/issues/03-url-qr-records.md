@@ -1,0 +1,50 @@
+# 03: URL QR input, direct exports and durable records
+
+**What to build:** Generate or recognize a QR, inspect its enlarged tree preview, download the intended image directly, save/update/preview records and resume old work after refresh.
+
+**Blocked by:** [02 — URL recursive editing and share-link round trip](02-url-tree-sharing.md)
+
+**Status:** ready-for-agent
+
+**Labels:** ready-for-agent
+
+**Approval:** 2026-10-20 — human user: 可以
+
+Context: [full specification](../spec.md); [source index](../sources.md); [ticket index](../tickets.md); [Chinese translation](03-url-qr-records.zh-CN.md).
+
+**Primary requirements:** U11–U23.
+
+## Acceptance criteria
+
+- [ ] Debounce, stale-result protection, picker/drop/paste guards and distinct recognition failures; page downloads pure QR, dialog downloads QR plus parameters with plain-text fallback, with no dropdown.
+- [ ] Decode QR and inspect combined-image dimensions/wrapping/omission and retry/busy behavior.
+- [ ] Verify explicit save versus update, naming/renaming, preview-before-selection, deselection, copy, confirmed delete/clear and selection cleanup.
+- [ ] Retain the original URL record identity, legacy conversion and nonblocking read-error behavior.
+
+## Requirement acceptance checklist
+
+- [ ] **U11** — As a tool user, I want URL or plain text to generate the existing QR PNG after the debounce, with stale results ignored and clearing respected, so that the QR follows current content.
+- [ ] **U12** — As a tool user, I want image selection, QR-area dropping and image pasting outside text inputs to recognize QR content, including repeated selection of the same file, so that all existing recognition paths work.
+- [ ] **U13** — As a tool user, I want unreadable-image and no-QR failures distinguished without destroying current text, and plain-text tree guidance, so that I can recover from unsuitable input.
+- [ ] **U14** — As a tool user, I want clicking the QR image to open an enlarged preview with a read-only parameter tree and Escape/backdrop dismissal, so that I can inspect the result.
+- [ ] **U15** — As a tool user, I want the page download action to directly download the pure QR PNG, so that the common export takes one action.
+- [ ] **U16** — As a tool user, I want the enlarged-preview download to directly create the existing QR-and-parameters image for URL content, so that I can share the complete structured result.
+- [ ] **U17** — As a tool user, I want direct export availability, busy protection, failure feedback and a plain-text QR fallback without a dropdown, so that the reviewed download flow is reliable.
+- [ ] **U18** — As a returning user, I want save to create a named snapshot and an explicit update to modify a selected record, so that typing never silently overwrites saved work.
+- [ ] **U19** — As a returning user, I want the existing default-name fallback and Enter/blur/Escape rename behavior, so that record naming remains predictable.
+- [ ] **U20** — As a returning user, I want record selection to load input and selecting it again to deselect without overwriting input, so that selection and editing stay distinct.
+- [ ] **U21** — As a returning user, I want desktop record tooltips and mobile preview dialogs showing QR/tree or plain text, so that I can inspect a record before choosing it.
+- [ ] **U22** — As a returning user, I want record copying, confirmed single deletion and confirmed clear-all with correct selection cleanup, so that record management remains complete.
+- [ ] **U23** — As a returning user, I want durable records and existing URL/QR legacy records restored under the original storage identity, with read failures not blocking the tool, so that upgrades preserve my work.
+
+## Cross-ticket checks
+
+- [ ] G06
+
+## Execution and verification constraints
+
+- [ ] Preserve all behavior in the assigned requirement IDs, including defaults, bounds, edge cases and failure handling in the specification. These summaries do not replace its detailed contracts. Reuse the production engines and storage contracts; prototype coverage is not production acceptance.
+- [ ] Each ticket changes a complete real-page workflow and verifies that workflow. Existing controls outside its scope remain available during migration. Any necessary component extraction stays within that ticket and preserves behavior; no separate engine rewrite or infrastructure-only phase is proposed.
+- [ ] Each workflow includes its applicable light/dark states, compact desktop layout, keyboard/focus behavior, phone core operation, empty/busy/error feedback and relevant existing module tests. Export tickets inspect decoded output or archive contents. Record tickets use isolated test data with production identities and verify reload and older records.
+- [ ] Follow reviewed borderless icon actions, semantic colors and floating-workspace decisions. Keep hidden tool entries hidden and retain direct routes. Do not add promotional data-location claims.
+- [ ] Run the required lint, typecheck and build checks for each implementation. Record real product-page evidence; unavailable browser checks remain pending and cannot be replaced by source inspection. Preserve unrelated changes and prototype references. No commit, release or deployment is included.

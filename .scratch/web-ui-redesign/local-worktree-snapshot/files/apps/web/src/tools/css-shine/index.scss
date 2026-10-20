@@ -1,0 +1,82 @@
+.shine-preview-wrap {
+  --shine-duration: 1.6s;
+  --shine-delay: 0.8s;
+  --shine-width: 24%;
+  --shine-tilt: -18deg;
+  --shine-travel: 667%;
+  --shine-color: color-mix(in oklab, var(--primary-foreground) 60%, transparent);
+
+  position: relative;
+  display: inline-grid;
+  isolation: isolate;
+}
+
+.shine-preview-layer {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: var(--shine-mask, linear-gradient(currentColor 0 0));
+  mask-image: var(--shine-mask, linear-gradient(currentColor 0 0));
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.shine-preview-beam {
+  position: absolute;
+  top: -75%;
+  bottom: -75%;
+  left: calc(var(--shine-width) * -1);
+  width: var(--shine-width);
+  background: linear-gradient(90deg, transparent, var(--shine-color), transparent);
+  transform: translateX(-150%) rotate(var(--shine-tilt));
+}
+
+.shine-preview-wrap[data-direction='right'][data-trigger='auto'] .shine-preview-beam {
+  animation: shine-preview-right var(--shine-duration) ease-in-out var(--shine-delay) infinite;
+}
+
+.shine-preview-wrap[data-direction='left'][data-trigger='auto'] .shine-preview-beam {
+  animation: shine-preview-left var(--shine-duration) ease-in-out var(--shine-delay) infinite;
+}
+
+.shine-preview-wrap[data-direction='right'][data-trigger='hover']:hover .shine-preview-beam,
+.shine-preview-wrap[data-direction='right'][data-trigger='hover']:focus-within .shine-preview-beam {
+  animation: shine-preview-right var(--shine-duration) ease-in-out 1;
+}
+
+.shine-preview-wrap[data-direction='left'][data-trigger='hover']:hover .shine-preview-beam,
+.shine-preview-wrap[data-direction='left'][data-trigger='hover']:focus-within .shine-preview-beam {
+  animation: shine-preview-left var(--shine-duration) ease-in-out 1;
+}
+
+@keyframes shine-preview-right {
+  from {
+    transform: translateX(-150%) rotate(var(--shine-tilt));
+  }
+
+  to {
+    transform: translateX(var(--shine-travel)) rotate(var(--shine-tilt));
+  }
+}
+
+@keyframes shine-preview-left {
+  from {
+    transform: translateX(var(--shine-travel)) rotate(var(--shine-tilt));
+  }
+
+  to {
+    transform: translateX(-150%) rotate(var(--shine-tilt));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shine-preview-beam {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,276 @@
+<!-- web-tools-ui-redesign-migration:2026-10-20:spec -->
+
+# Web UI redesign implementation specification
+
+Type: spec
+Status: ready-for-agent
+Labels: ready-for-agent
+Date: 2026-10-20
+Canonical language: English
+Test boundary: confirmed by the user on 2026-10-20
+
+## Problem Statement
+
+The existing tool interfaces do not provide the compact, consistent workspace needed for frequent development and design work. Navigation, spacing, controls, feedback and canvas organization need a complete UI redesign. Earlier simplified prototypes also made existing capabilities difficult to identify, creating a risk of losing important functionality during implementation.
+
+The user has completed review of the current F prototype. Production implementation must preserve the complete behavior of the four public tools while adopting the approved layouts and shared semantic color system. The reviewed prototype is a design reference, not the production implementation or evidence that all runtime behavior has passed acceptance.
+
+## Solution
+
+Implement the reviewed home, URL and QR tool, frame-animation tool, Lottie preview and nine-patch tool as production interfaces. Use compact controls, direct navigation, visible canvases, task-specific floating controls and consistent light/dark semantic colors. Preserve existing parsing, image processing, rendering, exports, records and compatibility behavior.
+
+The home and tool switcher expose only the four public tools. CSS shine and font toolkit remain deferred and have no visible navigation entries; their existing direct routes and functionality remain. Keep the application browser-based, retain the current storage and SSG architecture, and avoid promotional emphasis on data location or upload behavior.
+
+## User Stories
+
+### Shared behavior
+
+1. As a frequent user, I want the home to show the four ready public tools, so that I can enter my task directly and hidden tools stay hidden. (G01)
+2. As a returning user, I want current routes, legacy URL/QR redirects, hidden direct routes and unknown-address fallback to keep working, so that existing links remain useful. (G02)
+3. As a tool user, I want a discoverable return-home action on the left and a public-tool switcher, so that navigation does not consume a permanent sidebar. (G03)
+4. As a tool user, I want system, light and dark preferences to persist, respond to system changes and apply before first paint, so that theme behavior remains consistent. (G04)
+5. As a project user, I want the correct GitHub repository icon and a new-tab link, so that I can reach the project reliably. (G05)
+6. As a returning user, I want existing record identities, payloads, metadata and legacy conversion preserved, so that the redesign keeps my saved work available. (G06)
+7. As an image-tool user, I want shared viewing gestures and boundary/background controls with editing guards, so that viewing and editing do not interfere. (G07)
+8. As a visitor, I want static route content, correct page metadata and a single hydrated interface, so that pages load and index correctly. (G08)
+9. As a Safari web-app user, I want existing manifest, icons and standalone metadata preserved, so that the browser application continues to launch correctly. (G09)
+
+### Reviewed interface decisions
+
+10. As a frequent user, I want compact spacing and an immediately visible canvas, so that useful working content occupies the available screen. (D01)
+11. As a canvas-tool user, I want narrow task controls beside the canvas and floating viewing controls, so that parameters remain close to the work. (D02)
+12. As a tool user, I want borderless icon actions with visible hover, selection, disabled and keyboard-focus feedback, so that controls stay compact and understandable. (D03)
+13. As a tool user, I want a blue primary, soft-blue secondary and distinct success, error, warning and information colors in both themes, so that hierarchy and feedback are clear. (D04)
+14. As a URL-tool user, I want equal-height input and QR panels on the top row, a full-width tree below and full-width records after that, so that each area has a clear place. (D05)
+15. As a URL-tool user, I want close vertical spacing between tree items with wrapping and editable fields preserved, so that long parameter trees remain readable and efficient. (D06)
+16. As a frame-animation user, I want the frame sequence across the entire bottom edge and a short progress control above it, so that the canvas retains useful space. (D07)
+17. As a frame-animation user, I want progress seeking independently of thumbnail selection and no playback-following thumbnail highlight, so that editing the sequence stays visually stable. (D08)
+18. As a Lottie user, I want atlas optimization, playback settings and project-record tabs with persistent resource comparison and export, so that I can switch tasks without losing the result context. (D09)
+19. As a Lottie user, I want a narrow left panel, a short playback control and a separate floating atlas preview, so that the animation remains the main workspace. (D10)
+20. As a nine-patch user, I want center cropping near the top and a movable, resizable stretch-preview HUD, so that frequent cropping and preview comparison remain convenient. (D11)
+21. As a nine-patch user, I want independent source-view, preview-view and HUD resets, so that restoring a view does not accidentally change output parameters. (D12)
+
+### URL and QR
+
+22. As a developer, I want protocols, paths, query text, nested encoded URLs and hash routes parsed while preserving repeated keys, flags, empty values and malformed-escape tolerance, so that real links remain editable. (U01)
+23. As a developer, I want a recursive editable parameter/hash tree with each URL's base, so that nested structure stays visible. (U02)
+24. As a developer, I want to edit keys, ordinary values and root/nested bases with correct subtree rebuilding and suffix preservation, so that edits retain unrelated parameters. (U03)
+25. As a developer, I want Enter/blur submission, Escape cancellation, unchanged-edit preservation and initial focus on a new key, so that inline editing remains predictable. (U04)
+26. As a developer, I want root insertion, insertion after an ordinary field and insertion inside a nested URL, so that I can add fields at the intended level. (U05)
+27. As a developer, I want confirmation before deleting a field or URL subtree, so that cancellation preserves my current input. (U06)
+28. As a developer, I want to move key/hash nodes and complete subtrees between valid targets while invalid/self/descendant drops are rejected, so that restructuring is safe. (U07)
+29. As a developer, I want separate original-input and serialized root/subtree copying with feedback, so that I can choose the appropriate complete representation. (U08)
+30. As a developer, I want valid `$$name` variables to generate highlighted JavaScript template code with correct encoding depth and copying, so that nested URL templates remain usable. (U09)
+31. As a tool user, I want to explicitly load the nested OAuth example, so that I can explore the tool without replacing an empty start automatically. (U10)
+32. As a tool user, I want URL or plain text to generate the existing QR PNG after the debounce, with stale results ignored and clearing respected, so that the QR follows current content. (U11)
+33. As a tool user, I want image selection, QR-area dropping and image pasting outside text inputs to recognize QR content, including repeated selection of the same file, so that all existing recognition paths work. (U12)
+34. As a tool user, I want unreadable-image and no-QR failures distinguished without destroying current text, and plain-text tree guidance, so that I can recover from unsuitable input. (U13)
+35. As a tool user, I want clicking the QR image to open an enlarged preview with a read-only parameter tree and Escape/backdrop dismissal, so that I can inspect the result. (U14)
+36. As a tool user, I want the page download action to directly download the pure QR PNG, so that the common export takes one action. (U15)
+37. As a tool user, I want the enlarged-preview download to directly create the existing QR-and-parameters image for URL content, so that I can share the complete structured result. (U16)
+38. As a tool user, I want direct export availability, busy protection, failure feedback and a plain-text QR fallback without a dropdown, so that the reviewed download flow is reliable. (U17)
+39. As a returning user, I want save to create a named snapshot and an explicit update to modify a selected record, so that typing never silently overwrites saved work. (U18)
+40. As a returning user, I want the existing default-name fallback and Enter/blur/Escape rename behavior, so that record naming remains predictable. (U19)
+41. As a returning user, I want record selection to load input and selecting it again to deselect without overwriting input, so that selection and editing stay distinct. (U20)
+42. As a returning user, I want desktop record tooltips and mobile preview dialogs showing QR/tree or plain text, so that I can inspect a record before choosing it. (U21)
+43. As a returning user, I want record copying, confirmed single deletion and confirmed clear-all with correct selection cleanup, so that record management remains complete. (U22)
+44. As a returning user, I want durable records and existing URL/QR legacy records restored under the original storage identity, with read failures not blocking the tool, so that upgrades preserve my work. (U23)
+45. As a developer, I want current, old-text and bare share hashes restored and debounced replacement/clearing preserved, so that share links work without adding browser-history entries while typing. (U24)
+46. As a tool user, I want empty input, tree and QR states when no share content exists, so that the tool starts honestly and the example remains optional. (U25)
+
+### Frame animation
+
+47. As a designer, I want multiple browser-decodable images imported through selection or canvas dropping while invalid images are skipped, so that valid frames remain usable. (F01)
+48. As a designer, I want ZIP and directory image imports with the current supported formats, source names and archive filtering, so that I can load existing asset collections. (F02)
+49. As a designer, I want new batches appended in natural filename order while manual existing order stays intact, plus explicit global sorting, so that sequence organization remains under my control. (F03)
+50. As a designer, I want an explicit example action, so that I can preview and export without supplying files. (F04)
+51. As a designer, I want per-frame and all/none selection to control preview, playback and exports without deleting materials, so that I can adjust participation reversibly. (F05)
+52. As a designer, I want thumbnails, filenames, original dimensions/bytes and before/after drag sorting with stable selection feedback, so that I can organize frames without playback-driven highlighting. (F06)
+53. As a designer, I want common-transparent-edge cropping with stacked preview, bounds, live alpha controls, mixed-size warnings, cancel/apply and result feedback, so that I can crop deliberately. (F07)
+54. As a designer, I want playback, pause, stepping, selected-thumbnail seeking and existing keyboard controls with text-input guards and crop-dialog Escape, so that navigation remains efficient. (F08)
+55. As a designer, I want the existing FPS and duration relationship, fractional inference and timing displays, so that preview and exported timing stay consistent. (F09)
+56. As a designer, I want an inclusive start/end range with a full-range reset and selection-aware clamping, so that playback and export use the intended frames. (F10)
+57. As a designer, I want forward, reverse and ping-pong playback with infinite or finite loops and restart after completion, so that playback and code preserve the chosen behavior. (F11)
+58. As a designer, I want automatic source-size fitting, zoom/pinch, pan, scale feedback and reset, so that small and large frames remain inspectable. (F12)
+59. As a designer, I want boundary and themed checker/solid viewing backgrounds, so that I can inspect transparency without changing output pixels. (F13)
+60. As a designer, I want the pixel-art option reflected in previews and generated styling, so that pixelated material retains its intended rendering. (F14)
+61. As a designer, I want a PNG sprite sheet using original maximum cell dimensions with smaller frames centered and linked row/column controls, so that exported pixels and layout remain correct. (F15)
+62. As a designer, I want live sprite preview, frame/cell/grid/output measurements and empty/busy states, so that I can inspect the actual export arrangement. (F16)
+63. As a developer, I want CSS/Less/SCSS output, variable and relative-size options, matching direction/loops/timing/pixel style, copy feedback and code-only select-all, so that the generated animation is reusable. (F17)
+64. As a returning user, I want named durable projects restoring bytes, order, selection, range, playback, crop threshold and export settings, with load/delete actions, so that work resumes accurately. (F18)
+65. As a designer, I want clearing materials to stop playback and reset dependent selection, range, crop and import feedback, so that the next project starts cleanly. (F19)
+66. As a designer, I want empty-selection, archive/import, crop, export and copying feedback with appropriate busy/disabled states, so that failures and unavailable actions are understandable. (F20)
+
+### Lottie
+
+67. As a designer, I want a single ZIP or complete directory imported with paths and exactly one valid data.json, so that supported project packaging stays unambiguous. (L01)
+68. As a designer, I want nested/precomposition, relative and embedded image references resolved with existing formats and missing/unreadable warnings, so that project assets remain correct without automatic remote-image fetching. (L02)
+69. As a designer, I want example loading, replacement and clearing to reset project-dependent optimization, playback and viewing state, so that projects do not leak state into one another. (L03)
+70. As a designer, I want both existing Lottie rendering libraries and canvas/SVG renderers, so that I can compare supported engines. (L04)
+71. As a designer, I want complete-display and fill/crop fitting choices, so that the animation fits the intended viewing area. (L05)
+72. As a designer, I want playback, pause and fractional-frame progress seeking with current/total frame and project metadata, so that I can inspect animation timing precisely. (L06)
+73. As a designer, I want the existing speed presets, direction and loop control, so that playback inspection remains flexible. (L07)
+74. As a designer, I want the main canvas automatically fitted with independent zoom/pinch, pan, scale feedback and reset, so that the whole animation stays inspectable. (L08)
+75. As a designer, I want boundaries and themed checker/solid backgrounds for animation and atlas viewing, so that transparent assets remain visible. (L09)
+76. As a designer, I want optimization toggling and automatic rebuilding after option changes, with original assets used while rebuilding or disabled, so that the preview represents a valid current state. (L10)
+77. As a designer, I want the existing maximum atlas sizes, padding and extrusion settings with their defaults and bounds, so that packing controls remain complete. (L11)
+78. As a designer, I want rotation, transparent trimming with animation-position preservation and identical-pixel merging, so that existing optimization choices remain available. (L12)
+79. As a designer, I want advanced power-of-two, square-atlas and alpha-threshold controls, so that detailed atlas constraints remain adjustable. (L13)
+80. As a designer, I want supported animated image resources detected, excluded from atlas packing and explained, so that optimization does not flatten animation. (L14)
+81. As a designer, I want before/after bytes, texture counts, pixels and estimated RGBA memory with increases identified, plus atlas occupancy and deduplication statistics, so that I can assess actual results. (L15)
+82. As a designer, I want single/multiple atlas viewing with independent fitting, zoom/pinch, pan, scale feedback, boundaries and reset, so that atlas inspection does not disturb the main animation. (L16)
+83. As a designer, I want the existing optimized ZIP with rewritten data.json, numbered atlas PNGs and required original non-optimizable assets, so that exported projects remain usable. (L17)
+84. As a returning user, I want named durable complete projects restoring optimization, library, renderer, loop, speed, direction and fitting settings, with load/delete actions, so that inspection can resume. (L18)
+85. As a designer, I want visible scrollable errors/warnings, missing-asset details, operation/engine failures and busy/empty/disabled states, so that I can understand and recover from problems. (L19)
+86. As a mobile user, I want reachable stacked or tabbed controls, wrapping actions, two-canvas touch gestures and scrollable messages, so that core Lottie tasks remain possible. (L20)
+
+### Nine-patch
+
+87. As a designer, I want image selection or first-file dropping into the editor with filename and source dimensions, so that I can begin slicing the intended image. (N01)
+88. As a designer, I want cancellation to preserve my image, invalid-type/decode errors distinguished and valid replacement to clear errors, so that import recovery is predictable. (N02)
+89. As a designer, I want the generated example to use the normal load/default-parameter path, so that example behavior represents the real workflow. (N03)
+90. As a designer, I want replacement to restore the existing image-derived slice/width, outset and crop defaults and refit the source, so that previous geometry does not corrupt a new image. (N04)
+91. As a designer, I want clearing the image to return to import state and remove import/crop feedback, so that the workspace resets consistently. (N05)
+92. As a designer, I want four nonnegative integer source-pixel slices normalized against opposite edges and restored dimensions, so that cut lines cannot cross. (N06)
+93. As a designer, I want captured-pointer cut-line dragging converted through current zoom to source pixels with end/cancel handling, so that numeric slices and lines stay synchronized. (N07)
+94. As a keyboard user, I want focusable cut-line sliders with bounds and directional 1-pixel/Shift-10-pixel adjustments, so that precise slicing does not depend on dragging. (N08)
+95. As a designer, I want slice reset to restore image-derived defaults without resetting unrelated parameters, so that a targeted reset stays safe. (N09)
+96. As a designer, I want automatic pixel analysis to produce normalized slices, widths and minimum center-crop settings with busy/result/error feedback, so that I can accept or manually refine detection. (N10)
+97. As a designer, I want bound border widths and independently editable unbound widths with rebinding, so that rendering width remains distinct from source slices. (N11)
+98. As a designer, I want the existing integer outset control reflected in preview and CSS, so that external border extension remains adjustable. (N12)
+99. As a designer, I want center filling to remain an explicit setting with the existing default, so that preview and CSS agree. (N13)
+100.  As a designer, I want independent horizontal and vertical stretch/repeat/round/space choices, so that preview and CSS preserve both repeat axes. (N14)
+101.  As a designer, I want center cropping with both/X/Y axes, bounded positive retained dimensions and minimum cropping, so that frequent cropping remains complete. (N15)
+102.  As a designer, I want retained-center and removed-row/column overlays with accessible explanations and tiling warnings, so that cropping consequences are visible before download. (N16)
+103.  As a designer, I want the cropped PNG to preserve selected pixels at 1:1 with correct dimensions/name and availability, so that cropping does not rescale or alter CSS slice values. (N17)
+104.  As a designer, I want a separate live border-image preview reflecting slices, widths, outset, fill and repeat axes with dimensions, so that output behavior can be inspected. (N18)
+105.  As a designer, I want all eight logical preview-size handles and existing corner keyboard steps with zoom-correct movement and fixed opposite anchors, so that stretch testing remains precise. (N19)
+106.  As a designer, I want source pan, wheel/trackpad/touch zoom and transient scale feedback without changing export data, so that inspection stays separate from editing. (N20)
+107.  As a designer, I want independent preview viewing and reset with resize/pan guards and compensation cleanup, so that preview gestures remain predictable. (N21)
+108.  As a designer, I want both stages to fit initially and react to available-size changes until manual takeover, with replacement/reset restoring fit, so that content remains accessible. (N22)
+109.  As a designer, I want source/preview boundary controls and the existing six themed checker/solid palettes to affect viewing only, so that exports preserve original image data. (N23)
+110.  As a developer, I want longhand/shorthand CSS with compact four-side values, a replaceable image path, valid widths, fill, outset and repeat axes, so that the styling is ready to reuse. (N24)
+111.  As a developer, I want CSS copying with a temporary success indication, so that clipboard actions are clear. (N25)
+112.  As a developer, I want focusable/selectable code with code-only Command/Control+A and image-path guidance, so that code selection does not spread to the whole page. (N26)
+113.  As a returning user, I want explicit durable saving of source bytes and all current slice/render/crop/code-writing settings with save disabled when empty, so that projects are complete. (N27)
+114.  As a returning user, I want named record fallback, byte-size display and normalized restoration of current/older incomplete records and images, so that saved work remains usable. (N28)
+115.  As a returning user, I want single-record deletion to refresh only that record's list entry while preserving other records and the current editor, so that deletion remains targeted. (N29)
+
+## Implementation Decisions
+
+### Scope and source of truth
+
+- Implement the home, shared interface and four public tools: URL and QR, frame animation, Lottie preview and nine-patch. Use “URL 与二维码” consistently in the Chinese interface. Keep the approved F home ordering and direct-entry organization.
+- The final reviewed F behavior and the feature-retention criteria jointly define the result. Historical “missing” prototype coverage is not permission to omit functionality. Preserve U01–U25, F01–F20, L01–L20, N01–N29 and G01–G09, subject only to the explicit overrides below: 103 existing groups in this implementation scope.
+- D01–D12 name reviewed interface decisions, not additional historical feature groups. The 115 stories cover both kinds of requirement.
+- Reuse existing parsing, QR codecs, image/crop calculations, animation engines, atlas optimization, archives, resource metrics and storage contracts. Build maintainable production components from these contracts; retain the prototype as a separate design reference.
+- Preserve unrelated user changes. This specification does not authorize a release, deployment, automatic commit or destructive cleanup.
+
+### Shared interface and color
+
+- Keep compact page headers, recognizable titles, left-side return navigation, a public-only tool switcher, correct GitHub icon/link and three-way theme selection. Navigation is not a persistent management sidebar.
+- Keep navigation menus above floating canvas controls and active modals above the header. Align header/canvas controls and bound popovers to the viewport so controls do not overlap or become obscured.
+- Use existing semantic component conventions for primary, secondary, outline, ghost and destructive actions. Icon-only actions have no visible border; hover, selection, disabled and focus states remain visible. Theme actions remain equal squares with centered icons and soft selected fills.
+- Promote the reviewed blue-primary, soft-blue-secondary, green-success, red-error, amber-warning and cyan-blue-information palette into the production light/dark theme. Keep raw palette values centralized and component styling semantic. The final interface must not depend on a development-only palette gate.
+- Keep status text/icons alongside hue. Confirmed copy feedback may briefly switch a primary action to a readable success fill. Classify outcomes from explicit state, not translated message substrings. Distinguish nonfatal warnings and informational no-op results from failures.
+- Preserve compact controls and the absence of decorative shadows/hover displacement. The reviewed semantic color, compact layout and floating task-panel rules supersede conflicting old monochrome, single-hue and spacious-form rules for the redesigned public interface. Record the reconciled production design guidance during implementation.
+- Keep desktop working panels narrow, approximately the reviewed 240-pixel parameter width, with internal scrolling where needed. Mobile must retain imports, core parameters, preview, output and record access through the reviewed tabs/stacking; precise slicing and multi-frame ordering remain desktop-first, not removed on phones.
+
+### URL and QR layout and exports
+
+- On desktop, input and QR panels share the first row and stretch to equal height, with the QR centered. The editable tree spans the second row; records span the third. At compact/mobile widths, stack the complete sections without page-wide horizontal overflow.
+- Preserve the actual recursive editable tree and its ancestor connectors; do not add a separate flat parsed-result summary. Tightening applies to item spacing, not the title or outer section: ordinary rows have the reviewed 20-pixel minimum, root rows 24 pixels and editing rows may grow. Long values wrap or remain reachable in the tree's scrolling region; controls remain usable.
+- Keep original-input copying distinct from serialized root/subtree copying. Keep all insertion locations, invalid-drop protection, deletion confirmation, variables and conditional code copying.
+- Generate the existing 320-pixel, correction-level-L QR PNG with 400-millisecond debounce and stale-result protection. Page download is pure QR. The enlarged dialog directly downloads the existing combined image for URL content; plain text falls back to pure QR. Remove the download dropdown and its menu-specific close behavior by explicit user decision, while retaining availability, busy protection, retryable errors and both export formats.
+- Preserve combined-image output geometry: 1400-pixel width, 500-pixel QR, wrapped tree text, a 300-line drawing limit and an omission indication. Keep existing output naming and encoding behavior.
+- Save always creates a new snapshot. Updating a selected record remains explicit; typing does not overwrite saved content. Keep original naming, preview, selection/deselection and rename/delete semantics.
+- Preserve current, old-text and bare share hashes, debounced history replacement and clearing. Start empty when no share content exists; the OAuth example is explicit.
+
+### Frame-animation workspace
+
+- Use the reviewed narrow left parameter panel, main canvas, full-width bottom sequence and a short floating playback/progress control immediately above it. The sequence occupies the left-panel area too; its collapse releases canvas space and controls stay reachable.
+- Keep playback progress visible and seekable. Seeking pauses and may inspect any selected frame without rewriting the configured playback/export range; resumed playback obeys that range.
+- Explicit F06 override: omit playback-following thumbnail highlighting and automatic following. Keep user selection, focus, drag targets, thumbnails, metadata, sorting and click-to-pause/seek. The current frame remains identifiable through the progress controls.
+- Preserve append/natural-sort rules, selection, common-transparent-edge cropping and complete export options. Keep PNG sprite output at source-derived resolution, centered smaller frames and linked rows/columns; preserve CSS/Less/SCSS generation. No GIF/video exporter is introduced.
+- Preserve defaults and bounds: 12 FPS initially, 1–60 FPS slider, 1–120 numeric input including duration-derived fractions, inclusive playback/export range, forward/reverse/ping-pong and infinite or 1–999 loops. Keep existing crop alpha thresholds and reset/error behavior.
+
+### Lottie workspace
+
+- Use the reviewed narrow left task panel with atlas optimization, playback settings and project-record tabs. Resource comparison and the primary ZIP export remain reachable below the task content. Switching tabs preserves edits and focus behavior.
+- Keep project import/metadata and viewing controls organized in the shared top toolbar. Keep the short playback control on the canvas and the atlas in a separate floating preview. Scrollable asset messages belong in the parameter-panel footer; failure details expand appropriately and mobile has a discoverable message entry.
+- Preserve ZIP/directory import constraints, all existing asset resolution and both rendering libraries/renderers. Do not add automatic remote-image retrieval or unsupported loose JSON import.
+- Preserve fractional seeking at 0.01-frame steps, the existing speed presets, direction, loop and fitting modes. Seeking pauses. Main and atlas views remain independent.
+- Preserve packing controls/defaults: 1024/2048/4096 maximum size; padding 0–32, default 2; extrusion 0–8, default 1; rotation off, trimming on, deduplication on; advanced power-of-two and square off; alpha threshold 0–255, default 1. Keep animated-image exclusions and increased-resource warnings.
+- Preview the current valid optimization result, use original assets while rebuilding or disabled, and export the existing rewritten animation, numbered atlases and required original assets as a valid ZIP. Resource metrics must describe the same result, with estimated memory clearly distinguished from measured file bytes.
+
+### Nine-patch workspace
+
+- Keep the reviewed narrow left panel and visible source canvas. Parameter order is slice margins, frequent center cropping, then rendering settings. CSS and records remain available; copy, save and cropped-PNG actions remain reachable.
+- Use an overlaid stretch-preview HUD, initially in the lower-right working area, with title dragging, eight outer resizing handles, bounded positioning and its own reset. Support keyboard movement/resizing, pointer end/cancel/lost-capture cleanup and viewport clamping.
+- HUD geometry changes the observation window only. Preserve independent inner logical stretch dimensions of 96–720 by 64–480 pixels, eight logical sizing handles and corner keyboard increments of 8/Shift-40 pixels. HUD movement/resizing uses the reviewed 8/Shift-32-pixel keyboard steps. Keep HUD geometry and view transforms out of export and saved parameter data.
+- Keep source-view reset, preview-view reset and HUD reset clearly distinct. Preserve source-pixel cut-line dragging and keyboard increments of 1/Shift-10 pixels, invalid-edge clamping, image-derived defaults and the existing automatic analysis behavior.
+- Preserve bound/unbound widths, 0–200-pixel independent widths, 0–100-pixel outset, fill and independent stretch/repeat/round/space axes. Preserve both-axis/X/Y center cropping and exact 1:1 PNG output. Center-crop overlays and tiling warnings remain visible.
+- Preserve the existing source-based border-image renderer and longhand/shorthand CSS generator. Center-crop output is a separate pixel export; do not claim that the renderer already uses a regenerated cropped bitmap. CSS is the existing callable nine-patch code format; no SCSS/Less/Tailwind generator is added by inference from old metadata.
+
+### Data, runtime and compatibility
+
+- Production interfaces continue using the existing ToolStore, IndexedDB identities, payloads, Blob archives, metadata normalization and existing legacy URL/QR conversion. Do not use the disposable prototype database or migrate its records into production. This is preservation of existing compatibility, not a new storage schema or backend migration.
+- Keep existing tool-specific record behavior: URL explicit snapshots/update and confirmations; frame/Lottie named full-project archives; nine-patch source bytes and parameter restoration with targeted deletion. Do not silently add destructive confirmations, autosave or new persistence fields that change these contracts.
+- Maintain three-way theme persistence and pre-paint application, object-URL cleanup, asynchronous result ownership and the existing busy guards. View backgrounds, zoom/pan, HUD geometry and source-boundary visibility must not modify output pixels or export parameters except for the already defined pixel-style output setting.
+- Preserve explicit route identities, legacy redirect/fallback behavior, SSG hydration-data alignment, per-route SEO and existing browser/Safari web-app metadata. Keep the router compatibility shim and browser-only storage hydration guards.
+- The final production interface has no prototype switcher, variant dependency, disposable-record adapter or development-only theme requirement. Retain reproducible prototype references separately without overwriting unrelated working changes.
+
+## Testing Decisions
+
+### Confirmed test boundary
+
+The user confirmed the following boundary on 2026-10-20: test primarily through the actual production pages for input, editing, preview, download, records and refresh; reuse existing parser, stage and record tests; additionally verify SSG hydration, legacy-record compatibility, light/dark themes and phone operation.
+
+Use one highest-level acceptance seam: the product page in a browser, using real fixtures, controls, exported artifacts and persisted records. Exercise each tool through this seam rather than building a parallel mocked UI or exposing new engine APIs for testing. Existing focused module tests remain useful below it.
+
+### Test quality and prior art
+
+- Assert external behavior and user-visible state transitions. Do not assert private hook state, CSS-class strings, copied prototype handlers or incidental component hierarchy.
+- Reuse existing URL parse/serialize/tree-movement tests, stage fit/zoom tests, legacy-record parsing/conversion tests, frame/Lottie archive round trips, Lottie asset-resolution/animated-image/resource-metric tests and nine-patch slice-bound tests.
+- A repository browser acceptance suite is not yet established. Reuse available browser automation tooling where practical; add a small product-page harness only if required. A new public processing interface solely to make tests easy is not part of this plan.
+- Use isolated acceptance storage and deliberately seeded legacy fixtures. Never clear or mutate the user's actual saved records. Reload and old-record tests must exercise the real production storage contract, not the prototype adapter.
+- Compare exports by decoding the PNG, inspecting dimensions/pixels, reading generated code and unpacking project archives as appropriate. Button activation and filename presence alone do not prove export correctness.
+
+### Acceptance matrix
+
+| Area                 | Required observable proof                                                                                                                                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation and scope | Exactly four public home/menu entries; hidden entries absent; direct hidden routes, old aliases and unknown-route fallback still work.                                                                                 |
+| Themes and feedback  | System/light/dark persist and respond correctly; semantic hierarchy is visible; ordinary text contrast is at least 4.5:1 and input/focus boundaries are distinguishable; status text/icons accompany color.            |
+| URL tree             | Nested OAuth and hash fixtures, repeated/empty/flag fields, malformed escapes, edits, valid/invalid subtree drops, variables, copying, commit/cancel and inserted-key focus.                                           |
+| QR and sharing       | File/drop/paste recognition, plain text, stale-result clearing, QR preview, both direct export formats with decoded content, busy/error recovery and current/legacy share hashes.                                      |
+| Frame animation      | File/ZIP/directory imports, append/sort, selection/reorder, crop preview/apply/cancel, range/direction/loop/timing, seeking without selection mutation, source-resolution sprite output and all existing code formats. |
+| Lottie               | Import/asset failures, both libraries/renderers, fractional seek, playback options, optimization controls/exclusions, metrics, independent atlas view and a usable exported project archive.                           |
+| Nine-patch           | Slice normalization and gestures/keyboard, automatic analysis, all render/crop options, exact cropped pixels/CSS, inner preview sizing, HUD movement/resizing/clamping and distinct resets without output mutation.    |
+| Records              | Existing and newly saved URL/frame/Lottie/nine-patch projects survive reload, restore bytes/settings and preserve delete/update semantics; unavailable storage does not block the main tool.                           |
+| Responsive and input | Wide/compact desktops plus approximately 390-pixel and 320-pixel phone widths; keyboard focus, text-edit shortcut guards, touch/pointer gestures and reachable controls/messages.                                      |
+| SSG and metadata     | Built public and preserved direct routes render correct metadata and one hydrated interface without duplicate content or hydration errors; manifest/icons/Safari standalone remain valid.                              |
+
+### Completion and evidence
+
+- Maintain a behavior checklist mapping all 103 in-scope baseline IDs and D01–D12 to acceptance results, including the explicit F06/U17 overrides. Unrun checks remain unrun.
+- Run repository lint, type checking, tests and the production SSG build. After actual UI implementation, inspect representative light/dark desktop/mobile views and actual browser behavior, including Safari web-app launching where applicable.
+- Preserve current functional ranges and export contracts rather than mirroring implementation details in tests. Add tests only at behavior seams affected by the change; do not broaden unchanged algorithm testing without a specific reason.
+- The prototype's source coverage, successful builds, earlier screenshots, mathematical token contrast and scratch geometry checks are design evidence, not completion of this production matrix. Recent automated browser observation was unavailable; the corresponding runtime checks are still pending.
+- Completion requires the production pages to implement the reviewed design, every in-scope retention item to be verified, actual artifacts/record compatibility to be checked, and no material unexplained regression. An unresolved material acceptance item remains blocking, not passed. A code review must check both repository standards and this specification.
+
+## Out of Scope
+
+- Redesigning or newly reviewing CSS shine and font toolkit, exposing hidden navigation entries, or deleting their existing direct-route functionality.
+- New tools, new import/export formats, GIF/video output, new nine-patch code generators or automatic fetching of remote Lottie assets.
+- Backend/admin work, accounts, authentication, cloud synchronization, new HTTP storage contracts or a new database schema/migration system. Existing local legacy-record compatibility remains in scope.
+- Desktop wrapping, a framework/router/build-system migration, an offline service worker or an expanded installation promise.
+- New analytics, banners or promotional emphasis on local processing, data location or non-upload behavior.
+- Unrelated cleanup, rewriting processing engines for styling, automatic publication/release/deployment, or overwriting existing user changes.
+
+## Further Notes
+
+- Prototype review was explicitly completed on 2026-10-20. The test boundary was subsequently confirmed during specification preparation. Local tracker status is `ready-for-agent`; implementation tickets have not yet been created by this specification step.
+- The companion source index points to the accepted prototype, historical retention baseline, current mapping, color review and verification limits. Historical prototype coverage must not be read as the current product scope.
+- Preserve the prototype as a primary design reference. Production implementation should preserve existing business behavior and real data compatibility while replacing its interface. The specification does not claim that the disposable prototype is already production-ready.
+- Subsequent task decomposition should keep complete, independently demonstrable user workflows and explicit blocking dependencies. Do not turn this specification into one ticket per visual layer.

@@ -9,8 +9,10 @@ export default antfu(
     formatters: {
       markdown: true,
     },
+    // Preserve historical design artifacts verbatim; production source still uses the full lint rules.
+    // 历史设计资料按原样保留；生产源码继续使用完整 lint 规则。
     // drizzle-kit 生成的迁移与快照是构建产物，不做格式检查
-    ignores: ['apps/server/drizzle/**', 'apps/server/drizzle-d1/**'],
+    ignores: ['.scratch/**', 'apps/server/drizzle/**', 'apps/server/drizzle-d1/**'],
   },
   {
     // shadcn/ui 组件文件会同时导出组件与 variants 常量

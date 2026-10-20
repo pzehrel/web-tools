@@ -1,0 +1,920 @@
+{
+  "date": "2026-10-18",
+  "mapping_ids": 128,
+  "tool_groups_with_UI_entries": 119,
+  "shared_groups": 9,
+  "mapping_baseline_ID_parity": true,
+  "product_source_hashes_unchanged": 67,
+  "product_source_mismatches": [],
+  "original_snapshot": "source-snapshot.json",
+  "record_database": "web-tools-ui-PROTOTYPE-wipe-me",
+  "production_records_accessed": false,
+  "repository_checks": {
+    "pnpm lint": "passed",
+    "pnpm typecheck": "passed",
+    "pnpm build": "passed",
+    "targeted prototype ESLint": {
+      "errors": 0,
+      "inherited_warnings": 13
+    },
+    "build_warnings": [
+      "existing lottie-web eval",
+      "existing chunk size",
+      "existing SSG Navigate"
+    ]
+  },
+  "browser_views": 28,
+  "browser_viewports": [
+    1440,
+    390
+  ],
+  "browser_themes": [
+    "light",
+    "dark"
+  ],
+  "browser_page_errors": [],
+  "limits": "See prototype-current.md; entry coverage is not exhaustive runtime acceptance.",
+  "local_markdown_links_checked": 905,
+  "broken_local_links": [],
+  "current_mapping_translation_ID_parity": true,
+  "production_prototype_marker_leaks": [],
+  "extra_browser_checks": [
+    "system theme change and refresh persistence",
+    "home four visible tools and GitHub link",
+    "WOFF2 WASM subset download",
+    "frame panel content-fit after final SCSS change"
+  ],
+  "lottie_task_tabs_review": {
+    "date": "2026-10-18",
+    "approved_organization": "atlas/playback/records tabs with persistent comparison/export",
+    "browser_views": 12,
+    "page_errors": [],
+    "checks": [
+      "parameter and advanced-state retention across tabs",
+      "roving tab keyboard focus",
+      "pinned metrics/export while scrolling",
+      "named record save/refresh/load/delete",
+      "actual ZIP from Project records tab",
+      "mobile canvas/atlas/playback"
+    ],
+    "export_entries": [
+      "data.json",
+      "atlas-1.png"
+    ],
+    "product_sources_unchanged": 67,
+    "repository_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted Lottie prototype ESLint": {
+        "errors": 0,
+        "inherited_warnings": 6
+      },
+      "production_prototype_markers": "absent",
+      "bilingual_mapping_ID_parity": "128 IDs matched",
+      "local_links_checked": 903
+    }
+  },
+  "lottie_toolbar_review": {
+    "date": "2026-10-18",
+    "user_feedback": "remove misplaced project status; organize toolbar and atlas placement",
+    "viewport_widths": [
+      1440,
+      1024,
+      768,
+      701,
+      700,
+      390,
+      320
+    ],
+    "screenshots": 10,
+    "page_errors": [],
+    "checks": [
+      "all toolbar buttons share centerline",
+      "atlas anchored 8px below toolbar and aligned to right edge",
+      "atlas independent zoom/reset and close",
+      "desktop atlas state does not overlay mobile canvas/params",
+      "background and bounds toggles and main view reset",
+      "task tabs, named-record refresh/recovery/deletion and real ZIP",
+      "missing-image warning placement and valid-project recovery"
+    ],
+    "product_sources_unchanged": 67,
+    "repository_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted Lottie prototype ESLint": {
+        "errors": 0,
+        "inherited_warnings": 6
+      },
+      "production_prototype_markers": "absent",
+      "mapping_ID_parity": "128 IDs matched",
+      "local_links_checked": 907,
+      "zip_entries": [
+        "data.json",
+        "atlas-1.png"
+      ]
+    }
+  },
+  "lottie_left_panel_review": {
+    "date": "2026-10-18",
+    "user_request": "left panel and shorter relocated playback dock",
+    "viewport_widths": [
+      1440,
+      1024,
+      768,
+      701,
+      700,
+      390,
+      320
+    ],
+    "screenshots": 10,
+    "desktop_max_playback_width": 440,
+    "mobile_max_playback_width": 320,
+    "page_errors": [],
+    "checks": [
+      "left panel and right workspace alignment",
+      "animation fits unobscured available preview",
+      "playback below preview and centered",
+      "seek/play/pause/view reset",
+      "atlas and mobile views reachable",
+      "mobile export visible"
+    ],
+    "repository_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted Lottie prototype ESLint": {
+        "errors": 0,
+        "inherited_warnings": 6
+      },
+      "production_prototype_markers": "absent",
+      "bilingual_mapping_ids": 128,
+      "valid_local_links": 911,
+      "unchanged_product_sources": 67
+    }
+  },
+  "lottie_narrow_panel_review": {
+    "date": "2026-10-18",
+    "desktop_width_before": 280,
+    "desktop_width_after": 240,
+    "viewport_widths": [
+      1440,
+      1024,
+      701,
+      390
+    ],
+    "screenshots": 8,
+    "page_errors": [],
+    "checks": [
+      "all task tabs and metrics readable",
+      "pinned export and advanced controls reachable",
+      "workspace toolbar and playback follow panel width",
+      "mobile panel remains responsive"
+    ],
+    "repository_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "production_prototype_markers": "absent",
+      "bilingual_mapping_ids": 128,
+      "valid_local_links": 914,
+      "unchanged_product_sources": 67
+    }
+  },
+  "shared_header_bugfix": {
+    "date": "2026-10-18",
+    "repro": ".playwright-cli/prototype-header-repro.cjs",
+    "before": "URL and partial frames menu hit canvas toolbar",
+    "after": "all menu links unobstructed",
+    "scope": "shared F header and SCSS only",
+    "widths": [
+      1440,
+      390,
+      320
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "tool_views": 36,
+    "checks": [
+      "all tool menu rows receive pointer hits",
+      "left back action",
+      "GitHub brand SVG and repository target",
+      "menu within narrow viewport",
+      "real route switch and return home",
+      "crop modal remains above header"
+    ],
+    "repository_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted shared prototype ESLint": "0 errors, 0 warnings",
+      "production_prototype_markers": "absent",
+      "bilingual_mapping_ids": 128,
+      "valid_local_links": 917,
+      "unchanged_product_sources": 67
+    },
+    "page_errors": []
+  },
+  "lottie_messages_review": {
+    "date": "2026-10-18",
+    "placement": "panel footer above resource results",
+    "viewports": [
+      [
+        1440,
+        900
+      ],
+      [
+        390,
+        844
+      ],
+      [
+        320,
+        667
+      ]
+    ],
+    "screenshots": 12,
+    "stress_warning_count": 14,
+    "page_errors": [],
+    "checks": [
+      "complete warnings scroll and wrap",
+      "warning/error defaults and manual disclosure",
+      "state preserved across task tabs",
+      "mobile jump to parameters and expanded details",
+      "export remains visible",
+      "hard failure and valid-project recovery"
+    ],
+    "repository_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted Lottie prototype ESLint": {
+        "errors": 0,
+        "inherited_warnings": 6
+      },
+      "production_prototype_markers": "absent",
+      "bilingual_mapping_ids": 128,
+      "valid_local_links": 920,
+      "unchanged_product_sources": 67
+    }
+  },
+  "frames_left_layout_review": {
+    "date": "2026-10-18",
+    "layout": "240px left parameter panel, unified right toolbar and canvas, bottom material sequence and compact playback",
+    "viewports": [
+      1440,
+      1024,
+      768,
+      701,
+      700,
+      390,
+      320
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "panel_views": 56,
+    "screenshots": 40,
+    "page_errors": [],
+    "checks": [
+      "ZIP append and natural sort",
+      "native desktop drag reorder",
+      "selection and disabled outputs",
+      "crop cancel and apply",
+      "FPS/duration conversion",
+      "range/direction/finite loops",
+      "sprite rows and columns",
+      "CSS/Less/SCSS output",
+      "cropped project refresh restore and deletion",
+      "keyboard stepping preserves variant",
+      "background and view reset",
+      "sequence collapse",
+      "PNG export 336x600",
+      "no page or toolbar overflow",
+      "canvas fit clears material strip",
+      "all four panels and persistent export reachable"
+    ],
+    "boundaries": [
+      "real touch drag reorder not certified",
+      "all image format combinations not rerun",
+      "production implementation and data migration deferred"
+    ],
+    "repository_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted frame prototype ESLint": {
+        "errors": 0,
+        "inherited_warnings": 1
+      },
+      "unchanged_product_sources": 67,
+      "production_prototype_markers": "absent",
+      "bilingual_mapping_ids": 128,
+      "valid_local_links": 941
+    }
+  },
+  "frames_progress_review": {
+    "date": "2026-10-18",
+    "viewports": [
+      1440,
+      701,
+      390,
+      320
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "screenshots": 8,
+    "page_errors": [],
+    "checks": [
+      "seeking updates actual canvas and frame label",
+      "playback updates slider",
+      "pointer scrubbing pauses playback",
+      "keyboard Home/End",
+      "selection updates seek bounds",
+      "seeking preserves configured playback/export range",
+      "resumed playback respects range",
+      "progress available with sequence collapsed and in mobile views",
+      "empty/single-frame/clear disable seeking",
+      "compact controls have no horizontal overflow"
+    ],
+    "repository_checks": {
+      "pnpm lint": "passed after documentation formatting fix",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted frame prototype ESLint": {
+        "errors": 0,
+        "inherited_warnings": 1
+      },
+      "unchanged_product_sources": 67,
+      "bilingual_mapping_ids": 128,
+      "production_prototype_markers": "absent"
+    }
+  },
+  "frames_sequence_placement_review": {
+    "date": "2026-10-18",
+    "placement": "right workspace below top toolbar; canvas fitted beneath measured strip height",
+    "playback_highlighting": "removed at user request; selection and drag target styling retained",
+    "viewports": [
+      1440,
+      701,
+      390,
+      320
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "screenshots": 12,
+    "page_errors": [],
+    "checks": [
+      "thumbnail classes remain static during playback",
+      "thumbnail click pauses and seeks",
+      "drag reorder and natural sort",
+      "selection and disabled output",
+      "transparent-edge crop applies",
+      "toolbar and sequence alignment",
+      "canvas fit clears top strip",
+      "collapse frees canvas height",
+      "mobile materials remain reachable"
+    ],
+    "repository_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted frame prototype ESLint": {
+        "errors": 0,
+        "inherited_warnings": 1
+      },
+      "unchanged_product_sources": 67,
+      "bilingual_mapping_ids": 128,
+      "production_prototype_markers": "absent"
+    }
+  },
+  "frames_bottom_sequence_review": {
+    "date": "2026-10-18",
+    "placement": "material sequence at bottom of right workspace, compact playback immediately above with 8px gap; mobile Materials keeps playback above sequence",
+    "automatic_playback_highlighting": false,
+    "viewports": [
+      1440,
+      701,
+      390,
+      320
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "screenshots": 12,
+    "page_errors": [],
+    "checks": [
+      "sequence bottom alignment",
+      "playback above sequence after height changes",
+      "canvas fits above playback and material strip",
+      "collapse frees canvas and lowers playback",
+      "mobile material view order",
+      "static thumbnails during playback",
+      "thumbnail seek",
+      "drag reorder and sort",
+      "selection",
+      "crop"
+    ],
+    "repository_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted frame prototype ESLint": {
+        "errors": 0,
+        "inherited_warnings": 1
+      },
+      "unchanged_product_sources": 67,
+      "bilingual_mapping_ids": 128,
+      "production_prototype_markers": "absent"
+    }
+  },
+  "frames_fullwidth_sequence_review": {
+    "date": "2026-10-18",
+    "placement": "bottom sequence spans viewport width with 12px outer gutters; parameter panel ends above it; playback remains above sequence",
+    "viewports": [
+      1440,
+      701,
+      390,
+      320
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "panel_views": 32,
+    "screenshots": 8,
+    "page_errors": [],
+    "checks": [
+      "sequence spans left panel area",
+      "all parameter tabs clear bottom sequence",
+      "persistent export remains within panel",
+      "progress remains above sequence",
+      "thumbnail seeking",
+      "no horizontal page overflow"
+    ],
+    "repository_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "unchanged_product_sources": 67,
+      "bilingual_mapping_ids": 128,
+      "production_prototype_markers": "absent"
+    }
+  },
+  "nine_left_layout_revision": {
+    "date": "2026-10-18",
+    "layout": "240px left parameters, unified top toolbar, lower-right independent preview, expanded rendering and separate center-crop controls, persistent output footer",
+    "additional_UI": [
+      "numeric preview width and height with existing 96..720 x 64..480 clamping",
+      "resize handles visible before hover",
+      "distinct source and preview view-reset labels"
+    ],
+    "browser_verification": {
+      "status": "not-run",
+      "reason": "automatic browser access blocked by security policy; no alternate browser access attempted",
+      "screenshots": 0,
+      "interaction_checks": "not rerun"
+    },
+    "source_checks": {
+      "existing_pre_render_logic": "byte-identical to pre-revision prototype",
+      "unchanged_product_sources": 67,
+      "bilingual_mapping_ids": 128,
+      "valid_local_links": 948
+    },
+    "compiler_checks": {
+      "targeted nine prototype ESLint": "0 errors, 0 warnings",
+      "standalone_SCSS": "passed",
+      "isolated_prototype_bundle": {
+        "status": "passed without writing output",
+        "javascript_bytes": 177916,
+        "css_bytes": 9388
+      },
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "production_prototype_markers": "absent"
+    }
+  },
+  "nine_hud_review": {
+    "date": "2026-10-18",
+    "features": [
+      "title-bar pointer and keyboard movement",
+      "eight outer resize handles; keyboard on lower-right handle",
+      "pointer capture with end/cancel/lost-capture handling",
+      "inputs and buttons do not initiate HUD movement",
+      "viewport clamp after resize",
+      "independent HUD layout reset",
+      "full canvas behind overlay; no fixed preview slot",
+      "logical content dimensions and gestures remain independent"
+    ],
+    "geometry_proof": {
+      "script": ".scratch/web-ui-redesign/check-hud-geometry.mjs",
+      "passed": true,
+      "cases": 135,
+      "checks": [
+        "move preserves size",
+        "opposite resize edge anchored",
+        "large pointer deltas constrained",
+        "mobile bounds",
+        "viewport smaller than nominal minimum",
+        "inputs not mutated"
+      ]
+    },
+    "browser_verification": {
+      "status": "not-run",
+      "reason": "previous automatic browser security policy denial remains in effect; no alternate browser access attempted",
+      "screenshots": 0
+    },
+    "source_checks": {
+      "existing_NineFullPrototype_processing_logic": "unchanged",
+      "unchanged_product_sources": 67,
+      "bilingual_mapping_ids": 128,
+      "valid_local_links": 949
+    },
+    "compiler_checks": {
+      "targeted prototype ESLint": "0 errors, 0 warnings",
+      "isolated_prototype_bundle": {
+        "status": "passed without writing output",
+        "javascript_bytes": 183932,
+        "css_bytes": 10988
+      },
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "production_prototype_markers": "absent"
+    }
+  },
+  "borderless_icon_actions_review": {
+    "date": "2026-10-18",
+    "scope": "shared prototype styles across home and six tools",
+    "changes": [
+      "icon-sized Button controls remove borders",
+      "labeled native SVG icon actions remove borders",
+      "theme group outline and internal separators removed",
+      "icon-only narrow toolbar imports follow the same rule",
+      "Lottie clear action declares icon size"
+    ],
+    "preserved": [
+      "hover fills",
+      "selected fills",
+      "disabled states",
+      "keyboard focus indicators",
+      "form and swatch borders",
+      "tool processing behavior"
+    ],
+    "source_audit": {
+      "icon_only_Button_nodes": 34,
+      "missing_icon_size_fixed": 1,
+      "unchanged_product_sources": 67,
+      "bilingual_mapping_ids": 128
+    },
+    "compiler_checks": {
+      "all_prototype_entries_bundle": "passed without writing output",
+      "bundle_assets": 5,
+      "bundle_css_bytes": 115246,
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted Lottie ESLint": {
+        "errors": 0,
+        "inherited_warnings": 6
+      },
+      "production_prototype_markers": "absent"
+    },
+    "browser_verification": {
+      "status": "not-run",
+      "reason": "previous browser security policy denial; no alternate browser access attempted",
+      "screenshots": 0
+    }
+  },
+  "theme_icon_style_fix": {
+    "date": "2026-10-18",
+    "scope": "shared prototype theme switcher",
+    "changes": [
+      "remove competing 26/23/22 px width overrides",
+      "use equal 28 x 28 px buttons with centered 16 px icons",
+      "use secondary fill instead of primary fill for selection"
+    ],
+    "compiler_checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "all_prototype_entries_bundle": "passed without writing output",
+      "bundle_assets": 5,
+      "bundle_css_bytes": 115170
+    },
+    "browser_verification": {
+      "status": "not-run",
+      "reason": "previous browser security policy denial; no alternate browser access attempted",
+      "screenshots": 0
+    }
+  },
+  "url_workspace_review": {
+    "date": "2026-10-19",
+    "baseline_groups": 25,
+    "changes": [
+      "main column combines input and recursive tree",
+      "264 px QR and records column",
+      "independent desktop tree and record scrolling; stacked mobile sections",
+      "separate image recognition and QR enlargement buttons",
+      "explicit root insertion, original copying and variable code copying",
+      "QR errors stay in QR panel"
+    ],
+    "source_audit": {
+      "main_handlers_identical_to_product_and_previous_prototype": true,
+      "unchanged_interaction_components": 13,
+      "unchanged_product_sources": 67,
+      "all_baseline_groups_have_entries": true,
+      "remaining_deferred_compatibility": "U23 production records and legacy migration; prototype uses isolated durable storage",
+      "U24_share_hash": "wired",
+      "U25_initial_empty_state": "wired"
+    },
+    "checks": {
+      "existing_url_tree_tests": {
+        "passed": 37,
+        "failed": 0
+      },
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted URL ESLint": {
+        "errors": 0,
+        "inherited_warnings": 3
+      },
+      "all_prototype_entries_bundle": {
+        "status": "passed without writing output",
+        "assets": 5,
+        "css_bytes": 126539
+      },
+      "bilingual_mapping_ids": 128,
+      "local_links_checked": 296,
+      "production_prototype_markers": "absent"
+    },
+    "browser_verification": {
+      "status": "not-run",
+      "reason": "previous browser security policy denial; no alternate access attempted",
+      "screenshots": 0
+    },
+    "review_document": "url-review.md",
+    "review_document_zh_CN": "url-review.zh-CN.md",
+    "user_verdict": "rejected; previous layout preferred"
+  },
+  "url_workspace_rollback": {
+    "date": "2026-10-19",
+    "component_matches_pre_review_backup": true,
+    "shared_icon_and_theme_styles": "preserved",
+    "dedicated_review_stylesheet": "archived and removed from active imports",
+    "feature_gap_audit": "retained; U23 legacy migration remains deferred",
+    "browser_verification": "not-run; previous browser policy restriction",
+    "checks": {
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "exact_backup_comparison": "passed",
+      "current_local_links": "passed"
+    }
+  },
+  "url_equal_height_row": {
+    "date": "2026-10-19",
+    "user_request": "Input and QR on the same horizontal row, equal heights",
+    "changes": [
+      "shared desktop grid row for input and QR",
+      "matching 28 px headers, minimum 188 px content areas and 30 px action areas",
+      "tree and records on the second row",
+      "stacked sections at 800 px or narrower"
+    ],
+    "preservation": "Only the main layout class changed in URL TSX; every handler and control retained",
+    "checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "all_prototype_entries_bundle": {
+        "status": "passed without output files",
+        "assets": 5,
+        "css_bytes": 117963
+      }
+    },
+    "browser_verification": {
+      "status": "not-run",
+      "reason": "previous browser security policy restriction; no alternate access attempted"
+    }
+  },
+  "url_full_width_tree_and_records": {
+    "date": "2026-10-19",
+    "layout": [
+      "row 1: equal-height input and QR",
+      "row 2: tree spans both columns",
+      "row 3: records span both columns"
+    ],
+    "behavior_changes": "none; SCSS grid placement only",
+    "checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "shared prototype SCSS": "compiled in memory",
+      "git diff --check": "passed"
+    },
+    "browser_verification": "not-run; previous browser security policy restriction"
+  },
+  "url_qr_centering_fix": {
+    "date": "2026-10-19",
+    "cause": "Grid child retained vertical align-self but lacked horizontal justify-self",
+    "change": "justify-self: center on QR preview/upload area",
+    "checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "shared prototype SCSS": "compiled in memory"
+    },
+    "browser_verification": "not-run; prior browser security policy restriction"
+  },
+  "url_tree_vertical_density": {
+    "date": "2026-10-19",
+    "changes": {
+      "minimum_field_row_px": 24,
+      "minimum_root_row_px": 28,
+      "header_vertical_padding_px": 6,
+      "body_vertical_padding_px": 4,
+      "tree_to_code_gap_px": 8
+    },
+    "preserved": [
+      "24 px row action buttons",
+      "26 px root action buttons",
+      "wrapping and growing rows",
+      "all URL handlers and controls",
+      "current page layout"
+    ],
+    "checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "shared prototype SCSS": "compiled in memory"
+    },
+    "browser_verification": "not-run; prior browser security policy restriction"
+  },
+  "url_direct_download_actions": {
+    "date": "2026-10-19",
+    "user_request": "Remove dropdown; page downloads QR only, enlarged dialog downloads QR with parameters",
+    "page_action": "downloadQr -> qrcode.png",
+    "dialog_action": "URL: downloadQrPreview -> qrcode-with-parameters.png; plain text: downloadQr",
+    "preserved": [
+      "both export formats",
+      "combined export renderer and filenames",
+      "availability and busy guards",
+      "error feedback and retry",
+      "all other URL handlers"
+    ],
+    "menu_behavior": "explicitly superseded by user; U17 current mapping updated",
+    "checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted URL ESLint": {
+        "errors": 0,
+        "inherited_warnings": 3
+      },
+      "all_prototype_entries_bundle": {
+        "status": "passed without output files",
+        "assets": 5,
+        "css_bytes": 118900
+      },
+      "unchanged_product_sources": 67,
+      "existing_main_handlers": "unchanged"
+    },
+    "browser_verification": "not-run; existing security policy restriction; no new download artifact verification"
+  },
+  "url_tree_item_spacing_clarification": {
+    "date": "2026-10-19",
+    "user_request": "Tighten the space between tree items specifically",
+    "changes": [
+      "restore pre-density header, help, body padding and tree-to-code gap",
+      "20 px minimum normal row and line height",
+      "zero item vertical margin/padding",
+      "match key line height, connectors and row actions to 20 px",
+      "24 px minimum root row and 22 px edit inputs"
+    ],
+    "behavior_changes": "none; only prototype item density and reversal of outer spacing changes",
+    "checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "shared prototype SCSS": "compiled in memory",
+      "git diff --check": "passed"
+    },
+    "browser_verification": "not-run; prior browser security policy restriction"
+  },
+  "global_semantic_color_review": {
+    "date": "2026-10-19",
+    "palette": {
+      "primary": "blue",
+      "secondary": "soft blue",
+      "success": "green",
+      "error": "red",
+      "warning": "amber",
+      "information": "cyan blue"
+    },
+    "scope": "shared F prototype, home and four public tool status mappings; hidden tools remain deferred",
+    "changes": [
+      "remove grayscale primary/chart overrides",
+      "centralized light/dark review tokens in index.scss",
+      "development-only Sass palette gate in Vite config",
+      "primary QR downloads and colored selected tabs",
+      "success feedback on confirmed copies and nine-patch detection",
+      "typed frame crop feedback tones",
+      "amber Lottie/material and crop warnings; red failures; informational resource text"
+    ],
+    "contrast": {
+      "method": "numeric OKLCH to linear sRGB token contrast; not browser rendering",
+      "checked_pairs": 52,
+      "minimum_core_text_ratio": 5.45,
+      "minimum_input_border_ratio": 3.07,
+      "failures": 0,
+      "limits": "excludes translucent, disabled, image and gradient states"
+    },
+    "production_isolation": {
+      "original_root_and_dark_palette_blocks": "unchanged",
+      "sass_dev_palette": "included",
+      "sass_prod_palette": "excluded",
+      "vite_serve_flag": true,
+      "vite_build_flag": false,
+      "production_prototype_markers": "absent"
+    },
+    "source_audit": {
+      "unchanged_original_audited_files": 66,
+      "intentional_audited_change": [
+        "apps/web/vite.config.ts: development Sass flag only"
+      ],
+      "product_tool_pages_and_engines": "unchanged",
+      "index_scss": "new gated review palette and semantic utility mappings; original production palette unchanged"
+    },
+    "checks": {
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "targeted public prototype ESLint": {
+        "errors": 0,
+        "inherited_warnings": 10
+      },
+      "targeted Vite config ESLint": "passed with no-ignore",
+      "all_prototype_entries_bundle": {
+        "status": "passed without output files",
+        "assets": 5,
+        "css_bytes": 119636
+      },
+      "bilingual_mapping_ids": 128,
+      "local_links_checked": 294,
+      "git diff --check": "passed"
+    },
+    "browser_verification": {
+      "status": "not-run",
+      "reason": "previous browser security policy denial; no alternate access attempted",
+      "screenshots": 0
+    },
+    "documentation": [
+      "color-system.md",
+      "color-system.zh-CN.md"
+    ]
+  },
+  "hidden_tool_entries_removed": {
+    "date": "2026-10-20",
+    "scope": "home and every shared prototype tool switcher; other navigation and sitemap audited",
+    "visible_ids": [
+      "url-qrcode",
+      "frame-animation",
+      "lottie-preview",
+      "nine-patch"
+    ],
+    "hidden_ids": [
+      "css-shine",
+      "font-toolkit"
+    ],
+    "change": "Home and switcher share the ready-only tool collection; hidden menu items and labels removed",
+    "preserved": [
+      "direct routes",
+      "hidden tool implementations",
+      "feature inventory"
+    ],
+    "checks": {
+      "registry_ready_ids": "four public tools confirmed by direct module evaluation",
+      "targeted workspace ESLint": "passed",
+      "pnpm lint": "passed",
+      "pnpm typecheck": "passed",
+      "pnpm build": "passed",
+      "all_prototype_entries_bundle": {
+        "status": "passed without output files",
+        "assets": 5,
+        "css_bytes": 119636
+      },
+      "bilingual_mapping_ids": 128,
+      "git diff --check": "passed"
+    },
+    "browser_verification": "not-run; previous browser security policy restriction"
+  }
+}

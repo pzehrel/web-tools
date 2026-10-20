@@ -1,0 +1,49 @@
+# 07: Lottie project import, playback and narrow task workspace
+
+**What to build:** Import a supported project, inspect its animation using all existing engine/render/fitting choices, seek precisely and access messages in the reviewed narrow-left workspace.
+
+**Blocked by:** [01 — Home, navigation and production themes](01-home-navigation-themes.md)
+
+**Status:** ready-for-agent
+
+**Labels:** ready-for-agent
+
+**Approval:** 2026-10-20 — human user: 可以
+
+Context: [full specification](../spec.md); [source index](../sources.md); [ticket index](../tickets.md); [Chinese translation](07-lottie-import-playback.zh-CN.md).
+
+**Primary requirements:** L01–L09, L19–L20, D10; adopts D01–D02. Establishes the task-tab layout of D09 while retaining existing optimization, comparison, export and record access until ticket 08 completes their migration.
+
+## Acceptance criteria
+
+- [ ] Single ZIP or full directory with exactly one valid data.json; nested/relative/embedded image resolution, missing/unreadable warnings and no automatic remote image fetching.
+- [ ] Preserve replacement/example/clear resets, both libraries, canvas/SVG, meet/slice, fractional progress, speed/direction/loop and main-stage gestures.
+- [ ] Unify import/metadata/view controls, keep playback short, place material messages in the left footer with warning/error expansion and phone access.
+- [ ] Verify wrapping, touch and scrollable messages, not only successful import.
+
+## Requirement acceptance checklist
+
+- [ ] **L01** — As a designer, I want a single ZIP or complete directory imported with paths and exactly one valid data.json, so that supported project packaging stays unambiguous.
+- [ ] **L02** — As a designer, I want nested/precomposition, relative and embedded image references resolved with existing formats and missing/unreadable warnings, so that project assets remain correct without automatic remote-image fetching.
+- [ ] **L03** — As a designer, I want example loading, replacement and clearing to reset project-dependent optimization, playback and viewing state, so that projects do not leak state into one another.
+- [ ] **L04** — As a designer, I want both existing Lottie rendering libraries and canvas/SVG renderers, so that I can compare supported engines.
+- [ ] **L05** — As a designer, I want complete-display and fill/crop fitting choices, so that the animation fits the intended viewing area.
+- [ ] **L06** — As a designer, I want playback, pause and fractional-frame progress seeking with current/total frame and project metadata, so that I can inspect animation timing precisely.
+- [ ] **L07** — As a designer, I want the existing speed presets, direction and loop control, so that playback inspection remains flexible.
+- [ ] **L08** — As a designer, I want the main canvas automatically fitted with independent zoom/pinch, pan, scale feedback and reset, so that the whole animation stays inspectable.
+- [ ] **L09** — As a designer, I want boundaries and themed checker/solid backgrounds for animation and atlas viewing, so that transparent assets remain visible.
+- [ ] **L19** — As a designer, I want visible scrollable errors/warnings, missing-asset details, operation/engine failures and busy/empty/disabled states, so that I can understand and recover from problems.
+- [ ] **L20** — As a mobile user, I want reachable stacked or tabbed controls, wrapping actions, two-canvas touch gestures and scrollable messages, so that core Lottie tasks remain possible.
+- [ ] **D10** — As a Lottie user, I want a narrow left panel, a short playback control and a separate floating atlas preview, so that the animation remains the main workspace.
+
+## Cross-ticket checks
+
+- [ ] D01, D02, D09, G07
+
+## Execution and verification constraints
+
+- [ ] Preserve all behavior in the assigned requirement IDs, including defaults, bounds, edge cases and failure handling in the specification. These summaries do not replace its detailed contracts. Reuse the production engines and storage contracts; prototype coverage is not production acceptance.
+- [ ] Each ticket changes a complete real-page workflow and verifies that workflow. Existing controls outside its scope remain available during migration. Any necessary component extraction stays within that ticket and preserves behavior; no separate engine rewrite or infrastructure-only phase is proposed.
+- [ ] Each workflow includes its applicable light/dark states, compact desktop layout, keyboard/focus behavior, phone core operation, empty/busy/error feedback and relevant existing module tests. Export tickets inspect decoded output or archive contents. Record tickets use isolated test data with production identities and verify reload and older records.
+- [ ] Follow reviewed borderless icon actions, semantic colors and floating-workspace decisions. Keep hidden tool entries hidden and retain direct routes. Do not add promotional data-location claims.
+- [ ] Run the required lint, typecheck and build checks for each implementation. Record real product-page evidence; unavailable browser checks remain pending and cannot be replaced by source inspection. Preserve unrelated changes and prototype references. No commit, release or deployment is included.
