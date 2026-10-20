@@ -258,6 +258,7 @@ function BrutalCheckbox({
     <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-muted-foreground" title={title}>
       <input
         type="checkbox"
+        aria-label={typeof label === 'string' ? label : title}
         checked={checked}
         onChange={e => onChange(e.target.checked)}
         className="peer sr-only"
@@ -313,6 +314,9 @@ export default function NinePatchTool() {
   const [recordInfo, setRecordInfo] = useState<{ ok: boolean, text: string } | null>(null)
   const requestRef = useRef(0)
   const detectRequestRef = useRef(0)
+  const detectBusyRef = useRef(false)
+  const exportRef = useRef<{ key: string, revision: number } | null>(null)
+  const [exportState, setExportState] = useState<{ key: string, revision: number, busy: boolean, info: { ok: boolean, text: string } | null } | null>(null)
   const { records, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useNinePatchRecords()
   const [slice, setSlice] = useState<Slice>({ top: 24, right: 24, bottom: 24, left: 24 })
 
@@ -343,7 +347,39 @@ export default function NinePatchTool() {
   const [cropAxes, setCropAxes] = useState<CropAxes>('both')
 
   const [detecting, setDetecting] = useState(false)
-  const [detectInfo, setDetectInfo] = useState<{ ok: boolean, text: string } | null>(null)
+  const [detectInfo, setDetectInfo] = useState<{ tone: 'success' | 'warning' | 'error', text: string } | null>(null)
+
+  const exportKey = JSON.stringify([image?.url, slice, cropEnabled, cropKeep, cropAxes])
+  const exportKeyRef = useRef(exportKey)
+  const exportRevisionRef = useRef(0)
+  if (exportKeyRef.current !== exportKey) {
+    exportKeyRef.current = exportKey
+    exportRevisionRef.current++
+  }
+  const exporting = exportState?.revision === exportRevisionRef.current && exportState.busy
+  const exportInfo = exportState?.revision === exportRevisionRef.current ? exportState.info : null
+
+  const invalidateAnalysis = useCallback(() => {
+    detectRequestRef.current++
+    detectBusyRef.current = false
+    setDetecting(false)
+    setDetectInfo(null)
+  }, [])
+
+  const invalidateImageWork = useCallback(() => {
+    invalidateAnalysis()
+    exportRef.current = null
+    setExportState(null)
+  }, [invalidateAnalysis])
+
+  const changeCropEnabled = (value: boolean) => {
+    invalidateAnalysis()
+    setCropEnabled(value)
+  }
+  const changeCropAxes = (value: CropAxes) => {
+    invalidateAnalysis()
+    setCropAxes(value)
+  }
 
   const makeRecordMeta = useCallback((): NinePatchRecordMeta | null => {
     if (!image)
@@ -414,9 +450,7 @@ export default function NinePatchTool() {
   const { resetPan: resetPreviewPan } = previewPan
 
   const applyImage = useCallback((img: SourceImage) => {
-    detectRequestRef.current++
-    setDetecting(false)
-    setDetectInfo(null)
+    invalidateImageWork()
     setRecordInfo(null)
     setRecordName('')
     resetGestures()
@@ -437,7 +471,7 @@ export default function NinePatchTool() {
     setCropEnabled(false)
     setCropKeep({ w: 1, h: 1 })
     setCropAxes('both')
-  }, [resetEditorPan, resetPreviewPan, resetGestures])
+  }, [resetEditorPan, resetPreviewPan, resetGestures, invalidateImageWork])
 
   const saveRecord = useCallback(async () => {
     if (!image || savingRef.current)
@@ -466,6 +500,7 @@ export default function NinePatchTool() {
 
   const loadRecord = useCallback(async (id: string) => {
     const request = ++requestRef.current
+    invalidateImageWork()
     setRecordInfo(null)
     try {
       const item = await getRecordItem(id)
@@ -510,7 +545,7 @@ export default function NinePatchTool() {
       if (request === requestRef.current)
         setRecordInfo({ ok: false, text: '记录加载失败，请重试' })
     }
-  }, [applyImage, getRecordItem])
+  }, [applyImage, getRecordItem, invalidateImageWork])
 
   const deleteRecord = useCallback(async (id: string) => {
     setRecordInfo(null)
@@ -525,6 +560,7 @@ export default function NinePatchTool() {
 
   const importBlob = useCallback(async (name: string, blob: Blob) => {
     const request = ++requestRef.current
+    invalidateImageWork()
     if (!blob.type.startsWith('image/')) {
       setImportError('请选择图片文件')
       return
@@ -539,7 +575,7 @@ export default function NinePatchTool() {
       applyImage(loaded)
     else
       setImportError('图片解码失败，换一张试试')
-  }, [applyImage])
+  }, [applyImage, invalidateImageWork])
 
   const loadDemo = useCallback(() => {
     const demo = createDemoImage()
@@ -549,10 +585,8 @@ export default function NinePatchTool() {
 
   const clearImage = useCallback(() => {
     requestRef.current++
-    detectRequestRef.current++
+    invalidateImageWork()
     resetGestures()
-    setDetecting(false)
-    setDetectInfo(null)
     setRecordInfo(null)
     setRecordName('')
     setImage((prev) => {
@@ -565,11 +599,12 @@ export default function NinePatchTool() {
     setCropEnabled(false)
     setCropKeep({ w: 1, h: 1 })
     setCropAxes('both')
-  }, [resetGestures])
+  }, [resetGestures, invalidateImageWork])
 
   useEffect(() => () => {
     requestRef.current++
     detectRequestRef.current++
+    exportRef.current = null
     resetGestures()
     copyRequestRef.current++
     if (copyTimerRef.current !== null)
@@ -597,13 +632,15 @@ export default function NinePatchTool() {
   const setSliceValue = useCallback((side: Side, value: number) => {
     if (!image)
       return
+    invalidateAnalysis()
     setSlice(prev => updateSlice(side, value, prev, image))
-  }, [image])
+  }, [image, invalidateAnalysis])
 
   const setImageWidthValue = useCallback((side: Side, value: number) => {
+    invalidateAnalysis()
     const v = Math.min(200, Math.max(0, Math.round(value) || 0))
     setImageWidth(prev => ({ ...prev, [side]: v }))
-  }, [])
+  }, [invalidateAnalysis])
 
   const scale = zoom
 
@@ -662,12 +699,14 @@ export default function NinePatchTool() {
   const resetSlice = useCallback(() => {
     if (!image)
       return
+    invalidateAnalysis()
     setSlice(defaultSlice(image.width, image.height))
-  }, [image])
+  }, [image, invalidateAnalysis])
 
   const autoDetect = useCallback(async () => {
-    if (!image || detecting)
+    if (!image || detectBusyRef.current)
       return
+    detectBusyRef.current = true
     const request = ++detectRequestRef.current
     setDetecting(true)
     setDetectInfo(null)
@@ -680,35 +719,42 @@ export default function NinePatchTool() {
       const { crop, slice: s } = result
       const next = normalizeSlice({
         top: crop.y + s.top,
-        right: crop.x + s.right,
-        bottom: crop.y + s.bottom,
+        right: image.width - crop.x - crop.width + s.right,
+        bottom: image.height - crop.y - crop.height + s.bottom,
         left: crop.x + s.left,
       }, image)
       setSlice(next)
-      setImageWidth(next)
+      setImageWidth({
+        top: Math.min(200, next.top),
+        right: Math.min(200, next.right),
+        bottom: Math.min(200, next.bottom),
+        left: Math.min(200, next.left),
+      })
 
       setCropEnabled(true)
       setCropAxes('both')
       setCropKeep({
-        w: Math.max(1, result.compact.width - s.left - s.right),
-        h: Math.max(1, result.compact.height - s.top - s.bottom),
+        w: Math.min(Math.max(1, image.width - next.left - next.right), Math.max(1, result.compact.width - s.left - s.right)),
+        h: Math.min(Math.max(1, image.height - next.top - next.bottom), Math.max(1, result.compact.height - s.top - s.bottom)),
       })
       setDetectInfo(result.accepted
-        ? { ok: true, text: `已应用识别结果，检查了 ${result.candidatesEvaluated} 个候选` }
+        ? { tone: 'success', text: `已应用识别结果，检查了 ${result.candidatesEvaluated} 个候选${crop.width !== image.width || crop.height !== image.height ? '，已补偿透明留白' : ''}` }
         : {
-            ok: false,
+            tone: 'warning',
             text: '未找到满足误差阈值的最小切片，已应用最接近的候选，请手动微调切线',
           })
     }
     catch (error) {
       if (request === detectRequestRef.current)
-        setDetectInfo({ ok: false, text: error instanceof Error ? error.message : '识别失败' })
+        setDetectInfo({ tone: 'error', text: error instanceof Error ? error.message : '识别失败' })
     }
     finally {
-      if (request === detectRequestRef.current)
+      if (request === detectRequestRef.current) {
+        detectBusyRef.current = false
         setDetecting(false)
+      }
     }
-  }, [detecting, image])
+  }, [image])
 
   const centerW = image ? Math.max(0, image.width - slice.left - slice.right) : 0
   const centerH = image ? Math.max(0, image.height - slice.top - slice.bottom) : 0
@@ -722,20 +768,33 @@ export default function NinePatchTool() {
   const cropActive = cropEnabled && image !== null && centerW > 0 && centerH > 0 && (keepW < centerW || keepH < centerH)
 
   const setCropKeepValue = useCallback((axis: 'w' | 'h', value: number) => {
-    setCropKeep(prev => ({ ...prev, [axis]: Math.max(1, Math.round(value) || 1) }))
-  }, [])
+    invalidateAnalysis()
+    const max = axis === 'w' ? centerW : centerH
+    setCropKeep(prev => ({ ...prev, [axis]: Math.min(Math.max(1, max), Math.max(1, Math.round(value) || 1)) }))
+  }, [centerW, centerH, invalidateAnalysis])
 
-  const downloadCropped = useCallback(() => {
-    if (!image || !cropActive)
+  const downloadCropped = useCallback(async () => {
+    if (!image || !cropActive || (exportRef.current?.key === exportKeyRef.current && exportRef.current.revision === exportRevisionRef.current))
       return
-    const img = new Image()
-    img.onload = () => {
+    const task = { key: exportKeyRef.current, revision: exportRevisionRef.current }
+    exportRef.current = task
+    setExportState({ ...task, busy: true, info: null })
+    const current = () => exportRef.current === task && exportRevisionRef.current === task.revision
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const element = new Image()
+        element.onload = () => resolve(element)
+        element.onerror = () => reject(new Error('图片解码失败，请重试'))
+        element.src = image.url
+      })
+      if (!current())
+        return
       const canvas = document.createElement('canvas')
       canvas.width = croppedW
       canvas.height = croppedH
       const ctx = canvas.getContext('2d')
       if (!ctx)
-        return
+        throw new Error('Canvas 2D 不可用，请重试')
       const kx = slice.left + Math.floor((centerW - keepW) / 2)
       const ky = slice.top + Math.floor((centerH - keepH) / 2)
 
@@ -755,18 +814,33 @@ export default function NinePatchTool() {
             ctx.drawImage(img, sx, sy, sw, sh, dx, dy, sw, sh)
         }
       }
-      canvas.toBlob((blob) => {
-        if (!blob)
-          return
-        const url = URL.createObjectURL(blob)
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('PNG 编码失败，请重试')), 'image/png')
+      })
+      if (!current())
+        return
+      const url = URL.createObjectURL(blob)
+      try {
         const a = document.createElement('a')
         a.href = url
         a.download = `${image.name.replace(/\.[^.]+$/, '') || 'nine-patch'}-cropped.png`
         a.click()
-        URL.revokeObjectURL(url)
-      }, 'image/png')
+        setExportState({ ...task, busy: false, info: { ok: true, text: '裁剪 PNG 已导出' } })
+      }
+      finally {
+        setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      }
     }
-    img.src = image.url
+    catch (error) {
+      if (current())
+        setExportState({ ...task, busy: false, info: { ok: false, text: error instanceof Error ? error.message : 'PNG 导出失败，请重试' } })
+    }
+    finally {
+      if (exportRef.current === task) {
+        exportRef.current = null
+        setExportState(prev => prev?.revision === task.revision ? { ...prev, busy: false } : prev)
+      }
+    }
   }, [image, cropActive, slice, centerW, centerH, keepW, keepH, croppedW, croppedH])
 
   const anchorFor = (edge: ResizeEdge | ResizeCorner, rect: DOMRect) => ({
@@ -1314,14 +1388,15 @@ export default function NinePatchTool() {
                       </label>
                     ))}
                   </div>
+                  {detecting && <p role="status" className="mt-2 text-xs text-info">正在分析像素…</p>}
                   {detectInfo && (
-                    <p className={cn('mt-2 flex items-start gap-1.5 text-xs', detectInfo.ok ? 'text-success' : 'text-warning-muted-foreground')}>
-                      {!detectInfo.ok && <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />}
+                    <p role={detectInfo.tone === 'error' ? 'alert' : 'status'} className={cn('mt-2 flex items-start gap-1.5 text-xs', detectInfo.tone === 'success' ? 'text-success' : detectInfo.tone === 'error' ? 'text-destructive' : 'text-warning-muted-foreground')}>
+                      {detectInfo.tone !== 'success' && <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />}
                       {detectInfo.text}
                     </p>
                   )}
                 </div>
-                <section className="nine-crop" aria-label="中心裁剪设置">
+                <section className="nine-crop" aria-label="中心裁剪设置" aria-describedby={cropEnabled ? 'nine-crop-guide' : undefined}>
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
                       <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
@@ -1346,7 +1421,7 @@ export default function NinePatchTool() {
                       </p>
                       <BrutalCheckbox
                         checked={cropEnabled}
-                        onChange={setCropEnabled}
+                        onChange={changeCropEnabled}
                         title="启用中心裁剪"
                       />
                     </div>
@@ -1355,7 +1430,7 @@ export default function NinePatchTool() {
                         <OptionGroup
                           label="裁剪轴"
                           value={cropAxes}
-                          onChange={setCropAxes}
+                          onChange={changeCropAxes}
                           options={CROP_AXES_OPTIONS}
                         />
                         <div className="flex items-end gap-2">
@@ -1389,12 +1464,16 @@ export default function NinePatchTool() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            disabled={!image || (keepW === 1 && keepH === 1)}
-                            onClick={() => setCropKeep({ w: 1, h: 1 })}
+                            disabled={!image || ((cropAxes === 'y' || keepW === 1) && (cropAxes === 'x' || keepH === 1))}
+                            onClick={() => {
+                              invalidateAnalysis()
+                              setCropKeep({ w: 1, h: 1 })
+                            }}
                           >
                             裁到最小
                           </Button>
                         </div>
+                        <p id="nine-crop-guide" className="text-xs text-muted-foreground">框线内为保留中心，斜纹行列将删除。拉伸预览使用原图；裁剪只影响下载。</p>
                         {(repeatH !== 'stretch' || repeatV !== 'stretch') && (
                           <p className="flex items-start gap-1.5 text-xs text-warning-muted-foreground">
                             <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
@@ -1585,9 +1664,10 @@ export default function NinePatchTool() {
               {saving ? '保存中…' : '保存'}
             </Button>
           </div>
-          <Button type="button" variant="outline" size="sm" className="nine-crop-download" disabled={!cropActive} onClick={downloadCropped}>
+          {exportInfo && <p role={exportInfo.ok ? 'status' : 'alert'} className={exportInfo.ok ? 'text-success' : 'text-destructive'}>{exportInfo.text}</p>}
+          <Button type="button" variant="outline" size="sm" className="nine-crop-download" aria-busy={exporting} disabled={!cropActive || exporting} onClick={() => void downloadCropped()}>
             <Download />
-            裁剪 PNG
+            {exporting ? '导出中…' : '裁剪 PNG'}
             <span>{cropActive ? `${croppedW} × ${croppedH}` : '暂无裁剪'}</span>
           </Button>
         </footer>
