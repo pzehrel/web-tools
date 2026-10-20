@@ -1,0 +1,38 @@
+{
+  "status": "complete",
+  "date": "2026-10-20",
+  "approval": "human user approved the reviewed draft and label creation",
+  "repo": "pzehrel/web-tools",
+  "files": [
+    "docs/agents/issue-tracker.md",
+    "docs/agents/issue-tracker.zh-CN.md",
+    "docs/agents/domain.md",
+    "docs/agents/domain.zh-CN.md",
+    "docs/agents/triage-labels.md",
+    "docs/agents/triage-labels.zh-CN.md"
+  ],
+  "agent_original_sha256": "5579baef683f311c65bd451635ca8435f90cc66999083e0edd57bb19d34437ce",
+  "agent_original_bytes": 9812,
+  "labels_to_create": [
+    "needs-triage",
+    "needs-info",
+    "ready-for-agent",
+    "ready-for-human"
+  ],
+  "reused_label": "wontfix",
+  "labels_verified": [
+    "needs-info",
+    "needs-triage",
+    "ready-for-agent",
+    "ready-for-human",
+    "wontfix"
+  ],
+  "checks": {
+    "original_agent_content_preserved": true,
+    "single_agent_skills_section": true,
+    "all_local_links_resolve": true,
+    "bilingual_code_and_identifier_parity": true,
+    "remote_labels_verified": true,
+    "existing_labels_preserved": true
+  }
+}

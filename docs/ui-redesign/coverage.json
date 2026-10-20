@@ -1,0 +1,699 @@
+{
+  "date": "2026-10-18",
+  "basis": "source audit; coverage is not runtime acceptance",
+  "groups": {
+    "U": {
+      "total": 25,
+      "C": 22,
+      "P": 1,
+      "M": 2,
+      "R": 0
+    },
+    "F": {
+      "total": 20,
+      "C": 1,
+      "P": 8,
+      "M": 11,
+      "R": 0
+    },
+    "N": {
+      "total": 29,
+      "C": 2,
+      "P": 9,
+      "M": 18,
+      "R": 0
+    },
+    "L": {
+      "total": 20,
+      "C": 0,
+      "P": 0,
+      "M": 0,
+      "R": 20
+    },
+    "C": {
+      "total": 9,
+      "C": 0,
+      "P": 0,
+      "M": 9,
+      "R": 0
+    },
+    "T": {
+      "total": 16,
+      "C": 0,
+      "P": 0,
+      "M": 16,
+      "R": 0
+    },
+    "G": {
+      "total": 9,
+      "C": 2,
+      "P": 5,
+      "M": 2,
+      "R": 0
+    }
+  },
+  "rows": [
+    {
+      "id": "C01",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "C02",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "C03",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "C04",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "C05",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "C06",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "C07",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "C08",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "C09",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T01",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T02",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T03",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T04",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T05",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T06",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T07",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T08",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T09",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T10",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T11",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T12",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T13",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T14",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T15",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "T16",
+      "status": "M",
+      "file": "hidden.md"
+    },
+    {
+      "id": "F01",
+      "status": "P",
+      "file": "motion.md"
+    },
+    {
+      "id": "F02",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F03",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F04",
+      "status": "C",
+      "file": "motion.md"
+    },
+    {
+      "id": "F05",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F06",
+      "status": "P",
+      "file": "motion.md"
+    },
+    {
+      "id": "F07",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F08",
+      "status": "P",
+      "file": "motion.md"
+    },
+    {
+      "id": "F09",
+      "status": "P",
+      "file": "motion.md"
+    },
+    {
+      "id": "F10",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F11",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F12",
+      "status": "P",
+      "file": "motion.md"
+    },
+    {
+      "id": "F13",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F14",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F15",
+      "status": "P",
+      "file": "motion.md"
+    },
+    {
+      "id": "F16",
+      "status": "P",
+      "file": "motion.md"
+    },
+    {
+      "id": "F17",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F18",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F19",
+      "status": "M",
+      "file": "motion.md"
+    },
+    {
+      "id": "F20",
+      "status": "P",
+      "file": "motion.md"
+    },
+    {
+      "id": "L01",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L02",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L03",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L04",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L05",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L06",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L07",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L08",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L09",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L10",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L11",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L12",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L13",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L14",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L15",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L16",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L17",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L18",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L19",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "L20",
+      "status": "R",
+      "file": "motion.md"
+    },
+    {
+      "id": "N01",
+      "status": "P",
+      "file": "nine.md"
+    },
+    {
+      "id": "N02",
+      "status": "P",
+      "file": "nine.md"
+    },
+    {
+      "id": "N03",
+      "status": "P",
+      "file": "nine.md"
+    },
+    {
+      "id": "N04",
+      "status": "P",
+      "file": "nine.md"
+    },
+    {
+      "id": "N05",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N06",
+      "status": "P",
+      "file": "nine.md"
+    },
+    {
+      "id": "N07",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N08",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N09",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N10",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N11",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N12",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N13",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N14",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N15",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N16",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N17",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N18",
+      "status": "P",
+      "file": "nine.md"
+    },
+    {
+      "id": "N19",
+      "status": "P",
+      "file": "nine.md"
+    },
+    {
+      "id": "N20",
+      "status": "C",
+      "file": "nine.md"
+    },
+    {
+      "id": "N21",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N22",
+      "status": "P",
+      "file": "nine.md"
+    },
+    {
+      "id": "N23",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N24",
+      "status": "P",
+      "file": "nine.md"
+    },
+    {
+      "id": "N25",
+      "status": "C",
+      "file": "nine.md"
+    },
+    {
+      "id": "N26",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N27",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N28",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "N29",
+      "status": "M",
+      "file": "nine.md"
+    },
+    {
+      "id": "G01",
+      "status": "C",
+      "file": "shared.md"
+    },
+    {
+      "id": "G02",
+      "status": "P",
+      "file": "shared.md"
+    },
+    {
+      "id": "G03",
+      "status": "C",
+      "file": "shared.md"
+    },
+    {
+      "id": "G04",
+      "status": "P",
+      "file": "shared.md"
+    },
+    {
+      "id": "G05",
+      "status": "M",
+      "file": "shared.md"
+    },
+    {
+      "id": "G06",
+      "status": "P",
+      "file": "shared.md"
+    },
+    {
+      "id": "G07",
+      "status": "P",
+      "file": "shared.md"
+    },
+    {
+      "id": "G08",
+      "status": "M",
+      "file": "shared.md"
+    },
+    {
+      "id": "G09",
+      "status": "P",
+      "file": "shared.md"
+    },
+    {
+      "id": "U01",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U02",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U03",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U04",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U05",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U06",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U07",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U08",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U09",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U10",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U11",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U12",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U13",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U14",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U15",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U16",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U17",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U18",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U19",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U20",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U21",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U22",
+      "status": "C",
+      "file": "url.md"
+    },
+    {
+      "id": "U23",
+      "status": "M",
+      "file": "url.md"
+    },
+    {
+      "id": "U24",
+      "status": "M",
+      "file": "url.md"
+    },
+    {
+      "id": "U25",
+      "status": "P",
+      "file": "url.md"
+    }
+  ],
+  "phase": "audit snapshot before full-function expansion",
+  "current_mapping": "prototype-current.json"
+}

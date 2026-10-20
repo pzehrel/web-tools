@@ -1,0 +1,59 @@
+{
+  "functional_groups": 128,
+  "tool_groups": 119,
+  "shared_groups": 9,
+  "counts": {
+    "U": {
+      "total": 25,
+      "C": 22,
+      "P": 1,
+      "M": 2,
+      "R": 0
+    },
+    "F": {
+      "total": 20,
+      "C": 1,
+      "P": 8,
+      "M": 11,
+      "R": 0
+    },
+    "N": {
+      "total": 29,
+      "C": 2,
+      "P": 9,
+      "M": 18,
+      "R": 0
+    },
+    "L": {
+      "total": 20,
+      "C": 0,
+      "P": 0,
+      "M": 0,
+      "R": 20
+    },
+    "C": {
+      "total": 9,
+      "C": 0,
+      "P": 0,
+      "M": 9,
+      "R": 0
+    },
+    "T": {
+      "total": 16,
+      "C": 0,
+      "P": 0,
+      "M": 16,
+      "R": 0
+    },
+    "G": {
+      "total": 9,
+      "C": 2,
+      "P": 5,
+      "M": 2,
+      "R": 0
+    }
+  },
+  "valid_local_links": 550,
+  "unchanged_source_hashes": 72,
+  "bilingual_feature_ids_and_statuses_match": true
+}

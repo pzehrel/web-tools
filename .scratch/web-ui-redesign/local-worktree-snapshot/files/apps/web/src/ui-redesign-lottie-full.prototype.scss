@@ -1,0 +1,136 @@
+.full-lottie-prototype {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  min-height: 420px;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+  --lottie-panel-width: 240px;
+  --lottie-workspace-left: calc(var(--lottie-panel-width) + 24px);
+
+  button, input, select { font-size: 12px; }
+  button { min-height: 28px; }
+  button[data-slot='button'] { height: 28px; min-height: 28px; gap: 5px; padding: 4px 8px; border-radius: 4px; }
+  button[data-slot='button'] svg { width: 14px; height: 14px; }
+  input:not([type='range'], [type='checkbox'], [type='file']), select { height: 28px; border-radius: 4px; padding: 3px 7px; }
+  input[type='range'] { accent-color: var(--foreground); }
+  h1, h2 { margin: 0; font-size: 12px; line-height: 1.4; font-weight: 600; }
+  h1 { font-size: 13px; }
+  p { line-height: 1.5; }
+  [hidden] { display: none !important; }
+
+  .full-lottie-canvas { position: absolute; inset: 0; }
+  .full-lottie-stage { position: absolute; inset: 116px 12px 128px var(--lottie-workspace-left); display: flex; overflow: hidden; }
+  .full-lottie-title { position: absolute; z-index: 35; top: 68px; right: 12px; left: var(--lottie-workspace-left); display: flex; align-items: center; gap: 10px; height: 40px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--background); }
+  .full-lottie-project-info { min-width: 0; flex: 1; overflow: hidden; color: var(--muted-foreground); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+  .full-lottie-view-controls { position: relative; display: flex; flex-shrink: 0; align-items: center; gap: 4px; padding-left: 8px; border-left: 1px solid var(--border); }
+  .full-lottie-view-controls > .absolute.top-2.left-2 { position: static; gap: 4px; }
+  .full-lottie-view-controls > [data-stage-background-panel] { top: calc(100% + 12px); right: 0; left: auto; }
+  .full-lottie-view-controls > button[data-size='icon-sm'], .full-lottie-view-controls > .absolute > button { width: 28px; padding-inline: 5px; }
+
+  .full-lottie-params { position: absolute; top: 68px; bottom: 118px; left: 12px; display: flex; width: var(--lottie-panel-width); min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--background); }
+  .full-lottie-params-heading { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 5px; padding: 5px; border-bottom: 1px solid var(--border); }
+  .full-lottie-panel-tabs { display: flex; min-width: 0; flex: 1; gap: 2px; }
+  .full-lottie-panel-tabs > button { min-width: 0; flex: 1; padding: 4px 3px; border-radius: 3px; font-size: 11px; white-space: nowrap; }
+  .full-lottie-panel-tabs > button[aria-selected='true'] { color: var(--foreground); background: var(--muted); }
+  .full-lottie-panel-tabs > button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+  .full-lottie-params-body { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0 10px 10px; }
+  .full-lottie-params-body > section { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .full-lottie-params-body > section:last-child { padding-bottom: 0; border: 0; }
+  .full-lottie-params-body section > div:first-child { min-height: 24px; padding-bottom: 6px; }
+  .full-lottie-params-body .space-y-4 > :not(:last-child) { margin-bottom: 9px; }
+  .full-lottie-params-body .space-y-3 > :not(:last-child) { margin-bottom: 7px; }
+  .full-lottie-params-body .gap-4 { gap: 8px; }
+  .full-lottie-params-body .gap-3 { gap: 8px; }
+  .full-lottie-params-body .py-3 { padding-block: 7px; }
+  .full-lottie-params-body .pb-3 { padding-bottom: 7px; }
+  .full-lottie-params-body .mt-3 { margin-top: 8px; }
+  .full-lottie-params-body .mb-3 { margin-bottom: 8px; }
+  .full-lottie-params-body label.relative { width: 18px; height: 18px; }
+  .full-lottie-params-body label.relative > input, .full-lottie-params-body label.relative > span { width: 18px; height: 18px; }
+  .full-lottie-params-body label.relative svg { width: 12px; height: 12px; }
+  .full-lottie-params-body .rounded-md { border-radius: 4px; }
+  .full-lottie-params-body p.text-xs { font-size: 11px; }
+  .full-lottie-params-body .font-mono.text-sm { font-size: 12px; }
+  .full-lottie-params-body button[role='tab'] { padding-block: 4px; }
+  .full-lottie-imports { display: flex; flex-shrink: 0; gap: 4px; }
+  .full-lottie-imports > button:last-child { flex: 0 0 28px; padding-inline: 5px; }
+  .full-lottie-params-footer { flex: 0 0 auto; border-top: 1px solid var(--border); padding: 8px 10px; background: var(--popover); }
+  .full-lottie-resources > div:first-child { min-height: 20px; padding-bottom: 4px; }
+  .full-lottie-resources h2 { font-size: 11px; }
+  .full-lottie-resources > p { padding-bottom: 6px; font-size: 10px; }
+  .full-lottie-resources .space-y-3 > :not(:last-child) { margin-bottom: 6px; }
+  .full-lottie-resources .space-y-3 > p { font-size: 10px; line-height: 1.4; }
+  .full-lottie-resources .grid > div { padding: 4px 5px; }
+  .full-lottie-resources .grid p { font-size: 10px; }
+
+  .full-lottie-atlas { position: absolute; z-index: 30; top: 116px; right: 12px; display: none; width: min(320px, calc(100% - var(--lottie-workspace-left) - 12px)); overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--background); }
+  &[data-atlas-open='true'] .full-lottie-atlas { display: block; }
+  .full-lottie-atlas-heading { display: flex; align-items: center; gap: 8px; padding: 5px 8px; }
+  .full-lottie-atlas-heading h2 { flex-shrink: 0; font-size: 11px; }
+  .full-lottie-atlas-heading > span { min-width: 0; flex: 1; overflow: hidden; color: var(--muted-foreground); text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+  .full-lottie-atlas-heading > button { width: 24px; padding-inline: 4px; }
+  .full-lottie-atlas-body { padding: 0 8px 8px; }
+  .full-lottie-atlas-body [data-testid='lottie-atlas-stage'] { height: min(28dvh, 240px); border-radius: 3px; }
+
+  .full-lottie-playback { position: absolute; bottom: 68px; left: calc(50% + var(--lottie-panel-width) / 2 + 6px); transform: translateX(-50%); display: flex; width: min(440px, calc(100% - var(--lottie-workspace-left) - 36px)); align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--background); }
+  .full-lottie-playback > button { width: 28px; flex: 0 0 28px; }
+  .full-lottie-playback input { min-width: 20px; }
+  .full-lottie-playback > span { width: 95px; font-size: 11px; }
+  .full-lottie-message-entry { display: none; }
+  .full-lottie-messages { margin-bottom: 8px; padding-bottom: 7px; border-bottom: 1px solid var(--border); }
+  .full-lottie-message-toggle { display: flex; min-height: 28px; align-items: center; gap: 6px; cursor: pointer; list-style: none; font-size: 11px; font-weight: 600; }
+  .full-lottie-message-toggle::-webkit-details-marker { display: none; }
+  .full-lottie-message-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .full-lottie-message-count { margin-left: auto; font-family: var(--font-mono); }
+  .full-lottie-message-toggle > svg:last-child { transition: transform 150ms; }
+  .full-lottie-messages[open] .full-lottie-message-toggle > svg:last-child { transform: rotate(180deg); }
+  .full-lottie-messages[data-error='true'] .full-lottie-message-toggle { color: var(--destructive); }
+  // Limit expanded details on short screens so result metrics and export stay visible.
+  // 短屏限制详情展开高度，让资源指标和导出保持可见。
+  .full-lottie-message-body { max-height: clamp(48px, calc(100dvh - 620px), 144px); overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; }
+  .full-lottie-message-body > div { gap: 6px; padding: 7px; border-radius: 4px; }
+  .full-lottie-message-body > div + div { margin-top: 5px; }
+  .full-lottie-message-body .size-5 { width: 14px; height: 14px; }
+  .full-lottie-messages .text-sm { font-size: 11px; }
+  .full-lottie-mobile-nav { display: none; }
+
+  @media (min-width: 701px) {
+    .full-lottie-resources .grid > div { flex-direction: column; align-items: flex-start; gap: 1px; padding-block: 3px; }
+  }
+
+  @media (max-width: 1100px) {
+    .full-lottie-imports button { width: 28px; padding-inline: 5px; }
+    .full-lottie-imports button > span { display: none; }
+  }
+
+  @media (max-width: 700px) {
+    min-height: 0;
+
+    .full-lottie-title { top: 62px; right: 12px; left: 12px; gap: 6px; }
+    &[data-has-messages='true'] .full-lottie-project-info { display: none; }
+    .full-lottie-message-entry { display: inline-flex; min-width: 0; flex: 1; align-items: center; justify-content: center; padding: 0; font-size: 11px; white-space: nowrap; }
+    .full-lottie-view-controls { gap: 2px; padding-left: 6px; }
+    .full-lottie-view-controls > .absolute.top-2.left-2 { gap: 2px; }
+    .full-lottie-atlas-trigger { display: none; }
+    .full-lottie-mobile-nav { position: absolute; z-index: 4; top: 103px; right: 12px; left: 12px; display: flex; padding: 3px; border: 1px solid var(--border); border-radius: 5px; background: var(--background); }
+    .full-lottie-mobile-nav button { min-height: 28px; flex: 1; padding: 4px 5px; border-radius: 3px; }
+    .full-lottie-mobile-nav button[aria-pressed='true'] { background: var(--primary); color: var(--primary-foreground); }
+    .full-lottie-params { top: 147px; right: 12px; bottom: 118px; left: 12px; display: none; width: auto; }
+    .full-lottie-params-body { padding-inline: 12px; }
+    &[data-mobile-view='params'] .full-lottie-params { display: flex; }
+    .full-lottie-stage { inset: 143px 0 118px; }
+    .full-lottie-playback { left: 50%; width: min(320px, calc(100% - 24px)); }
+    .full-lottie-canvas { visibility: hidden; }
+    &[data-mobile-view='canvas'] .full-lottie-canvas { visibility: visible; }
+    .full-lottie-atlas, &[data-atlas-open='true'] .full-lottie-atlas { top: 147px; right: 12px; bottom: 118px; left: 12px; display: none; width: auto; }
+    &[data-mobile-view='atlas'] .full-lottie-atlas { display: flex; flex-direction: column; }
+    .full-lottie-atlas-heading { flex: 0 0 auto; }
+    .full-lottie-atlas-heading > button { display: none; }
+    .full-lottie-atlas-body { display: flex; min-height: 0; flex: 1; }
+    .full-lottie-atlas-body > div.space-y-1\.5 { display: flex; min-height: 0; width: 100%; flex-direction: column; }
+    .full-lottie-atlas-body [data-testid='lottie-atlas-stage'] { height: auto; min-height: 0; flex: 1; }
+  }
+}

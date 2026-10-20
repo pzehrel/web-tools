@@ -1,0 +1,42 @@
+<!-- web-tools-ui-redesign-migration:2026-10-20:ticket-10 -->
+
+# 10: Nine-patch automatic analysis, center crop and pixel export
+
+**What to build:** Analyze slices automatically, refine frequent center cropping with visible kept/removed areas and download the precise cropped PNG.
+
+**Blocked by:** [09 — Nine-patch slicing, rendering and independent preview HUD](09-nine-patch-editor-hud.md)
+
+**Status:** ready-for-agent
+
+**Labels:** ready-for-agent
+
+**Approval:** 2026-10-20 — human user: 可以
+
+Context: [full specification](../spec.md); [source index](../sources.md); [ticket index](../tickets.md); [Chinese translation](10-nine-patch-analysis-crop.zh-CN.md).
+
+**Primary requirements:** N10, N15–N17; completes the center-crop portion of D11.
+
+## Acceptance criteria
+
+- [ ] Analysis normalizes slices/widths/minimum crop, reports busy/result/error and permits manual refinement.
+- [ ] Both/X/Y axes, bounded retained dimensions, minimum action, overlay explanations and repeat warnings remain.
+- [ ] Decode exported PNG to verify 1:1 corners/retained rows/columns, dimensions and naming; disable ineffective crop, preserve numeric CSS slices and keep live border-image preview based on the original source.
+
+## Requirement acceptance checklist
+
+- [ ] **N10** — As a designer, I want automatic pixel analysis to produce normalized slices, widths and minimum center-crop settings with busy/result/error feedback, so that I can accept or manually refine detection.
+- [ ] **N15** — As a designer, I want center cropping with both/X/Y axes, bounded positive retained dimensions and minimum cropping, so that frequent cropping remains complete.
+- [ ] **N16** — As a designer, I want retained-center and removed-row/column overlays with accessible explanations and tiling warnings, so that cropping consequences are visible before download.
+- [ ] **N17** — As a designer, I want the cropped PNG to preserve selected pixels at 1:1 with correct dimensions/name and availability, so that cropping does not rescale or alter CSS slice values.
+
+## Cross-ticket checks
+
+- [ ] D11
+
+## Execution and verification constraints
+
+- [ ] Preserve all behavior in the assigned requirement IDs, including defaults, bounds, edge cases and failure handling in the specification. These summaries do not replace its detailed contracts. Reuse the production engines and storage contracts; prototype coverage is not production acceptance.
+- [ ] Each ticket changes a complete real-page workflow and verifies that workflow. Existing controls outside its scope remain available during migration. Any necessary component extraction stays within that ticket and preserves behavior; no separate engine rewrite or infrastructure-only phase is proposed.
+- [ ] Each workflow includes its applicable light/dark states, compact desktop layout, keyboard/focus behavior, phone core operation, empty/busy/error feedback and relevant existing module tests. Export tickets inspect decoded output or archive contents. Record tickets use isolated test data with production identities and verify reload and older records.
+- [ ] Follow reviewed borderless icon actions, semantic colors and floating-workspace decisions. Keep hidden tool entries hidden and retain direct routes. Do not add promotional data-location claims.
+- [ ] Run the required lint, typecheck and build checks for each implementation. Record real product-page evidence; unavailable browser checks remain pending and cannot be replaced by source inspection. Preserve unrelated changes and prototype references. No commit, release or deployment is included.
