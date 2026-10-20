@@ -1,13 +1,14 @@
+import type { AppEnv } from '../app-env.ts'
+import type { UserService } from '../services/users.ts'
+import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
-import { createFactory } from 'hono/factory'
-import { zValidator } from '@hono/zod-validator'
-import { z } from 'zod'
 
-import type { AppEnv } from '../app-env.ts'
+import { createFactory } from 'hono/factory'
+import { z } from 'zod'
 import { identity } from '../auth.ts'
 import { rateLimit } from '../rate-limit.ts'
-import { AuthError, SESSION_COOKIE, type UserService } from '../services/users.ts'
+import { AuthError, SESSION_COOKIE } from '../services/users.ts'
 
 const factory = createFactory<AppEnv>()
 

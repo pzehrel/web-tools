@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
+import type { FrameAnimationRecordMeta } from './records'
 import { unzipSync } from 'fflate'
 import {
   ArrowDownAZ,
@@ -21,16 +22,16 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Seo } from '@/components/seo'
-import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
+import { STAGE_BOUNDARY_CLASS, StageViewControls, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
 import { useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoFrames } from '../demos/frame-animation'
-import { createFrameAnimationItem, createFrameArchive, extractFrameArchive, useFrameAnimationRecords, type FrameAnimationRecordMeta } from './records'
+import { createFrameAnimationItem, createFrameArchive, extractFrameArchive, useFrameAnimationRecords } from './records'
 
 /** 一帧：Blob 用于记录持久化，objectURL 仅用于当前页面预览 */
 interface FrameItem {
@@ -1761,27 +1762,27 @@ export default function FrameAnimationTool() {
           </div>
           {/* 窄列：按钮组换行到标题下方；裁剪独占一行，全选 / 排序同一行 */}
           <div className="flex w-full flex-col gap-2 pb-3">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="w-full"
-                disabled={cropping}
-                onClick={() => void prepareCrop()}
-              >
-                {cropping ? <LoaderCircle className="animate-spin" /> : <Crop />}
-                裁透明边
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-full"
+              disabled={cropping}
+              onClick={() => void prepareCrop()}
+            >
+              {cropping ? <LoaderCircle className="animate-spin" /> : <Crop />}
+              裁透明边
+            </Button>
+            <div className="flex w-full gap-2">
+              <Button type="button" variant="outline" size="sm" className="flex-1" onClick={toggleSelectAll}>
+                <Check />
+                {selected.size >= frameCount ? '全不选' : '全选'}
               </Button>
-              <div className="flex w-full gap-2">
-                <Button type="button" variant="outline" size="sm" className="flex-1" onClick={toggleSelectAll}>
-                  <Check />
-                  {selected.size >= frameCount ? '全不选' : '全选'}
-                </Button>
-                <Button type="button" variant="outline" size="sm" className="flex-1" onClick={sortByName}>
-                  <ArrowDownAZ />
-                  排序
-                </Button>
-              </div>
+              <Button type="button" variant="outline" size="sm" className="flex-1" onClick={sortByName}>
+                <ArrowDownAZ />
+                排序
+              </Button>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {cropResult && (
@@ -1910,7 +1911,11 @@ export default function FrameAnimationTool() {
                   <button type="button" className="min-w-0 flex-1 truncate text-left text-sm hover:underline" title="加载项目" onClick={() => void loadRecord(record.id)}>
                     {record.recordName}
                   </button>
-                  <span className="shrink-0 text-xs text-muted-foreground">{record.frameCount} 帧</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {record.frameCount}
+                    {' '}
+                    帧
+                  </span>
                   <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除项目 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
                     <Trash2 />
                   </Button>

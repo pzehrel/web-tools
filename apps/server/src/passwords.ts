@@ -1,4 +1,5 @@
-import { createHash, randomBytes, scrypt as _scrypt, timingSafeEqual } from 'node:crypto'
+import { Buffer } from 'node:buffer'
+import { scrypt as _scrypt, createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 
 const scrypt = promisify(_scrypt) as (

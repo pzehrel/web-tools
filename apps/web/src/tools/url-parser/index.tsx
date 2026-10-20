@@ -1180,83 +1180,83 @@ function UrlParserTool() {
         {/* 二维码板块：与输入框左右布局、等高，垂直发丝线分隔；二维码填满剩余高度 */}
         <section className="flex shrink-0 flex-col gap-3 md:w-56 md:border-l md:border-border md:pl-6">
           <div
-              role="button"
-              tabIndex={0}
-              title="点击选择 / 拖拽 / 粘贴二维码图片识别"
-              aria-label="上传二维码图片识别"
-              onClick={() => fileInputRef.current?.click()}
-              onKeyDown={e => e.key === 'Enter' && fileInputRef.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setDragging(true)
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
-              className={cn(
-                'flex min-h-0 w-full flex-1 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border bg-background p-1 transition-colors',
-                !qr && 'border-dashed',
-                dragging ? 'bg-secondary' : 'hover:bg-secondary/50',
-              )}
-            >
-              {qr
-                ? (
-                    <img
-                      src={qr}
-                      alt="当前内容的二维码，点击放大"
-                      title="点击放大二维码"
-                      onClick={(e) => {
-                        // 点图片本身 → 放大；点其余区域 → 上传识别
-                        e.stopPropagation()
-                        setQrEnlarged(true)
-                      }}
-                      className="size-full min-h-0 cursor-zoom-in rounded-sm bg-white object-contain"
-                    />
-                  )
-                : (
-                    <div className="flex flex-col items-center gap-1 p-2 text-center text-muted-foreground">
-                      <QrCode className="size-8" />
-                      <span className="text-xs">上传二维码识别</span>
-                    </div>
-                  )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={onFileChange}
-              />
-            </div>
-            <QrDownloadButton
-              available={qr !== null}
-              previewAvailable={isUrl}
-              renderingPreview={renderingQrPreview}
-              onDownload={downloadQr}
-              onDownloadPreview={() => void downloadQrPreview()}
-              className="w-full shrink-0"
+            role="button"
+            tabIndex={0}
+            title="点击选择 / 拖拽 / 粘贴二维码图片识别"
+            aria-label="上传二维码图片识别"
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={e => e.key === 'Enter' && fileInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={cn(
+              'flex min-h-0 w-full flex-1 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border bg-background p-1 transition-colors',
+              !qr && 'border-dashed',
+              dragging ? 'bg-secondary' : 'hover:bg-secondary/50',
+            )}
+          >
+            {qr
+              ? (
+                  <img
+                    src={qr}
+                    alt="当前内容的二维码，点击放大"
+                    title="点击放大二维码"
+                    onClick={(e) => {
+                      // 点图片本身 → 放大；点其余区域 → 上传识别
+                      e.stopPropagation()
+                      setQrEnlarged(true)
+                    }}
+                    className="size-full min-h-0 cursor-zoom-in rounded-sm bg-white object-contain"
+                  />
+                )
+              : (
+                  <div className="flex flex-col items-center gap-1 p-2 text-center text-muted-foreground">
+                    <QrCode className="size-8" />
+                    <span className="text-xs">上传二维码识别</span>
+                  </div>
+                )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onFileChange}
             />
+          </div>
+          <QrDownloadButton
+            available={qr !== null}
+            previewAvailable={isUrl}
+            renderingPreview={renderingQrPreview}
+            onDownload={downloadQr}
+            onDownloadPreview={() => void downloadQrPreview()}
+            className="w-full shrink-0"
+          />
         </section>
       </div>
 
       {/* 参数 + 代码预览：去卡片板块，顶部发丝线与输入区分隔；代码预览仅在存在 $$变量 时出现 */}
       <section className="mt-10 border-t border-border pt-4">
-          <div className="flex min-h-8 items-start justify-between gap-4 pb-3">
-            <div>
-              <h2 className="font-mono text-sm font-semibold tracking-tight">参数</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                点击 key / value 编辑；写成
-                {' '}
-                <code className="rounded-sm bg-secondary px-1 font-mono">$$变量名</code>
-                {' '}
-                声明变量，拖放可移动或嵌套节点
-              </p>
-            </div>
-            {hasVars && (
-              <Button variant="ghost" size="icon-sm" disabled={!isUrl} title="复制代码" aria-label="复制代码" onClick={copyCode}>
-                {copiedCode ? <Check /> : <Copy />}
-              </Button>
-            )}
-          </div>
+        <div className="flex min-h-8 items-start justify-between gap-4 pb-3">
           <div>
+            <h2 className="font-mono text-sm font-semibold tracking-tight">参数</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              点击 key / value 编辑；写成
+              {' '}
+              <code className="rounded-sm bg-secondary px-1 font-mono">$$变量名</code>
+              {' '}
+              声明变量，拖放可移动或嵌套节点
+            </p>
+          </div>
+          {hasVars && (
+            <Button variant="ghost" size="icon-sm" disabled={!isUrl} title="复制代码" aria-label="复制代码" onClick={copyCode}>
+              {copiedCode ? <Check /> : <Copy />}
+            </Button>
+          )}
+        </div>
+        <div>
           {!isUrl
             ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
@@ -1352,7 +1352,7 @@ function UrlParserTool() {
                   )}
                 </div>
               )}
-          </div>
+        </div>
       </section>
 
       {/* 记录（存 IndexedDB，仅客户端渲染以避免 hydration 不一致）：去卡片板块，顶部发丝线分隔 */}
@@ -1531,7 +1531,7 @@ function UrlParserTool() {
               />
             </div>
           </div>
-          </div>
+        </div>
       )}
 
     </div>

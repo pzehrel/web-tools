@@ -41,9 +41,9 @@ export interface StoreItemSummary extends Omit<StoreItem, 'payload'> {
  */
 export interface ToolStore {
   /** 按 updatedAt 倒序返回该工具的元数据；Blob payload 只在 get 时读取 */
-  list(toolId: string): Promise<StoreItemSummary[]>
-  get(toolId: string, id: string): Promise<StoreItem | undefined>
+  list: (toolId: string) => Promise<StoreItemSummary[]>
+  get: (toolId: string, id: string) => Promise<StoreItem | undefined>
   /** 同 id 覆盖（upsert） */
-  save(toolId: string, item: StoreItem): Promise<void>
-  remove(toolId: string, id: string): Promise<void>
+  save: (toolId: string, item: StoreItem) => Promise<void>
+  remove: (toolId: string, id: string) => Promise<void>
 }

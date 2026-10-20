@@ -1,6 +1,6 @@
-import { createMiddleware } from 'hono/factory'
-
 import type { AppEnv } from './app-env.ts'
+
+import { createMiddleware } from 'hono/factory'
 
 /**
  * 进程内固定窗口限流（自部署单实例够用；多实例时换 Redis/共享存储）。

@@ -1,4 +1,5 @@
 import type { ChangeEvent, DragEvent, ReactNode } from 'react'
+import type { LottieRecordMeta } from './records'
 import type { AtlasOptions, LoadedLottieProject, OptimizedLottieResult } from './types'
 import {
   Check,
@@ -18,13 +19,13 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-
 import { Seo } from '@/components/seo'
-import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
+import { STAGE_BOUNDARY_CLASS, StageViewControls, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
-import { Button } from '@/components/ui/button'
 
+import { Button } from '@/components/ui/button'
 import { clampZoom, useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoProject } from '../demos/lottie-preview'
@@ -32,7 +33,7 @@ import { countAtlasOptimizableImages, disposeOptimizedResult, exportOptimizedPro
 import { createPreviewAnimation, disposeProject, loadLottieProject } from './import-files'
 import { LottiePreview } from './preview'
 import { LottieReactPreview } from './react-preview'
-import { createLottieArchive, createLottieItem, useLottieRecords, type LottieRecordMeta } from './records'
+import { createLottieArchive, createLottieItem, useLottieRecords } from './records'
 import { calculateLottieResourceMetrics } from './resource-metrics'
 
 const DEFAULT_OPTIONS: AtlasOptions = {
@@ -450,7 +451,8 @@ export default function LottiePreviewTool() {
         <Gauge className="size-4 text-muted-foreground" />
         <h2 className="font-mono text-sm font-semibold tracking-tight">资源结果</h2>
       </div>
-      <p className="pb-3 text-xs text-muted-foreground">{!project ? '导入素材后显示图集与资源统计。' : project.warnings.length > 0 ? '资源路径校验未通过，请查看右上角消息。' : project.images.size === 0 ? 'data.json 没有引用可预览的图片素材。' : optimizableImageCount === 0 && excludedImageDescription ? excludedImageDescription : !optimizationEnabled ? '图集优化已关闭，画布显示原始素材。' : optimizing ? '正在重新排布图集，画布先显示原始素材…' : optimized ? '画布当前显示的就是此导出结果。' : '等待图集优化结果'}
+      <p className="pb-3 text-xs text-muted-foreground">
+        {!project ? '导入素材后显示图集与资源统计。' : project.warnings.length > 0 ? '资源路径校验未通过，请查看右上角消息。' : project.images.size === 0 ? 'data.json 没有引用可预览的图片素材。' : optimizableImageCount === 0 && excludedImageDescription ? excludedImageDescription : !optimizationEnabled ? '图集优化已关闭，画布显示原始素材。' : optimizing ? '正在重新排布图集，画布先显示原始素材…' : optimized ? '画布当前显示的就是此导出结果。' : '等待图集优化结果'}
       </p>
       <div className="space-y-3">
         <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-muted/30">
@@ -530,7 +532,7 @@ export default function LottiePreviewTool() {
                       ))}
                     </div>
                   </div>
-              )
+                )
               : (
                   <div className="m-auto flex items-center justify-center gap-2 rounded-md border border-border bg-background/90 px-3 py-1.5 text-xs font-medium text-muted-foreground">
                     {optimizing
@@ -579,7 +581,6 @@ export default function LottiePreviewTool() {
         description="使用 lottie-web 或 lottie-react 预览动画，把分散的图片素材打包为纹理图集，并导出仍由 Lottie 播放的资源包。"
         path="/tools/lottie-preview"
       />
-
 
       {(error || Boolean(project?.warnings.length)) && (
         <section

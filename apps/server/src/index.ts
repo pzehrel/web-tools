@@ -1,11 +1,11 @@
-import { serve } from '@hono/node-server'
+import type { AppDeps } from './deps.ts'
 import process from 'node:process'
-import { sql } from 'drizzle-orm'
+import { serve } from '@hono/node-server'
 
+import { sql } from 'drizzle-orm'
 import { buildApp } from './app.ts'
 import { db } from './db/index.ts'
 import * as tables from './db/schema.pg.ts'
-import type { AppDeps } from './deps.ts'
 import { env } from './env.ts'
 import { FsBlobStore } from './storage/fs.ts'
 
@@ -34,6 +34,8 @@ export type { AppType } from './app.ts'
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { port } = env
   serve({ fetch: buildNodeApp().fetch, port }, (info) => {
+    // 启动地址是服务入口的预期操作日志。 / Startup address is expected operational output.
+    // eslint-disable-next-line no-console
     console.log(`[server] http://localhost:${info.port} (db: ${env.databaseUrl.replace(/\/\/.*@/, '//***@')})`)
   })
 }

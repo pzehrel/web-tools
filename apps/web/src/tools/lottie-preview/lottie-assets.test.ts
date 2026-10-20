@@ -34,7 +34,7 @@ function projectWith(...images: ResolvedImageAsset[]): LoadedLottieProject {
   }
 }
 
-describe('Lottie image sequence assets', () => {
+describe('lottie image sequence assets', () => {
   const stillAsset: LottieAsset = { id: 'still', h: 100, p: 'still.png', w: 100 }
   const sequenceAsset: LottieAsset = { id: 'sequence', h: 100, p: 'frame-0.png', t: 'seq', w: 100 }
 

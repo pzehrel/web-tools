@@ -108,7 +108,8 @@ function RangeField({
       <span className="mb-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
         <span>{label}</span>
         <output className="rounded-sm border border-border bg-secondary px-1.5 py-0.5 font-mono text-foreground">
-          {value}{suffix}
+          {value}
+          {suffix}
         </output>
       </span>
       <input
@@ -307,7 +308,7 @@ export default function CssShineTool() {
     catch {
       setCopyState('failed')
     }
-    window.setTimeout(() => setCopyState('idle'), 1400)
+    window.setTimeout(setCopyState, 1400, 'idle')
   }
 
   const selectImage = (file?: File) => {
@@ -416,29 +417,29 @@ export default function CssShineTool() {
                   {trigger === 'hover' ? '把鼠标移到样例上触发扫光。' : '每次调整参数都会重新播放。'}
                 </p>
               </div>
-                <div className="flex gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/webp,image/svg+xml,.png,.webp,.svg"
-                    className="sr-only"
-                    onChange={(event) => {
-                      selectImage(event.target.files?.[0])
-                      event.target.value = ''
-                    }}
-                  />
-                  {shape === 'image' && (
-                    <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                      <Upload />
-                      {uploadedImage ? '换图' : '上传'}
-                    </Button>
-                  )}
-                  <Button type="button" size="sm" variant="outline" onClick={() => setReplayKey(key => key + 1)}>
-                    <RotateCcw />
-                    重播
+              <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/webp,image/svg+xml,.png,.webp,.svg"
+                  className="sr-only"
+                  onChange={(event) => {
+                    selectImage(event.target.files?.[0])
+                    event.target.value = ''
+                  }}
+                />
+                {shape === 'image' && (
+                  <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                    <Upload />
+                    {uploadedImage ? '换图' : '上传'}
                   </Button>
-                </div>
+                )}
+                <Button type="button" size="sm" variant="outline" onClick={() => setReplayKey(key => key + 1)}>
+                  <RotateCcw />
+                  重播
+                </Button>
               </div>
+            </div>
             <div>
               <div className="flex min-h-72 items-center justify-center overflow-hidden bg-muted p-8">
                 {shape === 'card' && (

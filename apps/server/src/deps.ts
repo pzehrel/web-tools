@@ -1,5 +1,5 @@
-import type * as schema from './db/schema.pg.ts'
 import type { Db } from './db/index.ts'
+import type * as schema from './db/schema.pg.ts'
 import type { BlobStore } from './storage/types.ts'
 
 /**

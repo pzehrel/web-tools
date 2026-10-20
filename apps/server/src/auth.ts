@@ -1,9 +1,9 @@
-import { createMiddleware } from 'hono/factory'
-import { getCookie } from 'hono/cookie'
-
 import type { AppEnv } from './app-env.ts'
 import type { Identity } from './identity.ts'
+
 import type { PublicUser, UserService } from './services/users.ts'
+import { getCookie } from 'hono/cookie'
+import { createMiddleware } from 'hono/factory'
 import { SESSION_COOKIE } from './services/users.ts'
 
 /**
