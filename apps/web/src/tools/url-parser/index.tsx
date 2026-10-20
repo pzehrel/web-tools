@@ -1,4 +1,4 @@
-import type { ChangeEvent, DragEvent, ReactNode } from 'react'
+import type { ChangeEvent, DragEvent, ReactNode, SetStateAction } from 'react'
 import type { UrlRecord } from './url-records'
 import type { UrlNode, UrlTree } from './url-tree'
 import { Bookmark, Check, Copy, Download, GitBranch, Link2, LoaderCircle, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
@@ -696,6 +696,26 @@ function defaultName(input: string): string {
 
 function UrlParserTool() {
   const [input, setInput] = useState('')
+  const recognitionRequestRef = useRef(0)
+  const contentRevisionRef = useRef(0)
+  const mountedRef = useRef(true)
+  const [recognizing, setRecognizing] = useState(false)
+  const [qrError, setQrError] = useState('')
+  const changeInput = useCallback((value: SetStateAction<string>) => {
+    recognitionRequestRef.current += 1
+    contentRevisionRef.current += 1
+    setRecognizing(false)
+    setQrError('')
+    setInput(value)
+  }, [])
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      recognitionRequestRef.current += 1
+      contentRevisionRef.current += 1
+    }
+  }, [])
   const tree = useMemo(() => parseUrl(input), [input])
   const found = hasParams(tree)
   // 根节点只展示 base（协议 + 主机 + 路径），参数和 # 已在树里展开
@@ -709,10 +729,10 @@ function UrlParserTool() {
       const hash = window.location.hash.slice(1)
       const initial = hash.startsWith('text=') ? readHashParam('text') : readHashParam('url')
       if (initial)
-        setInput(initial)
+        changeInput(initial)
     }, 0)
     return () => clearTimeout(timer)
-  }, [])
+  }, [changeInput])
 
   // 内容变动 → 同步到 URL hash（防抖，replaceState 不产生历史记录）
   useEffect(() => {
@@ -721,23 +741,23 @@ function UrlParserTool() {
   }, [input])
 
   const handleEdit = useCallback((id: string, patch: Partial<Pick<UrlNode, 'label' | 'value'>>) => {
-    setInput(prev => serializeUrl(updateNode(parseUrl(prev), id, patch)))
-  }, [])
+    changeInput(prev => serializeUrl(updateNode(parseUrl(prev), id, patch)))
+  }, [changeInput])
 
   // 编辑普通值：重解析子树，避免旧子树覆盖新值
   const handleEditValue = useCallback((id: string, value: string) => {
-    setInput(prev => serializeUrl(setNodeValue(parseUrl(prev), id, value)))
-  }, [])
+    changeInput(prev => serializeUrl(setNodeValue(parseUrl(prev), id, value)))
+  }, [changeInput])
 
   // 编辑嵌套 URL 的 base（协议/域名/路径）：剥离误贴的 query，但保留手动输入的 hash（视为显式替换）
   const handleEditBase = useCallback((node: UrlNode, nextBase: string) => {
     const suffix = node.children ? suffixOfTree(node.children) : ''
-    setInput(prev => serializeUrl(setNodeValue(parseUrl(prev), node.id, mergeBaseEdit(nextBase, suffix))))
-  }, [])
+    changeInput(prev => serializeUrl(setNodeValue(parseUrl(prev), node.id, mergeBaseEdit(nextBase, suffix))))
+  }, [changeInput])
 
   const handleDelete = useCallback((id: string) => {
-    setInput(prev => serializeUrl(deleteNode(parseUrl(prev), id)))
-  }, [])
+    changeInput(prev => serializeUrl(deleteNode(parseUrl(prev), id)))
+  }, [changeInput])
 
   // 新增参数后，主动让新 key 进入编辑态。id 经「新旧树结构 diff」在重解析后的树里定位
   // （序列化 → 重解析会重新分配全部 id，不能直接用 addParam 内部生成的 id）；
@@ -746,11 +766,11 @@ function UrlParserTool() {
   const [autoEdit, setAutoEdit] = useState<{ id: string, nonce: number } | null>(null)
   const commitAdd = useCallback((prevTree: UrlTree, nextTree: UrlTree) => {
     const nextInput = serializeUrl(nextTree)
-    setInput(nextInput)
+    changeInput(nextInput)
     const id = findInsertedId(prevTree.nodes, parseUrl(nextInput).nodes)
     if (id)
       setAutoEdit(prev => ({ id, nonce: (prev?.nonce ?? 0) + 1 }))
-  }, [])
+  }, [changeInput])
 
   // 在某一行所在层级、其下方插入 key=value（默认值便于继续编辑）
   const handleAddBelow = useCallback((node: UrlNode | null) => {
@@ -809,34 +829,37 @@ function UrlParserTool() {
     event.stopPropagation()
     const sourceId = draggedId(event)
     if (sourceId) {
-      setInput((prev) => {
+      changeInput((prev) => {
         const current = parseUrl(prev)
         return serializeUrl(moveNode(current, sourceId, targetId))
       })
     }
     clearTreeDrag()
-  }, [clearTreeDrag, draggedId])
+  }, [clearTreeDrag, draggedId, changeInput])
 
   const [copied, setCopied] = useState(false)
 
   // 输入内容的二维码预览（防抖 400ms）
-  const [qr, setQr] = useState<string | null>(null)
+  const [qrResult, setQrResult] = useState<{ text: string, url: string } | null>(null)
+  const qr = qrResult?.text === input && input.trim() ? qrResult.url : null
   useEffect(() => {
     let cancelled = false
     const timer = setTimeout(() => {
       if (!input.trim()) {
         if (!cancelled)
-          setQr(null)
+          setQrResult(null)
         return
       }
       encodeQr(input, 'L')
         .then((dataUrl) => {
           if (!cancelled)
-            setQr(dataUrl)
+            setQrResult({ text: input, url: dataUrl })
         })
         .catch(() => {
-          if (!cancelled)
-            setQr(null)
+          if (!cancelled) {
+            setQrResult(null)
+            setQrError('二维码生成失败，内容可能过长，请缩短后重试')
+          }
         })
     }, 400)
     return () => {
@@ -846,25 +869,33 @@ function UrlParserTool() {
   }, [input])
 
   // —— 二维码图片识别（原二维码工具能力）：点击选择 / 拖拽 / 粘贴图片 ——
-  const [qrError, setQrError] = useState('')
   const [dragging, setDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = useCallback(async (file: File) => {
+    const request = ++recognitionRequestRef.current
+    setRecognizing(true)
     setQrError('')
     try {
       const result = await decodeQr(file)
+      if (request !== recognitionRequestRef.current)
+        return
       if (result) {
-        setInput(result)
+        changeInput(result)
       }
       else {
         setQrError('未在图片中识别到二维码，换一张更清晰的试试')
       }
     }
     catch {
-      setQrError('图片读取失败，请确认是有效的图片文件')
+      if (request === recognitionRequestRef.current)
+        setQrError('图片读取失败，请确认是有效的图片文件')
     }
-  }, [])
+    finally {
+      if (request === recognitionRequestRef.current)
+        setRecognizing(false)
+    }
+  }, [changeInput])
 
   const onFileChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -885,7 +916,7 @@ function UrlParserTool() {
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
       const target = e.target
-      if (target instanceof HTMLElement && target.closest('textarea, input'))
+      if (target instanceof HTMLElement && target.closest('textarea, input, [contenteditable]:not([contenteditable="false"])'))
         return
       const file = Array.from(e.clipboardData?.files ?? []).find(f => f.type.startsWith('image/'))
       if (file)
@@ -905,13 +936,18 @@ function UrlParserTool() {
   }, [qr])
 
   const [renderingQrPreview, setRenderingQrPreview] = useState(false)
+  const exportBusyRef = useRef(false)
   const downloadQrPreview = useCallback(async () => {
-    if (!qr || !isUrl)
+    if (!qr || !isUrl || exportBusyRef.current)
       return
+    exportBusyRef.current = true
+    const revision = contentRevisionRef.current
     setRenderingQrPreview(true)
     setQrError('')
     try {
       const blob = await renderQrParameterPreview(qr, tree)
+      if (revision !== contentRevisionRef.current)
+        return
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -920,10 +956,13 @@ function UrlParserTool() {
       setTimeout(URL.revokeObjectURL, 10_000, url)
     }
     catch {
-      setQrError('参数预览图片生成失败，请重试')
+      if (revision === contentRevisionRef.current)
+        setQrError('参数预览图片生成失败，请重试')
     }
     finally {
-      setRenderingQrPreview(false)
+      exportBusyRef.current = false
+      if (mountedRef.current)
+        setRenderingQrPreview(false)
     }
   }, [isUrl, qr, tree])
 
@@ -987,9 +1026,9 @@ function UrlParserTool() {
     }
     setSelectedId(item.id)
     setRenamingId(null)
-    setInput(item.text)
+    changeInput(item.text)
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [selectedId])
+  }, [selectedId, changeInput])
 
   const commitRename = useCallback(() => {
     if (renamingId)
@@ -1033,7 +1072,7 @@ function UrlParserTool() {
         <textarea
           id="url-workspace-input"
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={e => changeInput(e.target.value)}
           aria-label="链接内容"
           placeholder="粘贴 URL 或路径，例如 https://a.com/p?x=1；可声明参数变量，语法见参数区"
           className="h-36 min-h-28 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-sm leading-6 outline-none placeholder:font-sans placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -1070,7 +1109,7 @@ function UrlParserTool() {
             <Bookmark />
             保存
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setInput(DEMO_URL)}>
+          <Button variant="outline" size="sm" onClick={() => changeInput(DEMO_URL)}>
             <Sparkles />
             试试示例
           </Button>
@@ -1081,8 +1120,8 @@ function UrlParserTool() {
         <section className="flex min-w-0 flex-col gap-3">
           <div className="url-qr-heading">
             <h2>
-              <QrCode size={16} />
-              二维码
+              {recognizing ? <LoaderCircle size={16} className="animate-spin" /> : <QrCode size={16} />}
+              {recognizing ? '正在识别…' : '二维码'}
             </h2>
             <Button variant="ghost" size="icon-sm" aria-label="选择二维码图片识别" title="选择二维码图片识别" onClick={() => fileInputRef.current?.click()}><Plus size={16} /></Button>
           </div>
@@ -1091,6 +1130,7 @@ function UrlParserTool() {
             tabIndex={0}
             title="点击选择 / 拖拽 / 粘贴二维码图片识别"
             aria-label="上传二维码图片识别"
+            aria-busy={recognizing}
             onClick={() => fileInputRef.current?.click()}
             onKeyDown={e => e.key === 'Enter' && fileInputRef.current?.click()}
             onDragOver={(e) => {
@@ -1206,7 +1246,7 @@ function UrlParserTool() {
                           text={baseUrl}
                           mono
                           className={cn('w-full break-all', DEPTH_COLORS[0])}
-                          onCommit={next => setInput(mergeBaseEdit(next, suffixOfTree(tree)))}
+                          onCommit={next => changeInput(mergeBaseEdit(next, suffixOfTree(tree)))}
                         />
                       </span>
                       <button
