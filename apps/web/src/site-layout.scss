@@ -82,7 +82,11 @@ body:has([aria-modal='true']) .site-header { z-index: 0; }
   .site-brand-group { gap: 5px; }
   .site-brand-group h1 { padding-left: 6px; font-size: 12px; }
   .site-header-actions, .site-actions, .theme-toggle { gap: 2px; }
-  .site-tool-menu summary { width: 30px; padding: 7px; span { display: none; } }
+  .site-tool-menu {
+    position: static;
+    summary { width: 30px; padding: 7px; span { display: none; } }
+    nav { top: calc(100% + 4px); right: 12px; }
+  }
   .home-directory { padding: 24px 16px; }
   .home-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home-tools > a { min-height: 210px; padding: 20px 16px; &:nth-child(odd) { border-left: 0; } &:nth-child(n+3) { border-top: 0; } }
