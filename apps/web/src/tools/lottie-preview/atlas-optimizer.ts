@@ -239,6 +239,8 @@ function atlasLayer(atlasId: string, placement: PlacedSprite): LottieLayer {
   const position = placement.rotated
     ? [placement.trimLeft, placement.trimTop + placement.contentHeight, 0]
     : [placement.trimLeft, placement.trimTop, 0]
+  const maskWidth = placement.rotated ? placement.contentHeight : placement.contentWidth
+  const maskHeight = placement.rotated ? placement.contentWidth : placement.contentHeight
   return {
     ddd: 0,
     ind: 1,
@@ -259,9 +261,9 @@ function atlasLayer(atlasId: string, placement: PlacedSprite): LottieLayer {
             o: [[0, 0], [0, 0], [0, 0], [0, 0]],
             v: [
               [placement.contentX, placement.contentY],
-              [placement.contentX + placement.contentWidth, placement.contentY],
-              [placement.contentX + placement.contentWidth, placement.contentY + placement.contentHeight],
-              [placement.contentX, placement.contentY + placement.contentHeight],
+              [placement.contentX + maskWidth, placement.contentY],
+              [placement.contentX + maskWidth, placement.contentY + maskHeight],
+              [placement.contentX, placement.contentY + maskHeight],
             ],
           },
         },
@@ -424,7 +426,8 @@ export async function optimizeLottie(project: LoadedLottieProject, options: Atla
   const animation = rewriteAnimation(project.animation, atlasAssets, placements)
   const previewAnimation = resolveImageAssetsForPreview(animation, project.images)
   for (const asset of previewAnimation.assets ?? []) {
-    const atlas = atlases.find(item => item.filename === asset.p)
+    const sourceAsset = animation.assets?.find(item => item.id === asset.id)
+    const atlas = atlases.find(item => item.filename === sourceAsset?.p)
     if (!atlas)
       continue
     asset.u = ''
