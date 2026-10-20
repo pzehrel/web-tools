@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, PointerEvent as ReactPointerEvent } from 'react'
+import type { NinePatchRecordMeta } from './records'
 import {
   Check,
   Copy,
@@ -16,17 +17,17 @@ import {
   Wand2,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
 
+import { flushSync } from 'react-dom'
 import { Seo } from '@/components/seo'
-import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
+import { STAGE_BOUNDARY_CLASS, StageViewControls, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
 import { useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoImage } from '../demos/nine-patch'
 import { analyzeNineSlice, readImagePixels } from './nine-slice'
-import { createNinePatchItem, useNinePatchRecords, type NinePatchRecordMeta } from './records'
+import { createNinePatchItem, useNinePatchRecords } from './records'
 
 /** 已加载的源图：Blob 用于记录持久化，objectURL 仅用于当前页面预览 */
 interface SourceImage {
@@ -916,136 +917,142 @@ export default function NinePatchTool() {
                 className="font-mono text-xs text-muted-foreground"
                 title={`原图尺寸：${image.name}`}
               >
-                原图 {image.width} × {image.height}
+                原图
+                {' '}
+                {image.width}
+                {' '}
+                ×
+                {' '}
+                {image.height}
               </span>
             )}
           </div>
-            {/* 相对定位容器：高度外层定死（lg 跟随视口，clamp 在 30~42rem），舞台 absolute inset-0
+          {/* 相对定位容器：高度外层定死（lg 跟随视口，clamp 在 30~42rem），舞台 absolute inset-0
                 脱离文档流——放大后的内容不会把卡片撑高；悬浮按钮挂在舞台外面 */}
-            <div className="relative h-[22rem] lg:h-[calc(100svh-24rem)] lg:max-h-[52rem] lg:min-h-[34rem]">
-              <div
-                ref={editorStageRef}
-                {...editorPan.panHandlers}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setDragOver(true)
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={onDrop}
-                className={cn(
-                  'absolute inset-0 flex touch-none overflow-hidden border p-3 transition-colors select-none',
-                  editorPan.panning ? 'cursor-grabbing' : 'cursor-grab',
-                  !image && 'border-dashed',
-                  dragOver ? 'border-primary' : 'border-border',
-                )}
-                style={{ background: editorStageView.background }}
-              >
-                {image
-                  ? (
-                      <div
-                        className={cn('relative m-auto shrink-0 select-none', editorStageView.showBounds && STAGE_BOUNDARY_CLASS)}
-                        style={{
-                          width: image.width * scale,
-                          height: image.height * scale,
-                          transform: `translate(${editorPan.offset.x}px, ${editorPan.offset.y}px)`,
-                        }}
-                      >
-                        <img
-                          src={image.url}
-                          alt={image.name}
-                          width={image.width * scale}
-                          height={image.height * scale}
-                          draggable={false}
-                          className="block"
-                        />
-                        {/* 裁剪预览：被裁行列盖斜纹遮罩，保留框描边；不拦截指针，切线照常可拖 */}
-                        {cropMask && keepRect && (
-                          <>
-                            {cropMask.map(r => (
-                              <div
-                                key={`${r.x}-${r.y}`}
-                                className="pointer-events-none absolute"
-                                style={{ left: r.x * scale, top: r.y * scale, width: r.w * scale, height: r.h * scale, ...CROP_MASK_STYLE }}
-                              />
-                            ))}
-                            <div
-                              className="pointer-events-none absolute border border-primary"
-                              style={{ left: keepRect.x * scale, top: keepRect.y * scale, width: keepRect.w * scale, height: keepRect.h * scale }}
-                            />
-                          </>
-                        )}
-                        {SIDES.map(s => renderLine(s.side))}
-                      </div>
-                    )
-                  : (
-                      <div className="m-auto flex flex-col items-center gap-3 px-6 text-center">
-                        <Frame className="size-8 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">拖拽图片到此处，或</p>
-                          <p className="mt-1 text-sm text-muted-foreground">PNG / SVG / WebP 均可</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button type="button" onClick={() => fileInputRef.current?.click()}>
-                            <ImagePlus />
-                            选择图片
-                          </Button>
-                          <Button type="button" variant="outline" onClick={loadDemo}>
-                            <Sparkles />
-                            试试示例
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-              </div>
-              <StageZoomIndicator zoom={zoom} visible={editorStageZoom.zoomIndicatorVisible} />
-              <StageViewControls hasContent={Boolean(image)} settings={editorStageView} />
-              {/* 有图后：操作按钮悬浮在舞台右上角（与帧动画工具一致）；平移后出现「回到居中」 */}
-              {image && (
-                <div className="absolute top-2 right-2 flex gap-1.5">
-                  {(editorPan.offset.x !== 0 || editorPan.offset.y !== 0 || zoom !== editorFit) && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      title="重置视图（居中并完整适配）"
-                      aria-label="重置视图"
-                      onClick={() => {
-                        editorPan.resetPan()
-                        resetEditorZoom()
+          <div className="relative h-[22rem] lg:h-[calc(100svh-24rem)] lg:max-h-[52rem] lg:min-h-[34rem]">
+            <div
+              ref={editorStageRef}
+              {...editorPan.panHandlers}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setDragOver(true)
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              className={cn(
+                'absolute inset-0 flex touch-none overflow-hidden border p-3 transition-colors select-none',
+                editorPan.panning ? 'cursor-grabbing' : 'cursor-grab',
+                !image && 'border-dashed',
+                dragOver ? 'border-primary' : 'border-border',
+              )}
+              style={{ background: editorStageView.background }}
+            >
+              {image
+                ? (
+                    <div
+                      className={cn('relative m-auto shrink-0 select-none', editorStageView.showBounds && STAGE_BOUNDARY_CLASS)}
+                      style={{
+                        width: image.width * scale,
+                        height: image.height * scale,
+                        transform: `translate(${editorPan.offset.x}px, ${editorPan.offset.y}px)`,
                       }}
                     >
-                      <RotateCcw />
-                    </Button>
+                      <img
+                        src={image.url}
+                        alt={image.name}
+                        width={image.width * scale}
+                        height={image.height * scale}
+                        draggable={false}
+                        className="block"
+                      />
+                      {/* 裁剪预览：被裁行列盖斜纹遮罩，保留框描边；不拦截指针，切线照常可拖 */}
+                      {cropMask && keepRect && (
+                        <>
+                          {cropMask.map(r => (
+                            <div
+                              key={`${r.x}-${r.y}`}
+                              className="pointer-events-none absolute"
+                              style={{ left: r.x * scale, top: r.y * scale, width: r.w * scale, height: r.h * scale, ...CROP_MASK_STYLE }}
+                            />
+                          ))}
+                          <div
+                            className="pointer-events-none absolute border border-primary"
+                            style={{ left: keepRect.x * scale, top: keepRect.y * scale, width: keepRect.w * scale, height: keepRect.h * scale }}
+                          />
+                        </>
+                      )}
+                      {SIDES.map(s => renderLine(s.side))}
+                    </div>
+                  )
+                : (
+                    <div className="m-auto flex flex-col items-center gap-3 px-6 text-center">
+                      <Frame className="size-8 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">拖拽图片到此处，或</p>
+                        <p className="mt-1 text-sm text-muted-foreground">PNG / SVG / WebP 均可</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="button" onClick={() => fileInputRef.current?.click()}>
+                          <ImagePlus />
+                          选择图片
+                        </Button>
+                        <Button type="button" variant="outline" onClick={loadDemo}>
+                          <Sparkles />
+                          试试示例
+                        </Button>
+                      </div>
+                    </div>
                   )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    title="更换图片"
-                    aria-label="更换图片"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <ImagePlus />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    title="清除图片"
-                    aria-label="清除图片"
-                    onClick={clearImage}
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
-              )}
             </div>
-            {importError && (
-              <p className="mt-3 flex items-center gap-1.5 text-sm text-destructive">
-                <TriangleAlert className="size-4 shrink-0" />
-                {importError}
-              </p>
+            <StageZoomIndicator zoom={zoom} visible={editorStageZoom.zoomIndicatorVisible} />
+            <StageViewControls hasContent={Boolean(image)} settings={editorStageView} />
+            {/* 有图后：操作按钮悬浮在舞台右上角（与帧动画工具一致）；平移后出现「回到居中」 */}
+            {image && (
+              <div className="absolute top-2 right-2 flex gap-1.5">
+                {(editorPan.offset.x !== 0 || editorPan.offset.y !== 0 || zoom !== editorFit) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    title="重置视图（居中并完整适配）"
+                    aria-label="重置视图"
+                    onClick={() => {
+                      editorPan.resetPan()
+                      resetEditorZoom()
+                    }}
+                  >
+                    <RotateCcw />
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  title="更换图片"
+                  aria-label="更换图片"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  title="清除图片"
+                  aria-label="清除图片"
+                  onClick={clearImage}
+                >
+                  <Trash2 />
+                </Button>
+              </div>
             )}
+          </div>
+          {importError && (
+            <p className="mt-3 flex items-center gap-1.5 text-sm text-destructive">
+              <TriangleAlert className="size-4 shrink-0" />
+              {importError}
+            </p>
+          )}
         </section>
 
         {/* 实时预览：与编辑舞台同列，改完切线向下扫一眼即可验证；水平线与上方编辑区分隔 */}
@@ -1172,20 +1179,20 @@ export default function NinePatchTool() {
         <section className="lg:col-start-1 lg:row-start-1 lg:border-r lg:border-border lg:pr-6">
           <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
             <h2 className="font-mono text-sm font-semibold tracking-tight">参数</h2>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                title="从像素分析最小可用切片（自动识别）"
-                disabled={!image || detecting}
-                onClick={() => void autoDetect()}
-              >
-                <Wand2 />
-                {detecting ? '识别中…' : '自动识别'}
-              </Button>
-              <Button type="button" variant="outline" size="icon-sm" title="重置切片" aria-label="重置切片" onClick={resetSlice} disabled={!image}>
-                <RotateCcw />
-              </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              title="从像素分析最小可用切片（自动识别）"
+              disabled={!image || detecting}
+              onClick={() => void autoDetect()}
+            >
+              <Wand2 />
+              {detecting ? '识别中…' : '自动识别'}
+            </Button>
+            <Button type="button" variant="outline" size="icon-sm" title="重置切片" aria-label="重置切片" onClick={resetSlice} disabled={!image}>
+              <RotateCcw />
+            </Button>
           </div>
           <div className="flex flex-col gap-4">
             {/* 切片边距 */}
@@ -1375,9 +1382,9 @@ export default function NinePatchTool() {
         <section className="flex min-w-0 flex-col border-t border-border pt-4 lg:col-start-1 lg:row-start-2 lg:h-[32rem] lg:border-r lg:border-border lg:pr-6">
           <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
             <h2 className="font-mono text-sm font-semibold tracking-tight">样式代码</h2>
-              <Button type="button" variant="outline" size="icon-sm" title="复制" aria-label="复制" onClick={copyCode}>
-                {copied ? <Check /> : <Copy />}
-              </Button>
+            <Button type="button" variant="outline" size="icon-sm" title="复制" aria-label="复制" onClick={copyCode}>
+              {copied ? <Check /> : <Copy />}
+            </Button>
           </div>
           <div className="flex min-h-0 flex-1 flex-col gap-3">
             <div className="grid grid-cols-2 gap-2">
