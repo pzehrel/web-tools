@@ -89,6 +89,43 @@ function defaultSlice(width: number, height: number): Slice {
   return { top: s, right: s, bottom: s, left: s }
 }
 
+function restoreRecordMeta(meta: Record<string, unknown>, image: SourceImage): NinePatchRecordMeta {
+  const defaults = defaultSlice(image.width, image.height)
+  const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' ? value as Record<string, unknown> : {}
+  const number = (value: unknown, fallback: number, max: number, min = 0): number => typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, Math.round(value)))
+    : fallback
+  const sides = (value: unknown, fallback: Slice, max: number): Slice => {
+    const source = object(value)
+    const edge = (side: Side) => number(source[side], Math.min(max, fallback[side]), max)
+    return { top: edge('top'), right: edge('right'), bottom: edge('bottom'), left: edge('left') }
+  }
+  const slice = normalizeSlice(sides(meta.slice, defaults, Math.max(image.width, image.height)), image)
+  const crop = object(meta.cropKeep)
+  const repeat = (value: unknown): RepeatMode => value === 'repeat' || value === 'round' || value === 'space' ? value : 'stretch'
+  return {
+    name: typeof meta.name === 'string' ? meta.name.trim() : '',
+    imageName: image.name,
+    width: image.width,
+    height: image.height,
+    slice,
+    imageWidth: sides(meta.imageWidth, defaults, 200),
+    outset: number(meta.outset, 0, 100),
+    fill: typeof meta.fill === 'boolean' ? meta.fill : true,
+    linkWidth: typeof meta.linkWidth === 'boolean' ? meta.linkWidth : true,
+    repeatH: repeat(meta.repeatH),
+    repeatV: repeat(meta.repeatV),
+    cropEnabled: typeof meta.cropEnabled === 'boolean' ? meta.cropEnabled : false,
+    cropKeep: {
+      w: number(crop.w, 1, Math.max(1, image.width - slice.left - slice.right), 1),
+      h: number(crop.h, 1, Math.max(1, image.height - slice.top - slice.bottom), 1),
+    },
+    cropAxes: meta.cropAxes === 'x' || meta.cropAxes === 'y' ? meta.cropAxes : 'both',
+    codeFormat: 'css',
+    codeStyle: meta.codeStyle === 'shorthand' ? 'shorthand' : 'longhand',
+  }
+}
+
 function collapse4(t: number, r: number, b: number, l: number, unit = ''): string {
   const u = (v: number) => `${v}${unit}`
   if (t === r && r === b && b === l)
@@ -293,7 +330,11 @@ export default function NinePatchTool() {
 
   const [resizeOffset, setResizeOffset] = useState({ x: 0, y: 0 })
   const [codeStyle, setCodeStyle] = useState<CodeStyle>('longhand')
-  const [copied, setCopied] = useState(false)
+  const [copyFeedback, setCopyFeedback] = useState<{ text: string, ok: boolean } | null>(null)
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyRequestRef = useRef(0)
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
 
   const [cropEnabled, setCropEnabled] = useState(false)
 
@@ -399,62 +440,88 @@ export default function NinePatchTool() {
   }, [resetEditorPan, resetPreviewPan, resetGestures])
 
   const saveRecord = useCallback(async () => {
-    if (!image)
+    if (!image || savingRef.current)
       return
     const meta = makeRecordMeta()
     if (!meta)
       return
-    const id = crypto.randomUUID()
+    const request = requestRef.current
+    savingRef.current = true
+    setSaving(true)
+    setRecordInfo(null)
     try {
-      await saveRecordItem(createNinePatchItem(id, image.blob, meta))
-      setRecordInfo({ ok: true, text: '记录已保存' })
+      await saveRecordItem(createNinePatchItem(crypto.randomUUID(), image.blob, meta))
+      if (request === requestRef.current)
+        setRecordInfo({ ok: true, text: '记录已保存' })
     }
     catch {
-      setRecordInfo({ ok: false, text: '记录保存失败，请重试' })
+      if (request === requestRef.current)
+        setRecordInfo({ ok: false, text: '记录保存失败，请重试' })
+    }
+    finally {
+      savingRef.current = false
+      setSaving(false)
     }
   }, [image, makeRecordMeta, saveRecordItem])
 
   const loadRecord = useCallback(async (id: string) => {
     const request = ++requestRef.current
-    const item = await getRecordItem(id)
-    if (!item || !(item.payload instanceof Blob))
-      return
-    const meta = item.meta as Partial<NinePatchRecordMeta>
-    const loaded = await loadImageBlob(typeof meta.imageName === 'string' ? meta.imageName : 'image', item.payload)
-    if (!loaded) {
-      if (request === requestRef.current)
-        setRecordInfo({ ok: false, text: '记录图片解码失败' })
-      return
-    }
-    if (request !== requestRef.current) {
-      URL.revokeObjectURL(loaded.url)
-      return
-    }
-    applyImage(loaded)
-    setRecordName(typeof meta.name === 'string' ? meta.name : '')
-    if (meta.slice)
-      setSlice(normalizeSlice(meta.slice, loaded))
-    if (meta.imageWidth)
+    setRecordInfo(null)
+    try {
+      const item = await getRecordItem(id)
+      if (request !== requestRef.current)
+        return
+      if (!item || !(item.payload instanceof Blob)) {
+        setRecordInfo({ ok: false, text: '记录图片不可用，请重试或选择其他记录' })
+        return
+      }
+      const name = typeof item.meta.imageName === 'string' && item.meta.imageName.trim() ? item.meta.imageName : 'image'
+      const bytes = await item.payload.arrayBuffer()
+      if (request !== requestRef.current)
+        return
+      const source = new Blob([bytes], { type: item.payload.type })
+      const loaded = await loadImageBlob(name, source)
+      if (request !== requestRef.current) {
+        if (loaded)
+          URL.revokeObjectURL(loaded.url)
+        return
+      }
+      if (!loaded) {
+        setRecordInfo({ ok: false, text: '记录图片解码失败，请重试或选择其他记录' })
+        return
+      }
+      const meta = restoreRecordMeta(item.meta, loaded)
+      applyImage(loaded)
+      setRecordName(meta.name)
+      setSlice(meta.slice)
       setImageWidth(meta.imageWidth)
-    if (typeof meta.outset === 'number')
       setOutset(meta.outset)
-    if (typeof meta.fill === 'boolean')
       setFill(meta.fill)
-    if (typeof meta.linkWidth === 'boolean')
       setLinkWidth(meta.linkWidth)
-    if (meta.repeatH)
       setRepeatH(meta.repeatH)
-    if (meta.repeatV)
       setRepeatV(meta.repeatV)
-    if (typeof meta.cropEnabled === 'boolean')
       setCropEnabled(meta.cropEnabled)
-    if (meta.cropKeep)
       setCropKeep(meta.cropKeep)
-    if (meta.cropAxes)
       setCropAxes(meta.cropAxes)
-    if (meta.codeStyle)
       setCodeStyle(meta.codeStyle)
+      setRecordInfo({ ok: true, text: '记录已加载' })
+    }
+    catch {
+      if (request === requestRef.current)
+        setRecordInfo({ ok: false, text: '记录加载失败，请重试' })
+    }
   }, [applyImage, getRecordItem])
+
+  const deleteRecord = useCallback(async (id: string) => {
+    setRecordInfo(null)
+    try {
+      await removeRecordItem(id)
+      setRecordInfo({ ok: true, text: '记录已删除' })
+    }
+    catch {
+      setRecordInfo({ ok: false, text: '记录删除失败，请重试' })
+    }
+  }, [removeRecordItem])
 
   const importBlob = useCallback(async (name: string, blob: Blob) => {
     const request = ++requestRef.current
@@ -504,6 +571,9 @@ export default function NinePatchTool() {
     requestRef.current++
     detectRequestRef.current++
     resetGestures()
+    copyRequestRef.current++
+    if (copyTimerRef.current !== null)
+      clearTimeout(copyTimerRef.current)
     const img = imageRef.current
     if (img && img.url.startsWith('blob:'))
       URL.revokeObjectURL(img.url)
@@ -809,11 +879,29 @@ export default function NinePatchTool() {
   const codeParams: CodeParams = { slice, imageWidth, linkWidth, outset, fill, repeatH, repeatV }
   const exportText = buildCode(codeStyle, codeParams)
 
-  const copyCode = useCallback(() => {
-    void navigator.clipboard.writeText(exportText).then(() => {
-      setCopied(true)
-      setTimeout(setCopied, 1200, false)
-    })
+  const copied = copyFeedback?.ok === true && copyFeedback.text === exportText
+  const copyError = copyFeedback?.ok === false && copyFeedback.text === exportText
+
+  useEffect(() => {
+    copyRequestRef.current++
+  }, [exportText])
+
+  const copyCode = useCallback(async () => {
+    const request = ++copyRequestRef.current
+    setCopyFeedback(null)
+    if (copyTimerRef.current !== null)
+      clearTimeout(copyTimerRef.current)
+    try {
+      await navigator.clipboard.writeText(exportText)
+      if (request === copyRequestRef.current) {
+        setCopyFeedback({ text: exportText, ok: true })
+        copyTimerRef.current = setTimeout(setCopyFeedback, 1200, null)
+      }
+    }
+    catch {
+      if (request === copyRequestRef.current)
+        setCopyFeedback({ text: exportText, ok: false })
+    }
   }, [exportText])
 
   let cropMask: { x: number, y: number, w: number, h: number }[] | null = null
@@ -1423,12 +1511,15 @@ export default function NinePatchTool() {
                       { value: 'shorthand' as CodeStyle, label: '简写' },
                     ]}
                   />
-                  <Button type="button" variant="outline" size="icon-sm" title="复制" aria-label="复制" onClick={copyCode}>
+                  <Button type="button" variant="outline" size="icon-sm" title="复制" aria-label="复制" onClick={() => void copyCode()}>
                     {copied ? <Check data-feedback="success" /> : <Copy />}
                   </Button>
                 </div>
+                <p id="nine-image-path-guide" className="text-xs text-muted-foreground">把 YOUR-IMAGE-PATH.EXT 换成项目中的实际图片路径。</p>
                 <pre
                   tabIndex={0}
+                  aria-label="CSS 代码"
+                  aria-describedby="nine-image-path-guide"
                   onKeyDown={selectCodeOnShortcut}
                   className="min-h-40 max-h-96 min-w-0 flex-1 overflow-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-5 whitespace-pre outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
@@ -1468,8 +1559,8 @@ export default function NinePatchTool() {
                         <button type="button" className="min-w-0 flex-1 truncate text-left text-sm hover:underline" onClick={() => void loadRecord(record.id)} title="加载记录">
                           {record.recordName}
                         </button>
-                        <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{record.size > 0 ? `${Math.round(record.size / 1024)} KB` : ''}</span>
-                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除记录 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
+                        <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{record.size >= 1024 ? `${Math.round(record.size / 1024)} KB` : `${record.size} B`}</span>
+                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除记录 ${record.recordName}`} onClick={() => void deleteRecord(record.id)}>
                           <Trash2 />
                         </Button>
                       </div>
@@ -1483,14 +1574,15 @@ export default function NinePatchTool() {
         <footer className="nine-panel-footer">
           <input aria-label="记录名称" placeholder={image?.name || '记录名称'} value={recordName} onChange={event => setRecordName(event.target.value)} className="w-full rounded border border-border bg-background px-2 py-1" />
           {recordInfo && <p role="status" className={recordInfo.ok ? 'text-success' : 'text-destructive'}>{recordInfo.text}</p>}
+          {copyError && <p role="alert" className="text-destructive">复制失败，请重试或选中代码手动复制</p>}
           <div className="nine-output-actions">
-            <Button type="button" size="sm" disabled={!image} onClick={copyCode}>
+            <Button type="button" size="sm" disabled={!image} onClick={() => void copyCode()}>
               {copied ? <Check data-feedback="success" /> : <Copy />}
               复制 CSS
             </Button>
-            <Button type="button" variant="outline" size="sm" disabled={!image} onClick={() => void saveRecord()} aria-label="保存当前记录">
+            <Button type="button" variant="outline" size="sm" disabled={!image || saving} onClick={() => void saveRecord()} aria-label="保存当前记录">
               <Save />
-              保存
+              {saving ? '保存中…' : '保存'}
             </Button>
           </div>
           <Button type="button" variant="outline" size="sm" className="nine-crop-download" disabled={!cropActive} onClick={downloadCropped}>
