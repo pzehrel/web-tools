@@ -1110,7 +1110,7 @@ export default function FrameAnimation() {
       setExportFormat(meta.exportFormat === 'css' || meta.exportFormat === 'less' ? meta.exportFormat : 'scss')
       setSpriteDimension({
         axis: meta.spriteDimension?.axis === 'cols' ? 'cols' : 'rows',
-        value: Math.floor(bounded(meta.spriteDimension?.value, 1, 1, Math.max(1, end - start + 1))),
+        value: Math.floor(bounded(meta.spriteDimension?.value, 1, 1, loaded.length)),
       })
       setExportVars(typeof meta.exportVars === 'boolean' ? meta.exportVars : true)
       setExportContainer(typeof meta.exportContainer === 'boolean' ? meta.exportContainer : true)
