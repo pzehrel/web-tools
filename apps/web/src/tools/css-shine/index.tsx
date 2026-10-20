@@ -1,11 +1,10 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { ArrowLeft, Check, Copy, MousePointer2, Play, RotateCcw, Sparkles, Upload, WandSparkles } from 'lucide-react'
+import { ArrowLeft, Check, Copy, MousePointer2, Play, RotateCcw, Sparkles, Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import { Seo } from '@/components/seo'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import './index.scss'
 
@@ -62,7 +61,7 @@ function OptionGroup<T extends string>({
 }) {
   return (
     <div>
-      <p className="mb-1.5 text-xs font-bold text-muted-foreground">{label}</p>
+      <p className="mb-1.5 text-xs font-medium text-muted-foreground">{label}</p>
       <div role="radiogroup" aria-label={label} className="grid grid-cols-2 gap-2">
         {options.map(option => (
           <button
@@ -72,10 +71,10 @@ function OptionGroup<T extends string>({
             aria-checked={value === option.value}
             onClick={() => onChange(option.value)}
             className={cn(
-              'flex h-9 items-center justify-center gap-2 rounded-md border-2 border-border text-sm font-bold transition-all',
+              'flex h-9 items-center justify-center gap-2 rounded-md border border-border text-sm font-medium transition-colors',
               value === option.value
-                ? 'bg-primary text-primary-foreground shadow-hard-xs'
-                : 'bg-background hover:-translate-x-px hover:-translate-y-px hover:bg-secondary hover:shadow-hard-xs',
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-background hover:bg-secondary hover:border-foreground',
             )}
           >
             {option.icon}
@@ -106,10 +105,11 @@ function RangeField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 flex items-center justify-between text-xs font-bold text-muted-foreground">
+      <span className="mb-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
         <span>{label}</span>
-        <output className="rounded-sm border-2 border-border bg-secondary px-1.5 py-0.5 font-mono text-foreground">
-          {value}{suffix}
+        <output className="rounded-sm border border-border bg-secondary px-1.5 py-0.5 font-mono text-foreground">
+          {value}
+          {suffix}
         </output>
       </span>
       <input
@@ -308,7 +308,7 @@ export default function CssShineTool() {
     catch {
       setCopyState('failed')
     }
-    window.setTimeout(() => setCopyState('idle'), 1400)
+    window.setTimeout(setCopyState, 1400, 'idle')
   }
 
   const selectImage = (file?: File) => {
@@ -320,14 +320,14 @@ export default function CssShineTool() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pb-16">
       <Seo
         title="CSS 扫光动效"
         description="在线调整扫光方向、速度、宽度和亮度，实时预览并复制可直接使用的 CSS。"
         path="/tools/css-shine"
       />
 
-      <header className="flex min-h-24 items-center justify-between gap-4 py-5">
+      <header className="flex min-h-24 items-center justify-between gap-4 border-b border-border py-5">
         <div>
           <Link
             to="/"
@@ -336,27 +336,20 @@ export default function CssShineTool() {
             <ArrowLeft />
             返回工具箱
           </Link>
-          <div className="flex items-center gap-3">
-            <div className="flex size-11 shrink-0 -rotate-2 items-center justify-center rounded-md border-2 border-border bg-chart-2 shadow-hard-xs">
-              <WandSparkles className="size-5 text-secondary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight sm:text-3xl">CSS 扫光动效</h1>
-              <p className="mt-1 text-sm text-muted-foreground">调参数、看效果、复制代码，一气呵成。</p>
-            </div>
-          </div>
+          <h1 className="font-mono text-2xl font-semibold tracking-tight sm:text-3xl">CSS 扫光动效</h1>
+          <p className="mt-1 text-sm text-muted-foreground">调参数、看效果、复制代码，一气呵成。</p>
         </div>
       </header>
 
-      <main className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>动效参数</CardTitle>
-            <CardDescription>从预设起步，再把节奏调到刚刚好。</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5 pb-6">
+      <main className="grid items-start gap-x-8 gap-y-10 pt-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <section>
+          <div className="pb-3">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">动效参数</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">从预设起步，再把节奏调到刚刚好。</p>
+          </div>
+          <div className="space-y-5">
             <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">预设</p>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">预设</p>
               <div className="grid grid-cols-3 gap-2">
                 {PRESETS.map(preset => (
                   <Button
@@ -391,7 +384,7 @@ export default function CssShineTool() {
               ]}
             />
 
-            <div className="grid gap-5 border-t-2 border-border pt-5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            <div className="grid gap-5 border-t border-border pt-5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               <RangeField label="单次时长" value={config.duration} min={0.6} max={4} step={0.1} suffix="s" onChange={duration => updateConfig({ duration })} />
               <RangeField label="循环间隔" value={config.delay} min={0} max={4} step={0.1} suffix="s" onChange={delay => updateConfig({ delay })} />
               <RangeField label="光带宽度" value={config.width} min={8} max={55} step={1} suffix="%" onChange={width => updateConfig({ width })} />
@@ -412,44 +405,42 @@ export default function CssShineTool() {
               <RotateCcw />
               恢复默认
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <div className="space-y-5">
-          <Card>
-            <CardHeader className="border-b-2 border-border pb-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <CardTitle>实时预览</CardTitle>
-                  <CardDescription className="mt-1">
-                    {trigger === 'hover' ? '把鼠标移到样例上触发扫光。' : '每次调整参数都会重新播放。'}
-                  </CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/webp,image/svg+xml,.png,.webp,.svg"
-                    className="sr-only"
-                    onChange={(event) => {
-                      selectImage(event.target.files?.[0])
-                      event.target.value = ''
-                    }}
-                  />
-                  {shape === 'image' && (
-                    <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                      <Upload />
-                      {uploadedImage ? '换图' : '上传'}
-                    </Button>
-                  )}
-                  <Button type="button" size="sm" variant="outline" onClick={() => setReplayKey(key => key + 1)}>
-                    <RotateCcw />
-                    重播
-                  </Button>
-                </div>
+        <div className="space-y-10 lg:border-l lg:border-border lg:pl-8">
+          <section>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+              <div>
+                <h2 className="font-mono text-sm font-semibold tracking-tight">实时预览</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {trigger === 'hover' ? '把鼠标移到样例上触发扫光。' : '每次调整参数都会重新播放。'}
+                </p>
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
+              <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/webp,image/svg+xml,.png,.webp,.svg"
+                  className="sr-only"
+                  onChange={(event) => {
+                    selectImage(event.target.files?.[0])
+                    event.target.value = ''
+                  }}
+                />
+                {shape === 'image' && (
+                  <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                    <Upload />
+                    {uploadedImage ? '换图' : '上传'}
+                  </Button>
+                )}
+                <Button type="button" size="sm" variant="outline" onClick={() => setReplayKey(key => key + 1)}>
+                  <RotateCcw />
+                  重播
+                </Button>
+              </div>
+            </div>
+            <div>
               <div className="flex min-h-72 items-center justify-center overflow-hidden bg-muted p-8">
                 {shape === 'card' && (
                   <ShinePreview
@@ -461,12 +452,12 @@ export default function CssShineTool() {
                     className="w-full max-w-sm"
                     layerClassName="rounded-lg"
                   >
-                    <article className="w-full rounded-lg border-2 border-border bg-primary p-6 text-primary-foreground shadow-hard">
-                      <span className="inline-flex -rotate-2 items-center gap-1 rounded-full border-2 border-border bg-secondary px-2.5 py-1 text-xs font-bold text-secondary-foreground shadow-hard-xs">
+                    <article className="w-full rounded-lg border border-border bg-primary p-6 text-primary-foreground">
+                      <span className="inline-flex -rotate-2 items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-bold text-secondary-foreground">
                         <Sparkles className="size-3.5" />
                         NEW
                       </span>
-                      <h2 className="mt-5 text-3xl font-black tracking-tight">灵感正在发光</h2>
+                      <h2 className="mt-5 text-3xl font-semibold tracking-tight">灵感正在发光</h2>
                       <p className="mt-2 text-sm opacity-85">一束克制的高光，让重要内容被看见。</p>
                     </article>
                   </ShinePreview>
@@ -482,7 +473,7 @@ export default function CssShineTool() {
                   >
                     <button
                       type="button"
-                      className="rounded-md border-2 border-border bg-primary px-8 py-4 text-lg font-black text-primary-foreground shadow-hard transition-all hover:-translate-x-0.5 hover:-translate-y-0.5"
+                      className="rounded-md border border-border bg-primary px-8 py-4 text-lg font-semibold text-primary-foreground "
                     >
                       立即体验
                     </button>
@@ -499,7 +490,7 @@ export default function CssShineTool() {
                     className="-rotate-2"
                     layerClassName="rounded-full"
                   >
-                    <span className="rounded-full border-2 border-border bg-primary px-7 py-3 text-xl font-black text-primary-foreground shadow-hard-sm">
+                    <span className="rounded-full border border-border bg-primary px-7 py-3 text-xl font-semibold text-primary-foreground">
                       限时特惠
                     </span>
                   </ShinePreview>
@@ -522,8 +513,8 @@ export default function CssShineTool() {
                 )}
 
                 {shape === 'image' && !uploadedImage && (
-                  <div className="flex max-w-sm flex-col items-center rounded-lg border-2 border-dashed border-border bg-card p-8 text-center">
-                    <div className="flex size-12 items-center justify-center rounded-md border-2 border-border bg-chart-3 shadow-hard-xs">
+                  <div className="flex max-w-sm flex-col items-center rounded-lg border border-dashed border-border bg-card p-8 text-center">
+                    <div className="flex size-12 items-center justify-center rounded-md border border-border bg-chart-3">
                       <Upload className="size-5 text-accent-foreground" />
                     </div>
                     <p className="mt-4 font-bold">上传透明背景图片</p>
@@ -534,7 +525,7 @@ export default function CssShineTool() {
                   </div>
                 )}
               </div>
-              <div role="radiogroup" aria-label="预览样式" className="grid grid-cols-4 border-t-2 border-border">
+              <div role="radiogroup" aria-label="预览样式" className="grid grid-cols-4 border-t border-border">
                 {([
                   ['card', '卡片'],
                   ['button', '按钮'],
@@ -548,7 +539,7 @@ export default function CssShineTool() {
                     aria-checked={shape === value}
                     onClick={() => setShape(value)}
                     className={cn(
-                      'h-11 border-r-2 border-border text-xs font-bold transition-colors last:border-r-0 sm:text-sm',
+                      'h-11 border-r border-border text-xs font-medium transition-colors last:border-r-0 sm:text-sm',
                       shape === value ? 'bg-secondary text-secondary-foreground' : 'bg-card hover:bg-muted',
                     )}
                   >
@@ -556,26 +547,24 @@ export default function CssShineTool() {
                   </button>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
-          <Card>
-            <CardHeader className="border-b-2 border-border pb-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <CardTitle>可用代码</CardTitle>
-                  <CardDescription className="mt-1">动效放在独立覆盖层，目标元素的原有样式保持不变。</CardDescription>
-                </div>
-                <Button type="button" size="sm" onClick={() => void copyCss()}>
-                  {copyState === 'copied' ? <Check /> : <Copy />}
-                  {copyState === 'copied' ? '已复制' : copyState === 'failed' ? '复制失败' : '复制代码'}
-                </Button>
+          <section>
+            <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
+              <div>
+                <h2 className="font-mono text-sm font-semibold tracking-tight">可用代码</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">动效放在独立覆盖层，目标元素的原有样式保持不变。</p>
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <pre className="max-h-80 overflow-auto bg-muted p-5 text-xs leading-5"><code>{code}</code></pre>
-            </CardContent>
-          </Card>
+              <Button type="button" size="sm" onClick={() => void copyCss()}>
+                {copyState === 'copied' ? <Check /> : <Copy />}
+                {copyState === 'copied' ? '已复制' : copyState === 'failed' ? '复制失败' : '复制代码'}
+              </Button>
+            </div>
+            <div>
+              <pre className="max-h-80 overflow-auto bg-muted p-5 font-mono text-xs leading-5"><code>{code}</code></pre>
+            </div>
+          </section>
         </div>
       </main>
     </div>

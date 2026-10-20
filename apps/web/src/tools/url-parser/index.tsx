@@ -1,14 +1,13 @@
-import type { ChangeEvent, DragEvent, ReactNode } from 'react'
+import type { ChangeEvent, DragEvent, ReactNode, SetStateAction } from 'react'
 import type { UrlRecord } from './url-records'
 import type { UrlNode, UrlTree } from './url-tree'
-import { ArrowLeft, Bookmark, Check, Copy, Download, Ellipsis, Link2, LoaderCircle, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
+import { Bookmark, Check, Copy, Download, GitBranch, Link2, LoaderCircle, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
 import { ClientOnly } from 'vite-react-ssg'
 
 import { Seo } from '@/components/seo'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+
 import { PopConfirm } from '@/components/ui/pop-confirm'
 import { readHashParam, writeHashParam } from '@/lib/hash-param'
 import { cn } from '@/lib/utils'
@@ -18,6 +17,7 @@ import { renderQrParameterPreview } from './qr-preview-image'
 import { generateCode } from './url-code'
 import { useUrlRecords } from './url-records'
 import { addParam, baseOfTree, canMoveNode, deleteNode, findInsertedId, hasParams, insertParamBelow, looksLikeUrl, mergeBaseEdit, moveNode, paramNodes, parseUrl, serializeUrl, setNodeValue, suffixOfTree, updateNode, variableName } from './url-tree'
+import './url-workspace.scss'
 
 /** 层级文字颜色轮换：橙 → 黄 → 绿，暖色系相邻过渡（chart 令牌，随主题联动） */
 const DEPTH_COLORS = ['text-chart-4', 'text-chart-2', 'text-chart-3'] as const
@@ -94,7 +94,7 @@ function EditableText({
           ? { size: Math.max(1, [...draft].reduce((n, c) => n + (c.codePointAt(0)! > 0xFF ? 2 : 1), 0)) }
           : {})}
         className={cn(
-          'min-w-0 rounded-sm border-2 border-border bg-background px-1 py-0 text-sm outline-none',
+          'min-w-0 rounded-sm border border-border bg-background px-1 py-0 text-sm outline-none',
           autoSize ? 'w-auto' : 'flex-1',
           mono && 'font-mono',
           className,
@@ -121,12 +121,17 @@ function EditableText({
   )
 }
 
-/** 文件树连接符：祖先层竖线 / 空白 + 本行的 ├─ / └─ */
+/**
+ * Tree connectors preserve ancestor rails and the current branch.
+ * 文件树连接符保留祖先层竖线／空白与本行分支，以描边替代字符绘制。
+ */
 function TreePrefix({ lastFlags, isLast }: { lastFlags: boolean[], isLast: boolean }) {
   return (
-    <span className="shrink-0 font-mono text-sm whitespace-pre text-muted-foreground select-none">
-      {lastFlags.map(last => (last ? '   ' : '│  ')).join('')}
-      {isLast ? '└─' : '├─'}
+    <span className="url-tree-rails" aria-hidden="true">
+      {/* eslint-disable react/no-array-index-key -- ancestor positions define connector columns / 祖先位置定义连接线列 */}
+      {lastFlags.map((last, index) => <i key={index} className={last ? '' : 'continues'} />)}
+      {/* eslint-enable react/no-array-index-key */}
+      <i className={isLast ? 'branch is-last' : 'branch'} />
     </span>
   )
 }
@@ -200,7 +205,7 @@ function ParamRow({
 
   return (
     <div>
-      <div className="group flex items-start gap-0.5 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
+      <div className="url-node-row group flex items-start gap-0.5 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
         <TreePrefix lastFlags={lastFlags} isLast={isLast} />
 
         {/* key：param 可编辑，hash 固定为 # */}
@@ -242,7 +247,7 @@ function ParamRow({
                 onDragLeave={onDragLeaveUrl}
                 onDrop={event => onDropOnUrl(event, node.id)}
                 className={cn(
-                  'shrink-0 cursor-grab rounded-sm px-1 text-sm font-bold transition-all active:cursor-grabbing',
+                  'shrink-0 cursor-grab rounded-sm px-1 text-sm font-medium transition-colors active:cursor-grabbing',
                   'hover:ring-2 hover:ring-border',
                   keyClass,
                   dragSourceId === node.id && 'opacity-40',
@@ -290,7 +295,7 @@ function ParamRow({
             onClick={copySubtree}
             className="ml-1 flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground"
           >
-            {copiedSubtree ? <Check className="size-3" /> : <Copy className="size-3" />}
+            {copiedSubtree ? <Check data-feedback="success" className="size-3" /> : <Copy className="size-3" />}
           </button>
         )}
         <button
@@ -511,117 +516,6 @@ function StaticUrlTree({ tree }: { tree: UrlTree }) {
   )
 }
 
-/** 分段下载按钮：主区域执行默认下载，右侧 ··· 展开全部下载选项。 */
-function QrDownloadButton({
-  available,
-  previewAvailable,
-  renderingPreview,
-  onDownload,
-  onDownloadPreview,
-  className,
-}: {
-  available: boolean
-  previewAvailable: boolean
-  renderingPreview: boolean
-  onDownload: () => void
-  onDownloadPreview: () => void
-  className?: string
-}) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!menuOpen)
-      return
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Node && !containerRef.current?.contains(event.target))
-        setMenuOpen(false)
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape')
-        setMenuOpen(false)
-    }
-    window.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [menuOpen])
-
-  return (
-    <div ref={containerRef} className={cn('relative inline-flex', className)}>
-      <div
-        role="group"
-        aria-label="下载二维码"
-        className={cn(
-          'inline-flex h-8 w-full overflow-hidden rounded-md border-2 border-border bg-background shadow-hard-xs transition-all',
-          'hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm',
-          'has-[:active]:translate-x-0.5 has-[:active]:translate-y-0.5 has-[:active]:shadow-none',
-          !available && 'opacity-50',
-        )}
-      >
-        <button
-          type="button"
-          disabled={!available}
-          onClick={onDownload}
-          className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2.5 text-sm font-bold whitespace-nowrap outline-none hover:bg-secondary hover:text-secondary-foreground focus-visible:bg-secondary disabled:pointer-events-none"
-        >
-          <Download className="size-4 shrink-0" />
-          下载二维码
-        </button>
-        <button
-          type="button"
-          disabled={!available}
-          title="更多下载选项"
-          aria-label="更多下载选项"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen(open => !open)}
-          className="flex w-9 shrink-0 items-center justify-center border-l-2 border-border outline-none hover:bg-secondary hover:text-secondary-foreground focus-visible:bg-secondary disabled:pointer-events-none disabled:opacity-50"
-        >
-          <Ellipsis className="size-4" />
-        </button>
-      </div>
-      {menuOpen && (
-        <div
-          role="menu"
-          aria-label="二维码下载选项"
-          className="absolute top-full right-0 z-20 mt-2 min-w-52 overflow-hidden rounded-md border-2 border-border bg-popover p-1 text-popover-foreground shadow-hard-sm"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            autoFocus
-            onClick={() => {
-              setMenuOpen(false)
-              onDownload()
-            }}
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm font-bold outline-none hover:bg-secondary hover:text-secondary-foreground focus-visible:bg-secondary"
-          >
-            <Download className="size-4" />
-            下载纯二维码
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!previewAvailable || renderingPreview}
-            title={!previewAvailable ? '只有 URL 内容可以生成参数预览图' : undefined}
-            onClick={() => {
-              setMenuOpen(false)
-              onDownloadPreview()
-            }}
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm font-bold outline-none hover:bg-secondary hover:text-secondary-foreground focus-visible:bg-secondary disabled:pointer-events-none disabled:opacity-50"
-          >
-            {renderingPreview ? <LoaderCircle className="size-4 animate-spin" /> : <Download className="size-4" />}
-            下载二维码 + 参数预览
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
 /** 记录预览：二维码 + 只读参数树（与参数板块同样样式）；非 URL 内容原样展示 */
 function RecordPreviewContent({ text }: { text: string }) {
   const tree = useMemo(() => parseUrl(text), [text])
@@ -753,7 +647,7 @@ function RecordPreviewTip({ text, wide, onSelect, children }: { text: string, wi
           role="tooltip"
           style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? 'visible' : 'hidden' }}
           className={cn(
-            'pointer-events-none fixed z-50 max-h-[60vh] overflow-auto rounded-md border-2 border-border bg-popover px-3 py-2 text-popover-foreground shadow-hard-sm',
+            'pointer-events-none fixed z-50 max-h-[60vh] overflow-auto rounded-md border border-border bg-popover px-3 py-2 text-popover-foreground',
             wide ? 'w-[min(40rem,calc(100vw-1rem))]' : 'max-w-[min(28rem,calc(100vw-1rem))]',
           )}
         >
@@ -766,7 +660,7 @@ function RecordPreviewTip({ text, wide, onSelect, children }: { text: string, wi
         onClose={() => setDialogOpen(false)}
         // 点击描边 / 背板区域（事件目标是 dialog 本身）时关闭
         onClick={e => e.target === dialogRef.current && setDialogOpen(false)}
-        className="m-auto w-[min(36rem,calc(100vw-2rem))] rounded-lg border-2 border-border bg-popover p-5 text-popover-foreground shadow-hard-lg backdrop:bg-black/50"
+        className="m-auto w-[min(36rem,calc(100vw-2rem))] rounded-lg border border-border bg-popover p-5 text-popover-foreground backdrop:bg-black/50"
       >
         {dialogOpen && (
           <div className="max-h-[70vh] overflow-auto">
@@ -802,6 +696,26 @@ function defaultName(input: string): string {
 
 function UrlParserTool() {
   const [input, setInput] = useState('')
+  const recognitionRequestRef = useRef(0)
+  const contentRevisionRef = useRef(0)
+  const mountedRef = useRef(true)
+  const [recognizing, setRecognizing] = useState(false)
+  const [qrError, setQrError] = useState('')
+  const changeInput = useCallback((value: SetStateAction<string>) => {
+    recognitionRequestRef.current += 1
+    contentRevisionRef.current += 1
+    setRecognizing(false)
+    setQrError('')
+    setInput(value)
+  }, [])
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      recognitionRequestRef.current += 1
+      contentRevisionRef.current += 1
+    }
+  }, [])
   const tree = useMemo(() => parseUrl(input), [input])
   const found = hasParams(tree)
   // 根节点只展示 base（协议 + 主机 + 路径），参数和 # 已在树里展开
@@ -815,10 +729,10 @@ function UrlParserTool() {
       const hash = window.location.hash.slice(1)
       const initial = hash.startsWith('text=') ? readHashParam('text') : readHashParam('url')
       if (initial)
-        setInput(initial)
+        changeInput(initial)
     }, 0)
     return () => clearTimeout(timer)
-  }, [])
+  }, [changeInput])
 
   // 内容变动 → 同步到 URL hash（防抖，replaceState 不产生历史记录）
   useEffect(() => {
@@ -827,23 +741,23 @@ function UrlParserTool() {
   }, [input])
 
   const handleEdit = useCallback((id: string, patch: Partial<Pick<UrlNode, 'label' | 'value'>>) => {
-    setInput(prev => serializeUrl(updateNode(parseUrl(prev), id, patch)))
-  }, [])
+    changeInput(prev => serializeUrl(updateNode(parseUrl(prev), id, patch)))
+  }, [changeInput])
 
   // 编辑普通值：重解析子树，避免旧子树覆盖新值
   const handleEditValue = useCallback((id: string, value: string) => {
-    setInput(prev => serializeUrl(setNodeValue(parseUrl(prev), id, value)))
-  }, [])
+    changeInput(prev => serializeUrl(setNodeValue(parseUrl(prev), id, value)))
+  }, [changeInput])
 
   // 编辑嵌套 URL 的 base（协议/域名/路径）：剥离误贴的 query，但保留手动输入的 hash（视为显式替换）
   const handleEditBase = useCallback((node: UrlNode, nextBase: string) => {
     const suffix = node.children ? suffixOfTree(node.children) : ''
-    setInput(prev => serializeUrl(setNodeValue(parseUrl(prev), node.id, mergeBaseEdit(nextBase, suffix))))
-  }, [])
+    changeInput(prev => serializeUrl(setNodeValue(parseUrl(prev), node.id, mergeBaseEdit(nextBase, suffix))))
+  }, [changeInput])
 
   const handleDelete = useCallback((id: string) => {
-    setInput(prev => serializeUrl(deleteNode(parseUrl(prev), id)))
-  }, [])
+    changeInput(prev => serializeUrl(deleteNode(parseUrl(prev), id)))
+  }, [changeInput])
 
   // 新增参数后，主动让新 key 进入编辑态。id 经「新旧树结构 diff」在重解析后的树里定位
   // （序列化 → 重解析会重新分配全部 id，不能直接用 addParam 内部生成的 id）；
@@ -852,11 +766,11 @@ function UrlParserTool() {
   const [autoEdit, setAutoEdit] = useState<{ id: string, nonce: number } | null>(null)
   const commitAdd = useCallback((prevTree: UrlTree, nextTree: UrlTree) => {
     const nextInput = serializeUrl(nextTree)
-    setInput(nextInput)
+    changeInput(nextInput)
     const id = findInsertedId(prevTree.nodes, parseUrl(nextInput).nodes)
     if (id)
       setAutoEdit(prev => ({ id, nonce: (prev?.nonce ?? 0) + 1 }))
-  }, [])
+  }, [changeInput])
 
   // 在某一行所在层级、其下方插入 key=value（默认值便于继续编辑）
   const handleAddBelow = useCallback((node: UrlNode | null) => {
@@ -915,34 +829,37 @@ function UrlParserTool() {
     event.stopPropagation()
     const sourceId = draggedId(event)
     if (sourceId) {
-      setInput((prev) => {
+      changeInput((prev) => {
         const current = parseUrl(prev)
         return serializeUrl(moveNode(current, sourceId, targetId))
       })
     }
     clearTreeDrag()
-  }, [clearTreeDrag, draggedId])
+  }, [clearTreeDrag, draggedId, changeInput])
 
   const [copied, setCopied] = useState(false)
 
   // 输入内容的二维码预览（防抖 400ms）
-  const [qr, setQr] = useState<string | null>(null)
+  const [qrResult, setQrResult] = useState<{ text: string, url: string } | null>(null)
+  const qr = qrResult?.text === input && input.trim() ? qrResult.url : null
   useEffect(() => {
     let cancelled = false
     const timer = setTimeout(() => {
       if (!input.trim()) {
         if (!cancelled)
-          setQr(null)
+          setQrResult(null)
         return
       }
       encodeQr(input, 'L')
         .then((dataUrl) => {
           if (!cancelled)
-            setQr(dataUrl)
+            setQrResult({ text: input, url: dataUrl })
         })
         .catch(() => {
-          if (!cancelled)
-            setQr(null)
+          if (!cancelled) {
+            setQrResult(null)
+            setQrError('二维码生成失败，内容可能过长，请缩短后重试')
+          }
         })
     }, 400)
     return () => {
@@ -952,25 +869,33 @@ function UrlParserTool() {
   }, [input])
 
   // —— 二维码图片识别（原二维码工具能力）：点击选择 / 拖拽 / 粘贴图片 ——
-  const [qrError, setQrError] = useState('')
   const [dragging, setDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = useCallback(async (file: File) => {
+    const request = ++recognitionRequestRef.current
+    setRecognizing(true)
     setQrError('')
     try {
       const result = await decodeQr(file)
+      if (request !== recognitionRequestRef.current)
+        return
       if (result) {
-        setInput(result)
+        changeInput(result)
       }
       else {
         setQrError('未在图片中识别到二维码，换一张更清晰的试试')
       }
     }
     catch {
-      setQrError('图片读取失败，请确认是有效的图片文件')
+      if (request === recognitionRequestRef.current)
+        setQrError('图片读取失败，请确认是有效的图片文件')
     }
-  }, [])
+    finally {
+      if (request === recognitionRequestRef.current)
+        setRecognizing(false)
+    }
+  }, [changeInput])
 
   const onFileChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -991,7 +916,7 @@ function UrlParserTool() {
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
       const target = e.target
-      if (target instanceof HTMLElement && target.closest('textarea, input'))
+      if (target instanceof HTMLElement && target.closest('textarea, input, [contenteditable]:not([contenteditable="false"])'))
         return
       const file = Array.from(e.clipboardData?.files ?? []).find(f => f.type.startsWith('image/'))
       if (file)
@@ -1011,13 +936,18 @@ function UrlParserTool() {
   }, [qr])
 
   const [renderingQrPreview, setRenderingQrPreview] = useState(false)
+  const exportBusyRef = useRef(false)
   const downloadQrPreview = useCallback(async () => {
-    if (!qr || !isUrl)
+    if (!qr || !isUrl || exportBusyRef.current)
       return
+    exportBusyRef.current = true
+    const revision = contentRevisionRef.current
     setRenderingQrPreview(true)
     setQrError('')
     try {
       const blob = await renderQrParameterPreview(qr, tree)
+      if (revision !== contentRevisionRef.current)
+        return
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -1026,10 +956,13 @@ function UrlParserTool() {
       setTimeout(URL.revokeObjectURL, 10_000, url)
     }
     catch {
-      setQrError('参数预览图片生成失败，请重试')
+      if (revision === contentRevisionRef.current)
+        setQrError('参数预览图片生成失败，请重试')
     }
     finally {
-      setRenderingQrPreview(false)
+      exportBusyRef.current = false
+      if (mountedRef.current)
+        setRenderingQrPreview(false)
     }
   }, [isUrl, qr, tree])
 
@@ -1093,9 +1026,9 @@ function UrlParserTool() {
     }
     setSelectedId(item.id)
     setRenamingId(null)
-    setInput(item.text)
+    changeInput(item.text)
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [selectedId])
+  }, [selectedId, changeInput])
 
   const commitRename = useCallback(() => {
     if (renamingId)
@@ -1125,173 +1058,178 @@ function UrlParserTool() {
   }, [])
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-16">
+    <main className="url-workspace">
       <Seo
         title="URL 与二维码"
         description="解析任意协议的 URL 与路径，递归展开嵌套参数，并与二维码双向转换；支持编辑、拖拽、变量代码预览和历史记录。"
         path="/tools/url-qrcode"
       />
-      {/* 顶栏 */}
-      <header className="flex h-24 items-center gap-3">
-        <Button asChild variant="outline" size="icon">
-          <Link to="/" aria-label="返回首页">
-            <ArrowLeft className="size-5" />
-          </Link>
-        </Button>
-        <div className="flex size-10 items-center justify-center rounded-md border-2 border-border bg-chart-3 shadow-hard-xs">
-          <Link2 className="size-5 text-foreground" />
+      <section className="url-workspace-source">
+        <label htmlFor="url-workspace-input" className="url-source-label">
+          <Link2 size={14} />
+          链接内容
+        </label>
+        <textarea
+          id="url-workspace-input"
+          value={input}
+          onChange={e => changeInput(e.target.value)}
+          aria-label="链接内容"
+          placeholder="粘贴 URL 或路径，例如 https://a.com/p?x=1；可声明参数变量，语法见参数区"
+          className="h-36 min-h-28 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-sm leading-6 outline-none placeholder:font-sans placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        />
+        {qrError && (
+          <p className="rounded-md border border-border bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+            {qrError}
+          </p>
+        )}
+        <div className="url-source-actions flex flex-wrap gap-2">
+          <Button variant="outline" size="icon-sm" disabled={!input} title="复制" aria-label="复制" onClick={copy}>
+            {copied ? <Check data-feedback="success" /> : <Copy />}
+          </Button>
+          {/* 选中记录时提供「更新」回写该记录；「保存」始终新增一条记录 */}
+          {selectedId && (
+            <Button
+              variant="default"
+              size="sm"
+              disabled={!input.trim()}
+              title="把当前内容回写到选中的记录"
+              onClick={handleUpdate}
+            >
+              <Save />
+              更新
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!input.trim()}
+            title="保存为新记录"
+            onClick={handleSave}
+          >
+            <Bookmark />
+            保存
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => changeInput(DEMO_URL)}>
+            <Sparkles />
+            试试示例
+          </Button>
+          <span className="url-source-note">{isUrl ? 'URL / 路径' : input.trim() ? '文本' : '等待输入'}</span>
+        </div>
+      </section>
+      <div className="url-workspace-qr w-full">
+        <section className="flex min-w-0 flex-col gap-3">
+          <div className="url-qr-heading">
+            <h2>
+              {recognizing ? <LoaderCircle size={16} className="animate-spin" /> : <QrCode size={16} />}
+              {recognizing ? '正在识别…' : '二维码'}
+            </h2>
+            <Button variant="ghost" size="icon-sm" aria-label="选择二维码图片识别" title="选择二维码图片识别" onClick={() => fileInputRef.current?.click()}><Plus size={16} /></Button>
+          </div>
+          <div
+            role="button"
+            tabIndex={0}
+            title="点击选择 / 拖拽 / 粘贴二维码图片识别"
+            aria-label="上传二维码图片识别"
+            aria-busy={recognizing}
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={e => e.key === 'Enter' && fileInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={cn(
+              'flex aspect-square min-h-0 w-full cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border bg-muted/30 p-3 transition-colors',
+              !qr && 'border-dashed',
+              dragging ? 'bg-secondary' : 'hover:bg-secondary/50',
+            )}
+          >
+            {qr
+              ? (
+                  <img
+                    src={qr}
+                    alt="当前内容的二维码，点击放大"
+                    title="点击放大二维码"
+                    onClick={(e) => {
+                      // 点图片本身 → 放大；点其余区域 → 上传识别
+                      e.stopPropagation()
+                      setQrEnlarged(true)
+                    }}
+                    className="size-full cursor-zoom-in object-contain"
+                  />
+                )
+              : (
+                  <div className="flex flex-col items-center gap-3 p-2 text-center text-muted-foreground">
+                    <QrCode className="size-8" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">输入链接生成二维码</p>
+                      <p className="mt-1 text-xs">点击、拖拽或粘贴图片识别</p>
+                    </div>
+                  </div>
+                )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onFileChange}
+            />
+          </div>
+          <Button
+            variant="default"
+            size="sm"
+            disabled={!qr}
+            onClick={downloadQr}
+            className="url-qr-download w-full shrink-0"
+          >
+            <Download />
+            下载二维码
+          </Button>
+        </section>
+      </div>
+      <section className="url-workspace-tree min-w-0">
+        <div className="flex min-h-8 items-start justify-between gap-4 pb-3">
+          <div>
+            <h2 className="url-tree-heading">
+              <GitBranch size={16} />
+              参数树
+              <span>
+                {paramNodes(tree).length}
+                {' '}
+                个根字段
+              </span>
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              点击 key / value 编辑；写成
+              {' '}
+              <code className="rounded-sm bg-secondary px-1 font-mono">
+                <span>$</span>
+                <span>$变量名</span>
+              </code>
+              {' '}
+              声明变量，拖放可移动或嵌套节点
+            </p>
+          </div>
+          {hasVars && (
+            <Button variant="ghost" size="icon-sm" disabled={!isUrl} title="复制代码" aria-label="复制代码" onClick={copyCode}>
+              {copiedCode ? <Check data-feedback="success" /> : <Copy />}
+            </Button>
+          )}
         </div>
         <div>
-          <h1 className="text-lg font-black tracking-tight">URL 与二维码</h1>
-          <p className="text-sm text-muted-foreground">URL 参数解析与二维码双向转换，支持嵌套参数递归展开、编辑和拖拽</p>
-        </div>
-      </header>
-
-      {/* 输入 + 二维码：左右两块布局，等高对齐 */}
-      <div className="flex flex-col gap-5 md:flex-row md:items-stretch">
-        {/* 输入板块 */}
-        <Card className="min-w-0 flex-1">
-          <CardContent className="flex h-full flex-col gap-3 px-6 py-6">
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              placeholder="粘贴任意 URL 或路径，例如 https://a.com/p?x=1#/hash；参数值写成 $$变量名 可声明变量并在下方生成代码"
-              className="min-h-44 w-full flex-1 resize-y rounded-md border-2 border-border bg-background px-3 py-2 font-mono text-sm outline-none placeholder:font-sans placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            />
-            {qrError && (
-              <p className="rounded-md border-2 border-border bg-destructive/10 px-3 py-2 text-sm font-bold text-destructive">
-                {qrError}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="icon-sm" disabled={!input} title="复制" aria-label="复制" onClick={copy}>
-                {copied ? <Check /> : <Copy />}
-              </Button>
-              {/* 选中记录时提供「更新」回写该记录；「保存」始终新增一条记录 */}
-              {selectedId && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  disabled={!input.trim()}
-                  title="把当前内容回写到选中的记录"
-                  onClick={handleUpdate}
-                >
-                  <Save />
-                  更新
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!input.trim()}
-                title="保存为新记录"
-                onClick={handleSave}
-              >
-                <Plus />
-                保存
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setInput(DEMO_URL)}>
-                <Sparkles />
-                试试示例
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 二维码板块：与输入框左右布局、等高；二维码填满剩余高度 */}
-        <Card className="flex shrink-0 flex-col md:w-56">
-          <CardContent className="flex h-full flex-col gap-3 px-6 py-6">
-            <div
-              role="button"
-              tabIndex={0}
-              title="点击选择 / 拖拽 / 粘贴二维码图片识别"
-              aria-label="上传二维码图片识别"
-              onClick={() => fileInputRef.current?.click()}
-              onKeyDown={e => e.key === 'Enter' && fileInputRef.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setDragging(true)
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
-              className={cn(
-                'flex min-h-0 w-full flex-1 cursor-pointer items-center justify-center overflow-hidden rounded-md border-2 border-border bg-background p-1 transition-colors',
-                !qr && 'border-dashed',
-                dragging ? 'bg-secondary' : 'hover:bg-secondary/50',
-              )}
-            >
-              {qr
-                ? (
-                    <img
-                      src={qr}
-                      alt="当前内容的二维码，点击放大"
-                      title="点击放大二维码"
-                      onClick={(e) => {
-                        // 点图片本身 → 放大；点其余区域 → 上传识别
-                        e.stopPropagation()
-                        setQrEnlarged(true)
-                      }}
-                      className="size-full min-h-0 cursor-zoom-in rounded-sm bg-white object-contain"
-                    />
-                  )
-                : (
-                    <div className="flex flex-col items-center gap-1 p-2 text-center text-muted-foreground">
-                      <QrCode className="size-8" />
-                      <span className="text-xs">上传二维码识别</span>
-                    </div>
-                  )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={onFileChange}
-              />
-            </div>
-            <QrDownloadButton
-              available={qr !== null}
-              previewAvailable={isUrl}
-              renderingPreview={renderingQrPreview}
-              onDownload={downloadQr}
-              onDownloadPreview={() => void downloadQrPreview()}
-              className="w-full shrink-0"
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 参数 + 代码预览：左右融合为一个板块；代码预览仅在存在 $$变量 时出现 */}
-      <Card className="mt-5">
-        <CardHeader>
-          <CardTitle>参数</CardTitle>
-          <CardDescription>
-            点击 key / value 编辑；写成
-            {' '}
-            <code className="rounded-sm bg-secondary px-1 font-mono">$$变量名</code>
-            {' '}
-            声明变量，拖放可移动或嵌套节点
-          </CardDescription>
-          {hasVars && (
-            <CardAction>
-              <Button variant="ghost" size="icon-sm" disabled={!isUrl} title="复制代码" aria-label="复制代码" onClick={copyCode}>
-                {copiedCode ? <Check /> : <Copy />}
-              </Button>
-            </CardAction>
-          )}
-        </CardHeader>
-        <CardContent className="pb-6">
           {!isUrl
             ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
+                <p className="border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
                   {input.trim() ? '当前内容不是 URL / 路径，参数树保持默认状态' : '输入 URL 或路径后，这里会展示参数树'}
                 </p>
               )
             : (
                 <div className="flex flex-col gap-4">
                   {/* 参数树 */}
-                  <div className="w-full">
+                  <div className="url-workspace-tree-content w-full">
                     {/* 根节点：顶层 URL 的 base（可编辑），颜色与下面的参数字段一致 */}
-                    <div className="group flex items-start gap-1 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
+                    <div className="url-root-row group flex items-start gap-1 rounded-sm pr-1 leading-5 hover:bg-secondary/40">
                       <Link2 className={cn('size-3.5 shrink-0', DEPTH_COLORS[0])} />
                       <span
                         data-drop-url="root"
@@ -1300,7 +1238,7 @@ function UrlParserTool() {
                         onDragLeave={() => setDropTargetId(undefined)}
                         onDrop={event => handleTreeDrop(event, null)}
                         className={cn(
-                          'min-w-0 flex-1 rounded-sm transition-all',
+                          'min-w-0 flex-1 rounded-sm transition-colors',
                           dropTargetId === null && 'bg-primary/15 ring-2 ring-primary',
                         )}
                       >
@@ -1308,7 +1246,7 @@ function UrlParserTool() {
                           text={baseUrl}
                           mono
                           className={cn('w-full break-all', DEPTH_COLORS[0])}
-                          onCommit={next => setInput(mergeBaseEdit(next, suffixOfTree(tree)))}
+                          onCommit={next => changeInput(mergeBaseEdit(next, suffixOfTree(tree)))}
                         />
                       </span>
                       <button
@@ -1318,7 +1256,7 @@ function UrlParserTool() {
                         onClick={copyTree}
                         className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary hover:text-foreground"
                       >
-                        {copiedTree ? <Check className="size-3" /> : <Copy className="size-3" />}
+                        {copiedTree ? <Check data-feedback="success" className="size-3" /> : <Copy className="size-3" />}
                       </button>
                       <button
                         type="button"
@@ -1357,7 +1295,7 @@ function UrlParserTool() {
                   </div>
                   {/* 代码预览：变量生成模板字符串插值，按嵌套层级着色（与参数树一致）；仅在存在变量时展示在参数树下方 */}
                   {hasVars && (
-                    <pre className="overflow-x-auto rounded-md border-2 border-border bg-background p-3 font-mono text-sm leading-6 break-all whitespace-pre-wrap">
+                    <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-sm leading-6 break-all whitespace-pre-wrap">
                       {/* eslint-disable react/no-array-index-key -- token 无稳定 id，顺序固定 */}
                       {codeGen.tokens.map((t, i) => (
                         <span
@@ -1375,20 +1313,18 @@ function UrlParserTool() {
                   )}
                 </div>
               )}
-        </CardContent>
-      </Card>
-
-      {/* 记录（存 IndexedDB，仅客户端渲染以避免 hydration 不一致） */}
-      <ClientOnly>
-        {() => (
-          <Card className="mt-5">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bookmark className="size-4" />
-                记录
-              </CardTitle>
-              {records.length > 0 && (
-                <CardAction>
+        </div>
+      </section>
+      <aside aria-label="保存的记录" className="url-workspace-records min-w-0">
+        <ClientOnly>
+          {() => (
+            <section>
+              <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
+                <h2 className="flex items-center gap-2 font-mono text-sm font-semibold tracking-tight">
+                  <Bookmark className="size-4" />
+                  记录
+                </h2>
+                {records.length > 0 && (
                   <PopConfirm
                     trigger={<Trash2 />}
                     triggerAriaLabel="清空全部记录"
@@ -1401,90 +1337,86 @@ function UrlParserTool() {
                       clearRecords()
                     }}
                   />
-                </CardAction>
-              )}
-            </CardHeader>
-            <CardContent className="pb-6">
-              {records.length === 0
-                ? (
-                    <p className="py-6 text-center text-sm text-muted-foreground">
-                      还没有保存的记录，点击上方「保存」把当前内容存下来
-                    </p>
-                  )
-                : (
-                    <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {records.map(item => (
-                        <li
-                          key={item.id}
-                          className={cn(
-                            'flex min-w-0 items-stretch gap-2 rounded-md border-2 bg-background p-2 shadow-hard-xs',
-                            selectedId === item.id ? 'border-primary' : 'border-border',
-                          )}
-                        >
-                          {/* 悬停二维码或名称弹出预览（移动端点击打开弹窗），点击切换到该记录 */}
-                          <RecordPreviewTip text={item.text} wide onSelect={() => toggleSelect(item)}>
-                            <button
-                              type="button"
-                              title={selectedId === item.id ? '点击取消选中' : '点击切换到该记录的内容'}
-                              aria-label={`切换到记录 ${item.name || item.text}`}
-                              onClick={() => toggleSelect(item)}
-                              className="flex cursor-pointer items-center"
-                            >
-                              <RecordQr text={item.text} size={64} />
-                            </button>
-                          </RecordPreviewTip>
-                          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-0.5">
-                            {renamingId === item.id
-                              ? (
-                                  <input
-                                    autoFocus
-                                    value={nameDraft}
-                                    placeholder="给记录起一个名字"
-                                    onChange={e => setNameDraft(e.target.value)}
-                                    onBlur={commitRename}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter')
-                                        commitRename()
-                                      if (e.key === 'Escape')
-                                        setRenamingId(null)
-                                    }}
-                                    className="min-w-0 w-full rounded-sm border-2 border-border bg-background px-1 py-0 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                  />
-                                )
-                              : (
-                                  <RecordPreviewTip text={item.text} wide onSelect={() => toggleSelect(item)}>
-                                    <span className="flex min-w-0 items-center gap-1">
-                                      <span className="max-w-full truncate text-sm font-bold">{item.name || item.text}</span>
-                                      {selectedId === item.id && (
-                                        <span className="shrink-0 rounded-sm bg-primary px-1 text-xs font-bold text-primary-foreground">编辑中</span>
-                                      )}
-                                    </span>
-                                  </RecordPreviewTip>
-                                )}
-                            <div className="flex gap-0.5">
+                )}
+              </div>
+              <div>
+                {records.length === 0
+                  ? (
+                      <p className="py-3 text-xs leading-5 text-muted-foreground">
+                        还没有保存的记录，点击「保存」把当前内容存下来
+                      </p>
+                    )
+                  : (
+                      <ul className="flex flex-col">
+                        {records.map(item => (
+                          <li
+                            key={item.id}
+                            className={cn(
+                              'flex min-w-0 items-center gap-2 border-b py-2 transition-colors hover:bg-muted/60',
+                              selectedId === item.id ? 'border-primary' : 'border-border',
+                            )}
+                          >
+                            <div className="min-w-0 flex-1">
+                              {renamingId === item.id
+                                ? (
+                                    <input
+                                      autoFocus
+                                      value={nameDraft}
+                                      placeholder="给记录起一个名字"
+                                      onChange={e => setNameDraft(e.target.value)}
+                                      onBlur={commitRename}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter')
+                                          commitRename()
+                                        if (e.key === 'Escape')
+                                          setRenamingId(null)
+                                      }}
+                                      className="min-w-0 w-full rounded-sm border border-border bg-background px-1 py-0 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                    />
+                                  )
+                                : (
+                                    <RecordPreviewTip text={item.text} wide onSelect={() => toggleSelect(item)}>
+                                      <button
+                                        type="button"
+                                        title={selectedId === item.id ? '点击取消选中' : '点击切换到该记录的内容'}
+                                        aria-label={`切换到记录 ${item.name || item.text}`}
+                                        onClick={() => toggleSelect(item)}
+                                        className="flex min-w-0 cursor-pointer items-center gap-1 text-left"
+                                      >
+                                        <span className="line-clamp-2 min-w-0 text-sm break-all">{item.name || item.text}</span>
+                                        {selectedId === item.id && (
+                                          <span className="shrink-0 font-mono text-xs text-primary">编辑中</span>
+                                        )}
+                                      </button>
+                                    </RecordPreviewTip>
+                                  )}
+                            </div>
+                            <div className="flex shrink-0 items-center gap-0.5">
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
+                                className="size-6 text-muted-foreground"
                                 aria-label="重命名"
                                 onClick={() => {
                                   setRenamingId(item.id)
                                   setNameDraft(item.name)
                                 }}
                               >
-                                <Pencil />
+                                <Pencil className="size-3.5" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
+                                className="size-6 text-muted-foreground"
                                 aria-label="复制"
                                 onClick={() => copyHistory(item.id, item.text)}
                               >
-                                {copiedId === item.id ? <Check /> : <Copy />}
+                                {copiedId === item.id ? <Check data-feedback="success" className="size-3.5" /> : <Copy className="size-3.5" />}
                               </Button>
                               <PopConfirm
-                                trigger={<Trash2 />}
+                                trigger={<Trash2 className="size-3.5" />}
                                 triggerAriaLabel="删除"
-                                triggerClassName={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+                                triggerClassName={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'size-6 text-muted-foreground')}
                                 title="删除这条记录？"
                                 description="这条记录会被删除，且无法恢复。"
                                 onConfirm={() => {
@@ -1494,15 +1426,15 @@ function UrlParserTool() {
                                 }}
                               />
                             </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-            </CardContent>
-          </Card>
-        )}
-      </ClientOnly>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+              </div>
+            </section>
+          )}
+        </ClientOnly>
+      </aside>
 
       {/* 二维码详情弹层：二维码 + 当前 URL 的只读参数树 */}
       {qrEnlarged && qr && (
@@ -1515,11 +1447,11 @@ function UrlParserTool() {
         >
           <div
             onClick={event => event.stopPropagation()}
-            className="flex max-h-[calc(100vh-2rem)] w-[min(64rem,calc(100vw-2rem))] flex-col rounded-lg border-2 border-border bg-popover p-5 text-popover-foreground shadow-hard-lg"
+            className="flex max-h-[calc(100vh-2rem)] w-[min(64rem,calc(100vw-2rem))] flex-col rounded-lg border border-border bg-popover p-5 text-popover-foreground"
           >
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-black tracking-tight">二维码与参数预览</h2>
+                <h2 className="font-mono text-lg font-semibold tracking-tight">二维码与参数预览</h2>
                 <p className="text-sm text-muted-foreground">扫码打开当前内容，同时核对 URL 参数层级</p>
               </div>
               <Button variant="ghost" size="icon-sm" aria-label="关闭" onClick={() => setQrEnlarged(false)}>
@@ -1532,11 +1464,11 @@ function UrlParserTool() {
                   src={qr}
                   alt="当前内容的二维码（放大）"
                   style={{ imageRendering: 'pixelated' }}
-                  className="aspect-square w-full max-w-[22rem] rounded-md border-2 border-border bg-white object-contain"
+                  className="aspect-square w-full max-w-[22rem] rounded-md border border-border bg-background object-contain"
                 />
               </div>
-              <div className="min-h-32 overflow-auto rounded-md border-2 border-border bg-background p-3 text-foreground">
-                <h3 className="mb-2 text-sm font-black">参数预览</h3>
+              <div className="min-h-32 overflow-auto rounded-md border border-border bg-background p-3 text-foreground">
+                <h3 className="mb-2 text-sm font-semibold">参数预览</h3>
                 {isUrl
                   ? (
                       <div className="min-w-[28rem] sm:min-w-0">
@@ -1546,20 +1478,24 @@ function UrlParserTool() {
                   : <p className="text-sm break-all text-muted-foreground">当前内容不是 URL，无法展示参数树。</p>}
               </div>
             </div>
-            <div className="mt-4 flex flex-wrap justify-end gap-2 border-t-2 border-border pt-4">
-              <QrDownloadButton
-                available
-                previewAvailable={isUrl}
-                renderingPreview={renderingQrPreview}
-                onDownload={downloadQr}
-                onDownloadPreview={() => void downloadQrPreview()}
-              />
+            <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+              {qrError && <p role="alert" className="mr-auto self-center text-sm text-destructive">{qrError}</p>}
+              <Button
+                variant="default"
+                size="sm"
+                disabled={!qr || renderingQrPreview}
+                aria-busy={renderingQrPreview}
+                onClick={isUrl ? () => void downloadQrPreview() : downloadQr}
+              >
+                {renderingQrPreview ? <LoaderCircle className="animate-spin" /> : <Download />}
+                {renderingQrPreview ? '正在生成…' : isUrl ? '下载二维码 + 参数图' : '下载二维码'}
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-    </div>
+    </main>
   )
 }
 

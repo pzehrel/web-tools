@@ -10,20 +10,34 @@ const OPTIONS: { value: ThemePreference, label: string, icon: typeof Sun }[] = [
   { value: 'dark', label: '深色', icon: Moon },
 ]
 
-/**
- * 全局主题切换：跟随系统 / 浅色 / 深色。
- * 外层位置由 SiteActions 统一管理。
- */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
   return (
-    // 主题偏好存在 localStorage，SSG 与客户端首渲必然不同，仅客户端渲染
+    // Render stored preference after hydration to keep the static and initial client trees aligned.
+    // 水合后再显示已存偏好，保证静态页面与客户端首棵树一致。
     <ClientOnly>
       {() => (
         <div
           role="radiogroup"
           aria-label="主题"
-          className="flex h-10 overflow-hidden rounded-md border-2 border-border bg-card shadow-hard-sm"
+          className="theme-toggle"
+          onKeyDown={(event) => {
+            const index = OPTIONS.findIndex(option => option.value === theme)
+            let next = index
+            if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
+              next = (index + 1) % OPTIONS.length
+            else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
+              next = (index + OPTIONS.length - 1) % OPTIONS.length
+            else if (event.key === 'Home')
+              next = 0
+            else if (event.key === 'End')
+              next = OPTIONS.length - 1
+            else
+              return
+            event.preventDefault()
+            setTheme(OPTIONS[next].value)
+            event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus()
+          }}
         >
           {OPTIONS.map(({ value, label, icon: Icon }) => (
             <button
@@ -31,14 +45,15 @@ export function ThemeToggle() {
               type="button"
               role="radio"
               aria-checked={theme === value}
+              tabIndex={theme === value ? 0 : -1}
               title={label}
+              aria-label={label}
               onClick={() => setTheme(value)}
               className={cn(
-                'flex cursor-pointer items-center gap-1.5 px-2.5 text-xs font-bold transition-colors',
-                'not-last:border-r-2 not-last:border-border',
+                'site-icon-action',
                 theme === value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-card text-muted-foreground hover:bg-secondary hover:text-foreground',
+                  ? 'bg-secondary text-secondary-foreground'
+                  : 'text-muted-foreground',
               )}
             >
               <Icon className="size-3.5" />

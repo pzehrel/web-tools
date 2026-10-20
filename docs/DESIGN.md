@@ -1,124 +1,56 @@
-# Web Tools 设计规范
+# Web Tools design guide
 
-## 风格定位：新粗野主义（Neo-Brutalism）
+Build compact workspaces for frequent link, animation and image tasks. The production interface follows the reviewed F design: a blue primary action, soft-blue secondary actions, clear semantic feedback, narrow task controls and visible canvases. Prototype files are reference material, never production runtime dependencies.
 
-本项目是一套「打开即用」的浏览器小工具集合。视觉上刻意与后台管理系统风格保持距离：
-不做侧边栏、不做数据表格、不做灰扑扑的密集表单，而是像一盒摆在桌上的实体工具——
-**粗描边、硬阴影、大标题、高饱和点缀色**，带一点玩具感和印刷感。
+The public directory and tool switcher expose only URL and QR, frame animation, Lottie preview and nine-patch. CSS shine and font toolkit keep their direct routes. The registry in `apps/web/src/tools/index.ts` is the navigation source of truth. Do not add promotional claims about data location or uploads.
 
-三个关键词：
+## Navigation and density
 
-- **扎实**：所有元素有明确的「边界」和「重量」（2px 描边 + 无模糊硬阴影）
-- **直白**：层级靠字号和色块区分，不依赖灰度渐变和投影层级
-- **顽皮**：徽章可以轻微旋转，按钮按下去有「压实」的物理反馈
+- `SiteHeader` owns the shared header, return-home action on the left, public-tool switcher, theme controls and repository link. Do not duplicate these in tool workspaces or add permanent sidebar navigation.
+- The header stays above ordinary canvas controls and below modal backdrops. The switcher closes after navigation, outside pointer interaction or Escape; Escape returns focus to its summary.
+- Use compact spacing and controls. Avoid a large hero above tools. Canvas workspaces place narrow task controls beside the main canvas; mobile layouts stack or tab the controls so core actions remain reachable.
+- Home entries form a compact four-column directory on desktop and two columns on phones. Distinguish groups with fine borders and spacing; avoid decorative shadows, gradients and raised cards.
 
-## 换肤机制（必须遵守）
+## Semantic colors
 
-所有颜色一律走 shadcn/ui 语义令牌，**禁止在组件里写死颜色值**（如 `bg-purple-500`、`#7c3aed`）。
+All colors come from `apps/web/src/index.scss`. Never hard-code colors in components, including Tailwind palette classes such as `bg-blue-500`. Production light and dark palettes apply without a development flag.
 
-| 场景                   | 令牌                                     |
-| ---------------------- | ---------------------------------------- |
-| 页面底色 / 正文        | `bg-background` / `text-foreground`      |
-| 主行动色（按钮、强调） | `bg-primary` / `text-primary-foreground` |
-| 点缀色（徽章、贴纸）   | `bg-secondary`、`bg-accent`              |
-| 卡片底色               | `bg-card`                                |
-| 描边 / 硬阴影          | `border-border`（联动 `--shadow-color`） |
-| 弱化文本               | `text-muted-foreground`                  |
-| 装饰性色块（如图标底） | `bg-chart-1` ~ `bg-chart-5`              |
+| Purpose                                                   | Tokens                                                             |
+| --------------------------------------------------------- | ------------------------------------------------------------------ |
+| Page and text                                             | `background`, `foreground`                                         |
+| Panels and popovers                                       | `card`, `card-foreground`, `popover`, `popover-foreground`         |
+| Main action and focus                                     | `primary`, `primary-foreground`, `ring`                            |
+| Secondary action and selection                            | `secondary`, `secondary-foreground`, `accent`, `accent-foreground` |
+| Supporting content                                        | `muted`, `muted-foreground`                                        |
+| Borders and form controls                                 | `border`, `input`                                                  |
+| Successful, dangerous, warning and informational feedback | `success`, `destructive`, `warning`, `info`                        |
+| Decorative charts                                         | `chart-1` through `chart-5`                                        |
 
-换肤 = 只改 `src/index.scss` 中 `:root` / `.dark` 两张色板，组件零改动。
+Each feedback family has solid, `-foreground`, `-muted` and `-muted-foreground` variants. Use a text label or icon alongside color. Solid actions use the matching foreground; soft feedback uses the matching muted foreground. Keep success feedback readable when replacing a primary action's state. Explicitly model message tone rather than inferring it from translated strings.
 
-## 风格专属令牌
+## Controls and typography
 
-在标准令牌之外，主题定义了硬阴影工具类（`@theme inline`）：
+- Reuse `Button`. Pure icon actions have no visible border; preserve hover, selection, disabled and keyboard-focus feedback. Every icon action needs an accessible name. Shared theme actions are equal 30px squares.
+- Keep hover and pressed feedback to color changes, with short transitions. Do not shift or scale controls on hover. Avoid shadows and decorative motion.
+- Use `font-mono` for headings, numbers and code; `font-sans` for prose. Prefer compact headings and readable supporting text. Use tabular numbers for measurements.
+- Form labels remain clear and close to their fields. Group related values; segmented choices expose their selected state. Controls, fields and text must remain usable in both themes.
+- All tool content uses semantic tokens. Semantic feedback and selected states may use their intended distinct hues; blue is the primary action hue rather than the only permitted hue.
 
-```
-shadow-hard-xs  2px 2px 0 0   徽章、logo 印章、小按钮
-shadow-hard-sm  3px 3px 0 0   卡片默认态、Hero 高亮块
-shadow-hard     5px 5px 0 0   卡片悬停态
-shadow-hard-lg  8px 8px 0 0   弹窗等需要「浮起」的层级
-```
+## Canvas viewing and editing
 
-阴影颜色跟随 `--shadow-color`（亮色=墨黑，暗色=纸白），换肤时同步调整。
+Reuse `apps/web/src/lib/stage.ts` and `StageViewControls` / `useStageViewSettings` for image viewing.
 
-圆角基准 `--radius: 0.375rem`（小圆角），通过 `rounded-md` 等标准类使用。
+- Fit the union of visible content to the stage as the default view. Zoom from 1% to 800% through wheel, trackpad pinch or two fingers; zoom and pan never change exported pixels or output parameters.
+- Show the current zoom briefly after a zoom gesture. Reset view restores fitting and centering independently of editing/output settings.
+- Dragging pans at any zoom. Guard cut lines, resize handles, buttons and other editing interactions before pan captures the pointer. Use native non-passive wheel handlers and `touch-none` where the canvas owns touch gestures.
+- The outer layout determines the stage height. Keep its content clipped, with a positioned inner stage when needed to prevent large images from expanding the layout.
+- Keep image import/replacement actions near the canvas. Viewing controls float separately: boundaries and themed checker/solid backgrounds affect viewing only and appear when content exists.
+- Multiple canvases retain independent viewing transforms. Nine-patch source view, stretch-preview view and HUD geometry have separate resets. Background changes must not affect export output.
 
-## 交互语言：抬起与压实
+## Theme, metadata and verification
 
-可交互元素的统一动效（已内置于 `Button` 与 `ToolCard`，新组件应复用）：
+Retain the persisted `web-tools:theme` preference (`system`, `light`, `dark`), live system-theme changes and the pre-React first-paint script. Render stored preferences after hydration through `ClientOnly`.
 
-- **悬停 = 抬起**：`hover:-translate-x-0.5 hover:-translate-y-0.5`，阴影加大一级
-- **按下 = 压实**：`active:translate-x-0.5 active:translate-y-0.5`，阴影收回或消失
-- 过渡统一 `transition-all`，时长用默认（150ms），不加花哨缓动
+Preserve SSG route IDs and hydration data, per-page `Seo`, legacy URL/QR redirects including query and hash content, hidden direct routes, unknown-route fallback, manifest/icon references and Safari web-app metadata.
 
-## 排版
-
-- 标题：`font-black`（900）+ `tracking-tight`，Hero 可用 `text-4xl/5xl`
-- 卡片标题、按钮文字：`font-bold`
-- 正文/辅助：`text-sm text-muted-foreground`
-- 字标、徽章中的短词可以 `-rotate-2` 等轻微倾斜制造手工感，**一处页面最多一两个**
-
-## 布局规则
-
-- 页面容器：`mx-auto max-w-5xl px-4`（内容集中，不做满宽后台式布局）
-- 工具网格：`grid sm:grid-cols-2 lg:grid-cols-3 gap-5`
-- 分隔用 `border-t-2 border-border` 的实线，不用 1px 灰线
-- 不做侧边栏导航；工具页之间通过首页和面包屑往返
-
-## 表单排版
-
-参数面板的字段统一「标签在上、控件在下」，不做左标签右控件的密排行：
-
-- 字段标签：`mb-1.5 text-xs font-bold text-muted-foreground`（弱化小字，不做主色大标题）
-- 单选 / 枚举：用描边分段控件（`OptionGroup` 模式：`role="radiogroup"` + `role="radio"`，
-  选中项主色填充），默认占满整行宽度
-- 数字输入：等宽字体居中 + `border-2` + 聚焦 `ring-[3px] ring-ring/50`；
-  成组的四边值（上/右/下/左）用 `grid grid-cols-4` 平铺，输入在上、方位小字在下
-- 勾选：`BrutalCheckbox` 模式（sr-only 原生 input + 2px 描边方块 + 硬阴影抬起/压实）
-- 短行内组合（如「外扩 + 填充」）：底边对齐 `items-end`，较矮的控件包一层与输入框等高的
-  `items-center` 容器，保证视觉中心对齐
-
-## 画布舞台（图像类工具）
-
-涉及图片查看 / 编辑的工具（点九图、帧动画）共用一套舞台约定，手势实现收在
-`src/lib/stage.ts`（`useStageZoom` / `useStagePan`），新工具直接复用：
-
-- **缩放**：滚轮 / 触控板捏合 / 触屏双指，连续缩放 1% ~ 800%（指数曲线，手感均匀）。
-  视图缩放只影响查看，永远不写进导出参数；因此**不设缩放挡位选择器**
-  - 画布同时存在多个内容时，以所有内容的联合矩形完整适配舞台作为 100%，用户缩放在该基础比例上继续计算。
-  - 缩放手势发生时，画布左下角显示当前百分比；停止缩放约 1.2 秒后淡出。
-- **平移**：按住拖动空白 / 画面区域，内容层做 `transform: translate` 偏移，
-  任何缩放级别都可拖（scroll 式平移在内容不溢出时滚动范围为 0，拖了没反应，不用）。
-  平移或缩放偏离默认时，舞台右上角出现「重置视图」按钮（居中 + 恢复默认缩放）。光标 `cursor-grab` / `cursor-grabbing`。
-  按下落在切线、拖拽手柄等其他交互元素上时不启动平移
-  （利用事件冒泡顺序由内层 guard 拦截）；落在按钮等可点元素上也不启动
-  （否则 pointer capture 会吞掉 click）
-- **舞台尺寸**：高度必须由外层确定（固定 `h-*` 或绝对定位 `inset-0`），内容 `m-auto`
-  居中、超出裁剪（`overflow-hidden`，靠拖拽平移查看）。两个坑：flex 链路的
-  max-content 计算会把内容尺寸传播到上层（`min-h-0` 也拦不住），所以舞台宁可
-  `absolute inset-0` 脱离文档流；若用 `overflow: auto` 方案，注意它只在有确定
-  高度上限时才裁剪，`min-h-*` + 高度 auto 会被放大后的内容撑高
-- **悬浮操作**：更换 / 添加图片等按钮用 `size="icon-sm"` 浮在舞台**右上角**，
-  挂在滚动容器外面的相对定位层（否则随内容一起滚走）
-- **查看辅助**：画布有内容时，左上角统一显示「边界」与「画布背景」图标按钮，
-  复用 `StageViewControls` / `useStageViewSettings`；空画布不显示。边界只影响查看，
-  背景面板提供棋盘格 / 纯色与 6 套主题配色，不写入导出结果
-- **底纹**：棋盘格用 conic-gradient 四象限拼格；颜色走语义令牌（如 `var(--muted)`），
-  允许用户自定义时提供「恢复跟随主题」入口
-- 实现细节：React 的 `onWheel` 是 passive 监听，缩放必须挂原生 `wheel` 监听
-  （`{ passive: false }`）；舞台配 `touch-none`，触屏双指才不会被浏览器页面缩放接管
-
-## Do / Don't
-
-**Do**
-
-- 新组件优先复用 `Button` / `Card` 的描边 + 阴影组合
-- 装饰色用 `chart-*` 令牌，保证主题联动
-- 暗色模式必须同样成立（描边和阴影会自动反白）
-
-**Don't**
-
-- 不用柔和弥散阴影（`shadow-lg`、`drop-shadow` 等默认柔影一律不用）
-- 不用 1px 边框，描边统一 `border-2`
-- 不用大面积渐变、玻璃拟态、模糊背景
-- 不把页面做成「左侧菜单 + 右侧表格」的后台范式
+Run `pnpm lint`, `pnpm typecheck` and `pnpm build` after changes. Check real product pages in light/dark themes, compact desktop and phone layouts, keyboard focus, menu/modal stacking and single-tree hydration. Canvas-specific acceptance belongs to each tool migration; source inspection or prototype coverage does not replace browser evidence. Native Safari standalone launch requires its own device/app check.

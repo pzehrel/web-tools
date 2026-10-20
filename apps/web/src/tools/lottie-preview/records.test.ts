@@ -1,7 +1,7 @@
-import { unzipSync } from 'fflate'
-import { describe, expect, it } from 'vitest'
-
 import type { LoadedLottieProject } from './types'
+import { unzipSync } from 'fflate'
+
+import { describe, expect, it } from 'vitest'
 import { createLottieArchive } from './records'
 
 describe('lottie records', () => {

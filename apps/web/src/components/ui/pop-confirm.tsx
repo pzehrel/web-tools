@@ -110,7 +110,7 @@ function PopConfirm({
           aria-modal="false"
           aria-labelledby={titleId}
           aria-describedby={description ? descriptionId : undefined}
-          className="fixed z-[80] w-64 max-w-[calc(100vw-1rem)] rounded-md border-2 border-border bg-popover p-3 text-popover-foreground shadow-hard-sm invisible"
+          className="fixed z-[80] w-64 max-w-[calc(100vw-1rem)] rounded-md border border-border bg-popover p-3 text-popover-foreground invisible"
         >
           <p id={titleId} className="text-sm font-black">{title}</p>
           {description && <p id={descriptionId} className="mt-1 text-xs text-muted-foreground">{description}</p>}

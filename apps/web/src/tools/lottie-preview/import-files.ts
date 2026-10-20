@@ -3,6 +3,8 @@ import type { LoadedLottieProject, LottieAsset, LottieDocument, LottieLayer, Res
 import { unzipSync } from 'fflate'
 import { detectAnimatedImage } from './image-animation'
 
+const TRANSPARENT_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII='
+
 const IMAGE_MIME_BY_EXT: Record<string, string> = {
   avif: 'image/avif',
   gif: 'image/gif',
@@ -149,10 +151,12 @@ export function resolveImageAssetsForPreview(animation: LottieDocument, images: 
   const previewAnimation = structuredClone(animation)
   for (const asset of previewAnimation.assets ?? []) {
     const image = images.get(asset.id)
-    if (!image)
+    if (!isPreviewImageAsset(asset))
       continue
+    // Render missing images locally while retaining source references for archives.
+    // 仅预览用透明像素替代缺失图片，归档仍保留原始资源引用。
     asset.u = ''
-    asset.p = image.url
+    asset.p = image?.url ?? TRANSPARENT_IMAGE
     asset.e = 1
   }
   return previewAnimation
@@ -167,6 +171,21 @@ export function disposeProject(project: LoadedLottieProject | null): void {
     return
   for (const image of project.images.values())
     URL.revokeObjectURL(image.url)
+}
+
+async function validateImage(blob: Blob): Promise<void> {
+  const url = URL.createObjectURL(blob)
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const image = new Image()
+      image.onload = () => resolve()
+      image.onerror = () => reject(new Error('图片解码失败'))
+      image.src = url
+    })
+  }
+  finally {
+    URL.revokeObjectURL(url)
+  }
 }
 
 export async function loadLottieProject(files: File[]): Promise<LoadedLottieProject> {
@@ -191,10 +210,10 @@ export async function loadLottieProject(files: File[]): Promise<LoadedLottieProj
     try {
       let blob: Blob | null = null
       let sourceName = asset.p!
-      if (asset.e === 1 || asset.p!.startsWith('data:')) {
+      if (asset.p!.startsWith('data:')) {
         blob = await dataUrlToBlob(asset.p!)
       }
-      else if (/^https?:\/\//i.test(asset.p!)) {
+      else if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(`${asset.u ?? ''}${asset.p!}`)) {
         warnings.push(`远程图片 ${asset.p} 不会自动下载`)
       }
       else {
@@ -210,8 +229,18 @@ export async function loadLottieProject(files: File[]): Promise<LoadedLottieProj
         warnings.push(`缺少图片素材：${asset.u ?? ''}${asset.p ?? ''}`)
         continue
       }
+      // Decode before exposing a URL so unreadable files become recoverable warnings.
+      // 先解码再交给预览，损坏素材会显示可恢复的警告。
+      let readable = true
+      try {
+        await validateImage(blob)
+      }
+      catch {
+        readable = false
+        warnings.push(`无法读取图片素材：${asset.p}`)
+      }
       const isAnimated = await detectAnimatedImage(blob, sourceName)
-      const url = URL.createObjectURL(blob)
+      const url = readable ? URL.createObjectURL(blob) : TRANSPARENT_IMAGE
       images.set(asset.id, { assetId: asset.id, asset, blob, isAnimated, url, sourceName })
       sourceBytes += blob.size
     }

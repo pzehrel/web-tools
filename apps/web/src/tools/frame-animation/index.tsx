@@ -1,16 +1,15 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
+import type { FrameAnimationRecordMeta } from './records'
 import { unzipSync } from 'fflate'
 import {
   ArrowDownAZ,
-  ArrowLeft,
   Check,
   ChevronLeft,
   ChevronRight,
   Copy,
   Crop,
   FileImage,
-  Film,
   FolderOpen,
   ImagePlus,
   Images,
@@ -23,18 +22,17 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
 
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Seo } from '@/components/seo'
-import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
+import { STAGE_BOUNDARY_CLASS, StageViewControls, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useStagePan, useStageZoom } from '@/lib/stage'
+import { useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { cn } from '@/lib/utils'
 import { createDemoFrames } from '../demos/frame-animation'
-import { createFrameAnimationItem, createFrameArchive, extractFrameArchive, useFrameAnimationRecords, type FrameAnimationRecordMeta } from './records'
+import { createFrameAnimationItem, createFrameArchive, extractFrameArchive, useFrameAnimationRecords } from './records'
+import './workspace.scss'
 
 /** 一帧：Blob 用于记录持久化，objectURL 仅用于当前页面预览 */
 interface FrameItem {
@@ -346,7 +344,10 @@ function resolveSpriteDims(frameCount: number, axis: SpriteDimensionAxis, value:
     : { cols: Math.ceil(count / primary), rows: primary }
 }
 
-/** 语言差异适配：变量引用 / 变量声明 / 注释 / 「帧数 × 单元宽 px」表达式 / keyframes 能否嵌进选择器 */
+/**
+ * Language adapters: variable references/declarations, comments, final-frame pixel offsets and nested keyframes.
+ * 语言差异适配：变量引用 / 变量声明 / 注释 / 「末帧偏移 px」表达式 / keyframes 能否嵌进选择器。
+ */
 interface LangSpec {
   v: (name: string) => string
   decl: (name: string, value: string) => string
@@ -361,53 +362,58 @@ const LANG: Record<ExportFormat, LangSpec> = {
     v: n => `var(--${n})`,
     decl: (n, val) => `  --${n}: ${val};`,
     comment: t => `/* ${t} */`,
-    framesTimesPx: w => `calc(var(--frames) * -${w}px)`,
+    framesTimesPx: w => `calc((var(--frames) - 1) * -${w}px)`,
     nestedKeyframes: false,
   },
   less: {
     v: n => `@${n}`,
     decl: (n, val) => `  @${n}: ${val};`,
     comment: t => `// ${t}`,
-    framesTimesPx: w => `(@frames * -${w}px)`,
+    framesTimesPx: w => `((@frames - 1) * -${w}px)`,
     nestedKeyframes: true,
   },
   scss: {
     v: n => `$${n}`,
     decl: (n, val) => `  $${n}: ${val};`,
     comment: t => `// ${t}`,
-    framesTimesPx: w => `($frames * -${w}px)`,
+    framesTimesPx: w => `(($frames - 1) * -${w}px)`,
     nestedKeyframes: true,
   },
 }
 
 /** 网格模式的逐格 keyframes：第 k 帧 = 第 (k%cols, floor(k/cols)) 格 */
 function gridKeyframeLines(p: ExportParams): string[] {
-  const lines: string[] = []
-  for (let k = 0; k < p.frames; k++) {
-    const c = k % p.cols
-    const r = Math.floor(k / p.cols)
+  const sequence = Array.from({ length: p.frames }, (_, index) => index)
+  if (p.direction === 'alternate')
+    sequence.push(...sequence.slice(1, -1).reverse())
+  const position = (index: number) => {
+    const c = index % p.cols
+    const r = Math.floor(index / p.cols)
     const x = p.useContainer
       ? `${num(p.cols > 1 ? (c / (p.cols - 1)) * 100 : 0)}%`
       : `${-c * p.cellW}px`
     const y = p.useContainer
       ? `${num(p.rows > 1 ? (r / (p.rows - 1)) * 100 : 0)}%`
       : `${-r * p.cellH}px`
-    lines.push(`  ${num((k / p.frames) * 100)}% { background-position: ${x} ${y}; }`)
+    return `${x} ${y}`
   }
-  lines.push(`  100% { background-position: ${p.useContainer ? '0% 0%' : '0 0'}; }`)
+  const lines = sequence.map((index, tick) => `  ${Number(((tick / sequence.length) * 100).toFixed(6))}% { background-position: ${position(index)}; }`)
+  lines.push(`  100% { background-position: ${position(p.direction === 'alternate' ? 0 : sequence.at(-1)!)}; }`)
   return lines
 }
 
 /**
  * 落位方式：
  * - 长条 + 容器：background-size 为 N×100%，0% → 100% 恰好扫过 N 帧，用 steps(N, jump-none)；
- * - 长条 + px：原始尺寸平铺，0 → -N×W px，steps(N)；
+ * - 长条 + px：原始尺寸平铺，0 → -(N-1)×W px，steps(N, jump-none)；
+ * - 单帧使用 step-end；有限循环用 both 保留终帧，往返用完整返回序列计数。
  * - 网格：逐格 keyframes + step-end（段内保持、段末瞬移），行列百分比分母是 列-1 / 行-1。
  */
 function buildExport(p: ExportParams, lang: LangSpec): string {
   const frames = p.useVars ? lang.v('frames') : String(p.frames)
   const duration = p.useVars ? lang.v('duration') : `${p.duration}s`
   const isGrid = p.layout === 'grid'
+  const discrete = isGrid || p.direction === 'alternate'
 
   const varLines: string[] = []
   if (p.useVars) {
@@ -431,20 +437,20 @@ function buildExport(p: ExportParams, lang: LangSpec): string {
     bgSizeLine = `  background-size: ${bgSize};`
   }
 
-  const timing = isGrid ? 'step-end' : (p.useContainer ? `steps(${frames}, jump-none)` : `steps(${frames})`)
+  const timing = discrete || p.frames === 1 ? 'step-end' : `steps(${frames}, jump-none)`
 
   let keyframesComment: string | null = null
   let keyframeLines: string[]
-  if (isGrid) {
-    keyframesComment = lang.comment('逐格定位：step-end 段内保持、段末瞬移；末行不足留空即可')
+  if (discrete) {
+    keyframesComment = lang.comment('逐格定位：step-end 段内保持、段末瞬移；往返包含返回序列')
     keyframeLines = gridKeyframeLines(p)
   }
   else {
     if (p.useContainer)
       keyframesComment = lang.comment('配合 steps(N, jump-none)，0% → 100% 每步正好一帧')
     const to = p.useContainer
-      ? '100%'
-      : (p.useVars ? lang.framesTimesPx(p.cellW) : `-${p.cellW * p.frames}px`)
+      ? (p.frames === 1 ? '0%' : '100%')
+      : (p.useVars ? lang.framesTimesPx(p.cellW) : `${-p.cellW * (p.frames - 1)}px`)
     keyframeLines = [
       `  from { background-position: 0${p.useContainer ? '%' : ''} 0; }`,
       `  to { background-position: ${to} 0; }`,
@@ -467,7 +473,7 @@ function buildExport(p: ExportParams, lang: LangSpec): string {
     '  background-repeat: no-repeat;',
     ...(bgSizeLine ? [bgSizeLine] : []),
     ...(p.pixelated ? ['  image-rendering: pixelated;'] : []),
-    `  animation: frame-anim-play ${duration} ${timing} ${p.iteration} ${p.direction};`,
+    `  animation: frame-anim-play ${duration} ${timing} ${p.iteration} ${p.direction === 'alternate' ? 'normal' : p.direction} both;`,
     // SCSS / Less：keyframes 嵌进选择器内（编译时冒泡到顶层），CSS：平铺在外
     ...(lang.nestedKeyframes ? ['', ...keyframesBlock] : []),
     '}',
@@ -482,7 +488,7 @@ const EXPORT_BUILDERS: Record<ExportFormat, (p: ExportParams) => string> = {
 }
 
 /** 数字小输入框的统一样式 */
-const NUM_INPUT_CLASS = 'w-14 shrink-0 rounded-md border-2 border-border bg-background px-1.5 py-1 text-center font-mono text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50'
+const NUM_INPUT_CLASS = 'w-14 shrink-0 rounded-md border border-border bg-background px-1.5 py-1 text-center font-mono text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50'
 
 /** 单选按钮组：描边分段控件，选中项用主色填充 */
 function OptionGroup<T extends string | number>({
@@ -499,7 +505,7 @@ function OptionGroup<T extends string | number>({
   className?: string
 }) {
   return (
-    <div className={cn('flex overflow-hidden rounded-md border-2 border-border shadow-hard-xs', className)} role="radiogroup" aria-label={label}>
+    <div className={cn('flex overflow-hidden rounded-md border border-border', className)} role="radiogroup" aria-label={label}>
       {options.map((opt) => {
         const Icon = opt.icon
         return (
@@ -510,7 +516,7 @@ function OptionGroup<T extends string | number>({
             aria-checked={value === opt.value}
             onClick={() => onChange(opt.value)}
             className={cn(
-              'flex flex-1 items-center justify-center gap-1 px-1 py-1.5 text-xs font-bold whitespace-nowrap transition-colors',
+              'flex flex-1 items-center justify-center gap-1 px-1 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
               value === opt.value
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-background hover:bg-secondary',
@@ -531,12 +537,12 @@ function OptionGroup<T extends string | number>({
  */
 const RANGE_INPUT_CLASS = cn(
   'pointer-events-none absolute inset-x-0 top-1/2 h-4 -translate-y-1/2 appearance-none bg-transparent disabled:opacity-50',
-  '[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-border [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-hard-xs [&::-webkit-slider-thumb]:cursor-grab',
-  '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-border [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:cursor-grab',
+  '[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-border [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-grab',
+  '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-border [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:cursor-grab',
 )
 
 /** 新粗野主义勾选框：2px 描边 + 硬阴影 + 抬起/压实，选中填充主色 */
-function BrutalCheckbox({
+function FrameCheckbox({
   checked,
   onChange,
   label,
@@ -557,8 +563,8 @@ function BrutalCheckbox({
       />
       <span
         className={cn(
-          'flex size-5 shrink-0 items-center justify-center rounded-sm border-2 border-border shadow-hard-xs transition-all',
-          'hover:-translate-x-px hover:-translate-y-px hover:shadow-hard-sm active:translate-x-0.5 active:translate-y-0.5 active:shadow-none',
+          'flex size-5 shrink-0 items-center justify-center rounded-sm border border-border transition-all',
+          'transition-colors',
           'peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50',
           checked ? 'bg-primary text-primary-foreground' : 'bg-background',
         )}
@@ -570,10 +576,19 @@ function BrutalCheckbox({
   )
 }
 
-export default function FrameAnimationTool() {
+export default function FrameAnimation() {
+  const [workspace, setWorkspace] = useState<'canvas' | 'frames' | 'settings'>('canvas')
+  const [panel, setPanel] = useState<'playback' | 'sprite' | 'code' | 'records'>('playback')
+  const [sequenceOpen, setSequenceOpen] = useState(true)
+  const sequenceRef = useRef<HTMLDivElement>(null)
   const [frames, setFrames] = useState<FrameItem[]>([])
-  const { records, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useFrameAnimationRecords()
+  const { records, loading: recordsLoading, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useFrameAnimationRecords()
   const [recordName, setRecordName] = useState('')
+  const [recordFeedback, setRecordFeedback] = useState<{ text: string, error?: boolean } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const deletingRef = useRef(false)
   const [current, setCurrent] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -586,11 +601,9 @@ export default function FrameAnimationTool() {
   const [loopInfinite, setLoopInfinite] = useState(true)
   const [loopCount, setLoopCount] = useState(3)
   const stageView = useStageViewSettings()
-  /** 舞台视图缩放（1 = 100%）：滚轮或双指调整，不影响导出 */
-  const [zoom, setZoom] = useState(0.75)
   const [pixelated, setPixelated] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
-  const stageZoom = useStageZoom(stageRef, zoom, setZoom, frames.length > 0)
+  const fitAreaRef = useRef<HTMLDivElement>(null)
   const stagePan = useStagePan(stageRef, () => false)
   /** 入选的帧（按 id）：勾选 = 参与预览 / 播放 / 导出；不提供删除，防误操作 */
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
@@ -608,7 +621,7 @@ export default function FrameAnimationTool() {
   const [dropTarget, setDropTarget] = useState<{ index: number, after: boolean } | null>(null)
   /** 批处理裁剪状态与结果反馈 */
   const [cropping, setCropping] = useState(false)
-  const [cropResult, setCropResult] = useState<string | null>(null)
+  const [cropResult, setCropResult] = useState<{ text: string, tone: 'info' | 'success' | 'warning' | 'error' } | null>(null)
   /** 透明阈值：alpha 低于此值视为透明（弹窗内可调，实时重算并集） */
   const [alphaThreshold, setAlphaThreshold] = useState(DEFAULT_ALPHA_THRESHOLD)
   /** 弹窗打开期间缓存的帧像素：调阈值时无需重新解码图片 */
@@ -623,9 +636,19 @@ export default function FrameAnimationTool() {
     /** 帧宽 / 高不一致：弹窗内给出提示 */
     mixedSize: boolean
   } | null>(null)
+  const cropDialogRef = useRef<HTMLDivElement>(null)
+  const cropRestoreFocusRef = useRef<Element | null>(null)
+  const cropPreviewRef = useRef(cropPreview)
+  cropPreviewRef.current = cropPreview
+  const cropDialogOpen = Boolean(cropPreview)
   /** 样式导出：复制反馈与精灵图生成中状态 */
   const [copiedCss, setCopiedCss] = useState(false)
+  const [copyError, setCopyError] = useState(false)
   const [spriting, setSpriting] = useState(false)
+  const spriteBusyRef = useRef(false)
+  const [exportError, setExportError] = useState(false)
+  const [spriteError, setSpriteError] = useState<string | null>(null)
+  const [spriteRetry, setSpriteRetry] = useState(0)
   const [exportFormat, setExportFormat] = useState<ExportFormat>('scss')
   /** 精灵图排列：记录最后编辑的是列还是行，另一维由帧数自动推导 */
   const [spriteDimension, setSpriteDimension] = useState<{ axis: SpriteDimensionAxis, value: number }>({ axis: 'rows', value: 1 })
@@ -633,7 +656,35 @@ export default function FrameAnimationTool() {
   const [exportVars, setExportVars] = useState(true)
   const [exportContainer, setExportContainer] = useState(true)
   /** 压缩包解析失败等导入错误提示 */
-  const [importError, setImportError] = useState<string | null>(null)
+  const [importFeedback, setImportFeedback] = useState<{ text: string, tone: 'warning' | 'error' } | null>(null)
+  const [importing, setImporting] = useState(false)
+  // Clear, replacement and unmount invalidate unfinished work before it can commit.
+  // 清空、替换和卸载先使未完成的任务失效，防止旧结果回写。
+  const materialEpochRef = useRef(0)
+  const importCountRef = useRef(0)
+  const replacementRequestRef = useRef(0)
+  const materialRevisionRef = useRef(0)
+  const cropBusyRef = useRef(false)
+
+  // Reserve the visible sequence height when fitting the canvas.
+  // 画布适配时为当前帧序列实际高度留出空间。
+  useEffect(() => {
+    const sequence = sequenceRef.current
+    if (!sequence)
+      return
+    let resizeFrame = 0
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(resizeFrame)
+      resizeFrame = requestAnimationFrame(() => {
+        sequence.parentElement?.style.setProperty('--frames-sequence-height', `${sequence.getBoundingClientRect().height}px`)
+      })
+    })
+    observer.observe(sequence)
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(resizeFrame)
+    }
+  }, [])
 
   const frameCount = frames.length
   /** 入选帧：勾选 = 参与预览 / 播放 / 导出；顺序跟随列表（可拖拽重排） */
@@ -642,6 +693,10 @@ export default function FrameAnimationTool() {
   /** 渲染用游标：勾选变化后 current 可能短暂越界，这里收敛 */
   const safeIndex = activeCount === 0 ? 0 : Math.min(current, activeCount - 1)
   const frame = activeFrames[safeIndex] ?? null
+  /** 舞台视图缩放：加载帧后自动完整适配（留边），手动缩放后跟随用户 */
+  const stageFit = useStageFitScale(fitAreaRef, frame?.width ?? 0, frame?.height ?? 0, Boolean(frame), 24)
+  const [zoom, setZoom, resetStageZoom] = useAutoFitZoom(stageFit, frameCount > 0 ? 'content' : null)
+  const stageZoom = useStageZoom(stageRef, zoom, setZoom, frameCount > 0)
   /** 播放范围（收敛后）：在入选帧里截取；帧数变化时自动夹回有效区间 */
   const maxIdx = Math.max(0, activeCount - 1)
   const rangeStart = rangeRaw ? Math.min(rangeRaw[0], maxIdx) : 0
@@ -658,43 +713,84 @@ export default function FrameAnimationTool() {
   /* ---------- 帧管理 ---------- */
 
   const addFiles = useCallback(async (list: FileList | File[]) => {
-    const inputs = [...list].filter(f => f.type.startsWith('image/') || /\.zip$/i.test(f.name))
-    if (inputs.length === 0)
-      return
-    setImportError(null)
-    // 图片直接收，压缩包先解出图片条目
-    const incoming: IncomingImage[] = []
-    const failed: string[] = []
-    for (const f of inputs) {
-      try {
-        if (f.type.startsWith('image/'))
-          incoming.push({ name: f.name, blob: f })
-        else
-          incoming.push(...await extractZip(f))
-      }
-      catch {
-        failed.push(f.name)
-      }
-    }
-    if (failed.length > 0)
-      setImportError(`压缩包解析失败：${failed.join('、')}`)
-    if (incoming.length === 0) {
-      if (failed.length === 0)
-        setImportError('没有找到可用的图片')
+    const epoch = materialEpochRef.current
+    replacementRequestRef.current += 1
+    const inputs = [...list].filter(f => f.type.startsWith('image/') || imageMimeOf(f.name) || /\.zip$/i.test(f.name))
+    if (inputs.length === 0) {
+      setImportFeedback({ text: '没有找到可用的图片', tone: 'warning' })
       return
     }
-    const loaded = (await Promise.all(incoming.map(i => loadFrame(i.name, i.blob))))
-      .filter((f): f is Omit<FrameItem, 'seq'> => f !== null)
-    // 新追加的一批内部按文件名自然排序，不打乱已有帧的手动顺序
-    loaded.sort((a, b) => collator.compare(a.name, b.name))
-    // 分配上传序号：重排不改变它，便于对照原始文件顺序；新帧默认入选
-    const withSeq = loaded.map(f => ({ ...f, seq: seqRef.current++ }))
-    setFrames(prev => [...prev, ...withSeq])
-    setSelected((prev) => {
-      const next = new Set(prev)
-      withSeq.forEach(f => next.add(f.id))
-      return next
-    })
+    importCountRef.current += 1
+    setImporting(true)
+    setImportFeedback(null)
+    try {
+      // 图片直接收，压缩包先解出图片条目
+      const incoming: IncomingImage[] = []
+      const failed: string[] = []
+      for (const f of inputs) {
+        try {
+          if (f.type.startsWith('image/') || imageMimeOf(f.name))
+            incoming.push({ name: f.name, blob: f.type ? f : new Blob([f], { type: imageMimeOf(f.name)! }) })
+          else
+            incoming.push(...await extractZip(f))
+        }
+        catch {
+          failed.push(f.name)
+        }
+      }
+      if (epoch !== materialEpochRef.current)
+        return
+      if (incoming.length === 0) {
+        setImportFeedback(failed.length ? { text: `压缩包解析失败：${failed.join('、')}`, tone: 'error' } : { text: '没有找到可用的图片', tone: 'warning' })
+        return
+      }
+      const loaded = (await Promise.all(incoming.map(i => loadFrame(i.name, i.blob))))
+        .filter((f): f is Omit<FrameItem, 'seq'> => f !== null)
+      if (epoch !== materialEpochRef.current) {
+        loaded.forEach(f => URL.revokeObjectURL(f.url))
+        return
+      }
+      if (loaded.length < incoming.length || failed.length) {
+        const messages = []
+        if (loaded.length < incoming.length)
+          messages.push(`已跳过 ${incoming.length - loaded.length} 张无法解码的图片`)
+        if (failed.length)
+          messages.push(`压缩包解析失败：${failed.join('、')}`)
+        setImportFeedback({ text: messages.join('；'), tone: loaded.length ? 'warning' : 'error' })
+      }
+      if (loaded.length === 0)
+        return
+      materialRevisionRef.current += 1
+      cropBusyRef.current = false
+      setCropping(false)
+      setCropResult(null)
+      cropScanRef.current = null
+      setCropPreview((previous) => {
+        if (previous)
+          URL.revokeObjectURL(previous.url)
+        return null
+      })
+      // 新追加的一批内部按文件名自然排序，不打乱已有帧的手动顺序
+      loaded.sort((a, b) => collator.compare(a.name, b.name))
+      // 分配上传序号：重排不改变它，便于对照原始文件顺序；新帧默认入选
+      const withSeq = loaded.map(f => ({ ...f, seq: seqRef.current++ }))
+      setFrames(prev => [...prev, ...withSeq])
+      setSelected((prev) => {
+        const next = new Set(prev)
+        withSeq.forEach(f => next.add(f.id))
+        return next
+      })
+    }
+    catch {
+      if (epoch === materialEpochRef.current)
+        setImportFeedback({ text: '导入失败，请重试', tone: 'error' })
+    }
+    finally {
+      if (epoch === materialEpochRef.current) {
+        importCountRef.current -= 1
+        setImporting(importCountRef.current > 0)
+      }
+    }
   }, [])
 
   const onFileChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
@@ -712,8 +808,9 @@ export default function FrameAnimationTool() {
 
   /** 载入内置示例帧（canvas 只有客户端可用，用户点「试试示例」时现场生成） */
   const loadDemo = useCallback(async () => {
+    const epoch = materialEpochRef.current
     const files = await createDemoFrames()
-    if (files)
+    if (files && epoch === materialEpochRef.current)
       await addFiles(files)
   }, [addFiles])
 
@@ -757,8 +854,11 @@ export default function FrameAnimationTool() {
 
   /** 批处理：扫描所有帧的非透明包围盒，取并集 = 裁掉所有帧都透明的公共边缘 */
   const prepareCrop = useCallback(async () => {
-    if (frames.length === 0 || cropping)
+    if (frames.length === 0 || cropBusyRef.current)
       return
+    cropRestoreFocusRef.current = document.activeElement
+    const revision = materialRevisionRef.current
+    cropBusyRef.current = true
     setCropping(true)
     setCropResult(null)
     try {
@@ -772,8 +872,10 @@ export default function FrameAnimationTool() {
         scan.push(data)
       }
       const union = computeUnionBox(scan, alphaThreshold)
+      if (revision !== materialRevisionRef.current)
+        return
       if (!union) {
-        setCropResult('所有帧都是全透明图片，没有可保留的内容')
+        setCropResult({ text: '所有帧都是全透明图片，没有可保留的内容', tone: 'warning' })
         return
       }
       // 并集已覆盖整张图 = 没有公共透明边可裁
@@ -781,13 +883,15 @@ export default function FrameAnimationTool() {
         f => union.left <= 0 && union.top <= 0 && union.right >= f.width && union.bottom >= f.height,
       )
       if (coversAll) {
-        setCropResult('没有找到所有帧都透明的边缘，无需裁剪')
+        setCropResult({ text: '没有找到所有帧都透明的边缘，无需裁剪', tone: 'info' })
         return
       }
       // 生成叠放预览并弹出确认框
       const blob = await buildStackPreview(frames)
+      if (revision !== materialRevisionRef.current)
+        return
       if (!blob) {
-        setCropResult('生成预览失败')
+        setCropResult({ text: '生成预览失败', tone: 'error' })
         return
       }
       const url = URL.createObjectURL(blob)
@@ -806,12 +910,16 @@ export default function FrameAnimationTool() {
       })
     }
     catch {
-      setCropResult('裁剪失败：有图片无法解码')
+      if (revision === materialRevisionRef.current)
+        setCropResult({ text: '裁剪失败：有图片无法解码', tone: 'error' })
     }
     finally {
-      setCropping(false)
+      if (revision === materialRevisionRef.current) {
+        cropBusyRef.current = false
+        setCropping(false)
+      }
     }
-  }, [frames, cropping, alphaThreshold])
+  }, [frames, alphaThreshold])
 
   /** 弹窗内调整阈值：用缓存像素实时重算并集（null = 该阈值下全部透明） */
   useEffect(() => {
@@ -826,6 +934,9 @@ export default function FrameAnimationTool() {
   }, [alphaThreshold])
 
   const closeCropPreview = useCallback(() => {
+    materialRevisionRef.current += 1
+    cropBusyRef.current = false
+    setCropping(false)
     cropScanRef.current = null
     setCropPreview((prev) => {
       if (prev)
@@ -834,8 +945,22 @@ export default function FrameAnimationTool() {
     })
   }, [])
 
+  useEffect(() => {
+    if (!cropDialogOpen)
+      return
+    const previousFocus = cropRestoreFocusRef.current
+    cropDialogRef.current?.focus()
+    return () => {
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
+        previousFocus.focus()
+    }
+  }, [cropDialogOpen])
+
   /** 清除全部帧：回收所有 objectURL，回到空状态（精灵图预览随 spriteKey 变空自动清理） */
   const clearAll = useCallback(() => {
+    materialEpochRef.current += 1
+    importCountRef.current = 0
+    setImporting(false)
     setPlaying(false)
     setCurrent(0)
     playRef.current = { index: 0, dir: 1, cycles: 0 }
@@ -848,100 +973,184 @@ export default function FrameAnimationTool() {
     setRangeRaw(null)
     closeCropPreview()
     setCropResult(null)
-    setImportError(null)
+    setImportFeedback(null)
+    setRecordFeedback(null)
+    setExportError(false)
+    setCopyError(false)
+    setDragOver(false)
+    dragIndexRef.current = null
+    setDropTarget(null)
   }, [closeCropPreview])
 
   const saveRecord = useCallback(async () => {
-    if (frames.length === 0)
+    if (frames.length === 0 || savingRef.current)
       return
-    const archive = await createFrameArchive(frames.map(frame => ({
-      id: frame.id,
-      seq: frame.seq,
-      name: frame.name,
-      blob: frame.blob,
-      selected: selected.has(frame.id),
-    })))
-    const meta: FrameAnimationRecordMeta = {
-      name: recordName.trim() || frames[0].name.replace(/\.[^.]+$/, '') || '帧动画项目',
-      frames: archive.frames,
-      fps,
-      direction,
-      loopInfinite,
-      loopCount,
-      range: rangeRaw,
-      pixelated,
-      alphaThreshold,
-      exportFormat,
-      spriteDimension,
-      exportVars,
-      exportContainer,
+    savingRef.current = true
+    setSaving(true)
+    setRecordFeedback(null)
+    const epoch = materialEpochRef.current
+    try {
+      const archive = await createFrameArchive(frames.map(frame => ({
+        id: frame.id,
+        seq: frame.seq,
+        name: frame.name,
+        blob: frame.blob,
+        selected: selected.has(frame.id),
+      })))
+      const meta: FrameAnimationRecordMeta = {
+        name: recordName.trim() || frames[0].name.replace(/\.[^.]+$/, '') || '帧动画项目',
+        frames: archive.frames,
+        fps,
+        direction,
+        loopInfinite,
+        loopCount,
+        range: rangeRaw,
+        pixelated,
+        alphaThreshold,
+        exportFormat,
+        spriteDimension,
+        exportVars,
+        exportContainer,
+      }
+      await saveRecordItem(createFrameAnimationItem(crypto.randomUUID(), archive.blob, meta))
+      if (epoch === materialEpochRef.current) {
+        setRecordName('')
+        setRecordFeedback({ text: '项目已保存' })
+      }
     }
-    await saveRecordItem(createFrameAnimationItem(crypto.randomUUID(), archive.blob, meta))
-    setRecordName('')
+    catch {
+      if (epoch === materialEpochRef.current)
+        setRecordFeedback({ text: '保存失败，素材和项目名称已保留，请重试', error: true })
+    }
+    finally {
+      savingRef.current = false
+      setSaving(false)
+    }
   }, [alphaThreshold, direction, exportContainer, exportFormat, exportVars, fps, frames, loopCount, loopInfinite, pixelated, rangeRaw, recordName, saveRecordItem, selected, spriteDimension])
 
+  const deleteRecord = useCallback(async (id: string) => {
+    if (deletingRef.current)
+      return
+    deletingRef.current = true
+    setDeletingId(id)
+    setRecordFeedback(null)
+    try {
+      await removeRecordItem(id)
+      setRecordFeedback({ text: '项目已删除' })
+    }
+    catch {
+      setRecordFeedback({ text: '删除失败，请重试', error: true })
+    }
+    finally {
+      deletingRef.current = false
+      setDeletingId(null)
+    }
+  }, [removeRecordItem])
+
   const loadRecord = useCallback(async (id: string) => {
-    const item = await getRecordItem(id)
-    if (!item || !(item.payload instanceof Blob))
-      return
-    const meta = item.meta as unknown as Partial<FrameAnimationRecordMeta>
-    if (!Array.isArray(meta.frames))
-      return
-    const archive = await extractFrameArchive(item.payload)
-    const loaded = (await Promise.all(meta.frames.map(async (saved) => {
-      const blob = archive.get(saved.path)
-      if (!blob)
-        return null
-      const frame = await loadFrame(saved.name, blob)
-      return frame ? { ...frame, id: saved.id, seq: saved.seq, selected: saved.selected } : null
-    }))).filter((frame): frame is Omit<FrameItem, 'seq'> & { seq: number, selected: boolean } => frame !== null)
-    if (loaded.length === 0)
-      return
-    setPlaying(false)
-    setCurrent(0)
-    playRef.current = { index: 0, dir: 1, cycles: 0 }
-    finishedRef.current = false
-    setFrames((previous) => {
-      previous.forEach(frame => URL.revokeObjectURL(frame.url))
-      return loaded.map(({ selected: _selected, ...frame }) => frame)
-    })
-    setSelected(new Set(loaded.filter(frame => frame.selected).map(frame => frame.id)))
-    setRangeRaw(meta.range ?? null)
-    if (typeof meta.fps === 'number')
-      setFps(meta.fps)
-    if (meta.direction)
-      setDirection(meta.direction)
-    if (typeof meta.loopInfinite === 'boolean')
-      setLoopInfinite(meta.loopInfinite)
-    if (typeof meta.loopCount === 'number')
-      setLoopCount(meta.loopCount)
-    if (typeof meta.pixelated === 'boolean')
-      setPixelated(meta.pixelated)
-    if (typeof meta.alphaThreshold === 'number')
-      setAlphaThreshold(meta.alphaThreshold)
-    if (meta.exportFormat)
-      setExportFormat(meta.exportFormat)
-    if (meta.spriteDimension)
-      setSpriteDimension(meta.spriteDimension)
-    if (typeof meta.exportVars === 'boolean')
-      setExportVars(meta.exportVars)
-    if (typeof meta.exportContainer === 'boolean')
-      setExportContainer(meta.exportContainer)
-    seqRef.current = Math.max(...loaded.map(frame => frame.seq)) + 1
-    setRecordName(typeof meta.name === 'string' ? meta.name : '')
-    setImportError(null)
+    const epoch = ++materialEpochRef.current
+    const request = ++replacementRequestRef.current
+    importCountRef.current = 0
+    setImporting(true)
+    setRecordFeedback(null)
     closeCropPreview()
+    try {
+      const item = await getRecordItem(id)
+      if (!item || !(item.payload instanceof Blob))
+        throw new Error('Missing project archive')
+      const meta = item.meta as unknown as Partial<FrameAnimationRecordMeta>
+      if (!Array.isArray(meta.frames) || meta.frames.length === 0 || meta.frames.some(saved => !saved || typeof saved.path !== 'string' || typeof saved.name !== 'string'))
+        throw new Error('Invalid frame manifest')
+      const archive = await extractFrameArchive(item.payload)
+      const ids = new Set<string>()
+      const manifest = meta.frames.map((saved, index) => {
+        const id = typeof saved.id === 'string' && saved.id && !ids.has(saved.id) ? saved.id : crypto.randomUUID()
+        ids.add(id)
+        return { ...saved, id, seq: Number.isFinite(saved.seq) && saved.seq > 0 ? Math.floor(saved.seq) : index + 1, selected: typeof saved.selected === 'boolean' ? saved.selected : true }
+      })
+      const loaded = (await Promise.all(manifest.map(async (saved) => {
+        const blob = archive.get(saved.path)
+        if (!blob)
+          return null
+        // Cropping produces PNG pixels while retaining the original source name.
+        // 裁剪生成 PNG 像素，但保留原素材名称。
+        const signature = new Uint8Array(await blob.slice(0, 8).arrayBuffer())
+        const isPng = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => signature[index] === byte)
+        const decodedBlob = isPng && blob.type !== 'image/png' ? new Blob([blob], { type: 'image/png' }) : blob
+        const frame = await loadFrame(saved.name, decodedBlob)
+        return frame ? { ...frame, id: saved.id, seq: saved.seq, selected: saved.selected } : null
+      }))).filter((frame): frame is Omit<FrameItem, 'seq'> & { seq: number, selected: boolean } => frame !== null)
+      if (epoch !== materialEpochRef.current || request !== replacementRequestRef.current) {
+        loaded.forEach(frame => URL.revokeObjectURL(frame.url))
+        return
+      }
+      if (loaded.length !== manifest.length) {
+        loaded.forEach(frame => URL.revokeObjectURL(frame.url))
+        throw new Error('Incomplete or invalid frame archive')
+      }
+      setPlaying(false)
+      setCurrent(0)
+      playRef.current = { index: 0, dir: 1, cycles: 0 }
+      finishedRef.current = false
+      setFrames((previous) => {
+        previous.forEach(frame => URL.revokeObjectURL(frame.url))
+        return loaded.map(({ selected: _selected, ...frame }) => frame)
+      })
+      setSelected(new Set(loaded.filter(frame => frame.selected).map(frame => frame.id)))
+      const bounded = (value: unknown, fallback: number, min: number, max: number) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
+      const count = loaded.filter(frame => frame.selected).length
+      const last = Math.max(0, count - 1)
+      const validRange = Array.isArray(meta.range) && meta.range.length === 2 && meta.range.every(value => typeof value === 'number' && Number.isFinite(value))
+      const start = validRange ? Math.floor(bounded(meta.range![0], 0, 0, last)) : 0
+      const end = validRange ? Math.floor(bounded(meta.range![1], last, start, last)) : last
+      setRangeRaw(validRange ? [start, end] : null)
+      setFps(bounded(meta.fps, 12, 1, 120))
+      setDirection(meta.direction === 'reverse' || meta.direction === 'pingpong' ? meta.direction : 'forward')
+      setLoopInfinite(typeof meta.loopInfinite === 'boolean' ? meta.loopInfinite : true)
+      setLoopCount(Math.floor(bounded(meta.loopCount, 3, 1, 999)))
+      setPixelated(typeof meta.pixelated === 'boolean' ? meta.pixelated : false)
+      setAlphaThreshold(Math.floor(bounded(meta.alphaThreshold, DEFAULT_ALPHA_THRESHOLD, 0, 254)))
+      setExportFormat(meta.exportFormat === 'css' || meta.exportFormat === 'less' ? meta.exportFormat : 'scss')
+      setSpriteDimension({
+        axis: meta.spriteDimension?.axis === 'cols' ? 'cols' : 'rows',
+        value: Math.floor(bounded(meta.spriteDimension?.value, 1, 1, loaded.length)),
+      })
+      setExportVars(typeof meta.exportVars === 'boolean' ? meta.exportVars : true)
+      setExportContainer(typeof meta.exportContainer === 'boolean' ? meta.exportContainer : true)
+      seqRef.current = Math.max(...loaded.map(frame => frame.seq)) + 1
+      setRecordName(typeof meta.name === 'string' ? meta.name : '')
+      setImportFeedback(null)
+      setRecordFeedback({ text: '项目已加载' })
+      setCropResult(null)
+      closeCropPreview()
+    }
+    catch {
+      if (epoch === materialEpochRef.current && request === replacementRequestRef.current) {
+        setImportFeedback({ text: '加载项目失败，当前素材已保留，请重试', tone: 'error' })
+        setRecordFeedback({ text: '加载项目失败，当前素材已保留，请重试', error: true })
+      }
+    }
+    finally {
+      if (epoch === materialEpochRef.current && request === replacementRequestRef.current)
+        setImporting(false)
+    }
   }, [closeCropPreview, getRecordItem])
 
   /** 确认裁剪：按预览的并集矩形裁掉所有帧 */
   const applyCrop = useCallback(async () => {
-    if (!cropPreview || !cropPreview.union || cropping)
+    if (!cropPreview || !cropPreview.union || cropBusyRef.current)
       return
+    const revision = materialRevisionRef.current
+    cropBusyRef.current = true
     setCropping(true)
     const { union } = cropPreview
     try {
       // 单帧失败不拖垮整批：失败的帧保持原样
       const cropped = await Promise.all(frames.map(f => cropFrameImage(f, union).catch(() => null)))
+      if (revision !== materialRevisionRef.current) {
+        cropped.forEach(frame => frame && URL.revokeObjectURL(frame.url))
+        return
+      }
       // 按 id 匹配回写：裁剪是异步的，期间用户可能重排或调整勾选
       const croppedById = new Map(frames.map((f, i) => [f.id, cropped[i]]))
       setFrames((prev) => {
@@ -959,18 +1168,28 @@ export default function FrameAnimationTool() {
           return { ...f, ...c }
         })
       })
-      setCropResult(
-        `已裁掉公共透明边：${cropPreview.fullW} × ${cropPreview.fullH} → ${union.right - union.left} × ${union.bottom - union.top}`,
-      )
+      const failedCount = cropped.filter(frame => !frame).length
+      setCropResult(failedCount === frames.length
+        ? { text: '裁剪失败：未能生成图片，原素材已保留', tone: 'error' }
+        : failedCount > 0
+          ? { text: `已裁剪 ${frames.length - failedCount} 帧，${failedCount} 帧无法裁剪，已保留原素材`, tone: 'warning' }
+          : {
+              text: `已裁掉公共透明边：${cropPreview.fullW} × ${cropPreview.fullH} → ${union.right - union.left} × ${union.bottom - union.top}`,
+              tone: 'success',
+            })
       closeCropPreview()
     }
     catch {
-      setCropResult('裁剪失败：有图片无法解码')
+      if (revision === materialRevisionRef.current)
+        setCropResult({ text: '裁剪失败：有图片无法解码', tone: 'error' })
     }
     finally {
-      setCropping(false)
+      if (revision === materialRevisionRef.current) {
+        cropBusyRef.current = false
+        setCropping(false)
+      }
     }
-  }, [cropPreview, frames, cropping, closeCropPreview])
+  }, [cropPreview, frames, closeCropPreview])
 
   const sortByName = useCallback(() => {
     setFrames(prev => [...prev].sort((a, b) => collator.compare(a.name, b.name)))
@@ -979,7 +1198,13 @@ export default function FrameAnimationTool() {
   // 卸载时回收所有 objectURL
   const framesRef = useRef<FrameItem[]>([])
   framesRef.current = frames
-  useEffect(() => () => framesRef.current.forEach(f => URL.revokeObjectURL(f.url)), [])
+  useEffect(() => () => {
+    materialEpochRef.current += 1
+    materialRevisionRef.current += 1
+    framesRef.current.forEach(f => URL.revokeObjectURL(f.url))
+    if (cropPreviewRef.current)
+      URL.revokeObjectURL(cropPreviewRef.current.url)
+  }, [])
 
   /* ---------- 播放引擎：rAF + 时间累积，帧率可调 ---------- */
 
@@ -995,9 +1220,13 @@ export default function FrameAnimationTool() {
     const advance = (): boolean => {
       const lo = rangeStart
       const hi = rangeEnd
-      if (hi <= lo)
-        return false
       const ps = playRef.current
+      if (hi <= lo) {
+        ps.index = lo
+        ps.cycles += 1
+        setCurrent(lo)
+        return !loopInfinite && ps.cycles >= loopCount
+      }
       let { index, dir, cycles } = ps
       if (index < lo || index > hi) {
         // 范围外（刚调过范围或点过范围外的帧）：先归位，不计循环
@@ -1019,21 +1248,25 @@ export default function FrameAnimationTool() {
         }
       }
       else {
-        // 往返：lo..hi..lo+1 为一轮，回到前进方向时记一次循环
+        // Count a full ping-pong cycle on return, without an extra held tick.
+        // 往返：回到 lo 就完成一轮，避免有限循环多等待一帧。
         index += dir
-        if (index > hi) {
-          index = hi - 1
+        if (index >= hi) {
+          index = hi
           dir = -1
         }
-        else if (index < lo) {
-          index = lo + 1
+        else if (index <= lo) {
+          index = lo
           dir = 1
           cycles += 1
         }
       }
+      const finished = !loopInfinite && cycles >= loopCount
+      if (finished)
+        index = direction === 'forward' ? hi : lo
       playRef.current = { index, dir, cycles }
       setCurrent(index)
-      return !loopInfinite && cycles >= loopCount
+      return finished
     }
 
     const tick = (now: number) => {
@@ -1057,7 +1290,7 @@ export default function FrameAnimationTool() {
     setPlaying((prev) => {
       const next = !prev
       // 有限循环播完后再次播放：从范围起点开始
-      if (next && finishedRef.current) {
+      if (next && (finishedRef.current || playRef.current.index < rangeStart || playRef.current.index > rangeEnd)) {
         playRef.current = { index: direction === 'reverse' ? rangeEnd : rangeStart, dir: 1, cycles: 0 }
         setCurrent(playRef.current.index)
         finishedRef.current = false
@@ -1079,14 +1312,14 @@ export default function FrameAnimationTool() {
   // 键盘：弹窗打开时只响应 Esc；否则空格播放/暂停，← → 逐帧
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
-        return
       if (cropPreview) {
         if (e.key === 'Escape')
           closeCropPreview()
         return
       }
+      const target = e.target as HTMLElement
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target.isContentEditable)
+        return
       if (e.key === ' ') {
         e.preventDefault()
         togglePlay()
@@ -1105,20 +1338,27 @@ export default function FrameAnimationTool() {
   /* ---------- 样式导出 ---------- */
 
   const copyCss = useCallback((text: string) => {
-    void navigator.clipboard.writeText(text).then(() => {
+    setCopiedCss(false)
+    setCopyError(false)
+    void Promise.resolve().then(() => navigator.clipboard.writeText(text)).then(() => {
       setCopiedCss(true)
       setTimeout(setCopiedCss, 1200, false)
-    })
+    }).catch(() => setCopyError(true))
   }, [])
 
   const downloadSprite = useCallback(async () => {
-    if (exportFrames.length === 0 || spriting)
+    if (exportFrames.length === 0 || spriteBusyRef.current)
       return
+    const epoch = materialEpochRef.current
+    spriteBusyRef.current = true
     setSpriting(true)
+    setExportError(false)
     try {
       const blob = await buildSpriteSheet(exportFrames, { cols: spriteCols, rows: spriteRows })
-      if (!blob)
+      if (epoch !== materialEpochRef.current)
         return
+      if (!blob)
+        throw new Error('Sprite encoding failed')
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -1127,10 +1367,15 @@ export default function FrameAnimationTool() {
       // 延迟回收，确保下载已拿到引用
       setTimeout(URL.revokeObjectURL, 10_000, url)
     }
+    catch {
+      if (epoch === materialEpochRef.current)
+        setExportError(true)
+    }
     finally {
+      spriteBusyRef.current = false
       setSpriting(false)
     }
-  }, [exportFrames, spriteCols, spriteRows, spriting])
+  }, [exportFrames, spriteCols, spriteRows])
 
   /* ---------- 精灵图预览：入选 + 范围变化后防抖重建 ---------- */
 
@@ -1163,22 +1408,28 @@ export default function FrameAnimationTool() {
     }
     let cancelled = false
     const timer = setTimeout(() => {
+      setSpriteError(null)
       void buildSpriteSheet(exportFramesRef.current, { cols: spriteCols, rows: spriteRows }).then((blob) => {
-        if (cancelled || !blob)
+        if (cancelled)
           return
+        if (!blob)
+          throw new Error('Sprite preview encoding failed')
         const url = URL.createObjectURL(blob)
         setSprite((prev) => {
           if (prev)
             URL.revokeObjectURL(prev.url)
           return { key: spriteKey, url }
         })
+      }).catch(() => {
+        if (!cancelled)
+          setSpriteError(spriteKey)
       })
     }, 250)
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [spriteKey, spriteCols, spriteRows, disposeSprite])
+  }, [spriteKey, spriteCols, spriteRows, spriteRetry, disposeSprite])
 
   // 卸载回收精灵图预览的 objectURL
   useEffect(() => () => {
@@ -1201,7 +1452,9 @@ export default function FrameAnimationTool() {
     : null
   const exportParams: ExportParams = {
     frames: exportFrames.length,
-    duration,
+    // Ping-pong includes both legs and counts a complete return as one loop.
+    // 往返包含前进和返回，回到起点才计一次循环。
+    duration: String(Number(((direction === 'pingpong' ? Math.max(1, (rangeLen - 1) * 2) : rangeLen) / fps).toFixed(6))),
     iteration: loopInfinite ? 'infinite' : String(loopCount),
     direction: direction === 'forward' ? 'normal' : direction === 'reverse' ? 'reverse' : 'alternate',
     pixelated,
@@ -1217,599 +1470,206 @@ export default function FrameAnimationTool() {
     ? EXPORT_BUILDERS[exportFormat](exportParams)
     : ''
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-16">
-      <Seo
-        title="帧动画预览"
-        description="导入多张图片逐帧预览动画效果，可调帧率、播放方向、循环次数、缩放与背景。"
-        path="/tools/frame-animation"
-      />
-      {/* 顶栏 */}
-      <header className="flex h-24 items-center gap-3">
-        <Button asChild variant="outline" size="icon">
-          <Link to="/" aria-label="返回首页">
-            <ArrowLeft className="size-5" />
-          </Link>
-        </Button>
-        <div className="flex size-10 items-center justify-center rounded-md border-2 border-border bg-chart-1 shadow-hard-xs">
-          <Film className="size-5 text-foreground" />
-        </div>
-        <div>
-          <h1 className="text-lg font-black tracking-tight">帧动画预览</h1>
-          <p className="text-sm text-muted-foreground">导入多张图片逐帧播放，帧率 / 方向 / 循环 / 缩放可调</p>
-        </div>
-      </header>
-
-      {/* 预览 + 参数（导入已融入预览：舞台即拖放区，添加按钮在舞台里） */}
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle>预览</CardTitle>
-            {frameCount > 0 && (
-              <CardDescription>
-                {`入选 ${activeCount}/${frameCount} 帧 · 空格播放/暂停，← → 逐帧`}
-              </CardDescription>
+    <div className={`frame-workspace workspace-${workspace} ${sequenceOpen ? '' : 'sequence-collapsed'}`}>
+      <Seo title="帧动画预览" description="导入多张图片逐帧预览动画效果，可调帧率、播放方向、循环次数、缩放与背景。" path="/tools/frame-animation" />
+      <div className="frames-canvas" aria-label="帧动画画布">
+        <div ref={fitAreaRef} className="frames-fit-area" aria-hidden="true" />
+        <div className="frames-stage-viewport">
+          <div
+            ref={stageRef}
+            {...stagePan.panHandlers}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragOver(true)
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            className={cn(
+              'absolute inset-0 flex touch-none overflow-hidden border p-3 transition-colors select-none',
+              frame && (stagePan.panning ? 'cursor-grabbing' : 'cursor-grab'),
+              frameCount === 0 && 'border-dashed',
+              dragOver ? 'border-primary' : 'border-border',
             )}
-          </CardHeader>
-          <CardContent className="min-w-0 flex flex-1 flex-col gap-4 pb-6">
-            {/* 舞台：本身就是拖放区；滚轮 / 双指缩放，按住拖动平移（与点九图工具同一套手势） */}
-            {/* 相对定位容器：舞台绝对定位脱离文档流（高度由卡片剩余空间决定），悬浮按钮不随内容滚动 */}
-            <div className="relative min-h-64 flex-1">
-              <div
-                ref={stageRef}
-                {...stagePan.panHandlers}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setDragOver(true)
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={onDrop}
-                className={cn(
-                  'absolute inset-0 flex touch-none overflow-hidden rounded-md border-2 p-4 transition-colors select-none',
-                  frame && (stagePan.panning ? 'cursor-grabbing' : 'cursor-grab'),
-                  frameCount === 0 && 'border-dashed',
-                  dragOver ? 'border-primary' : 'border-border',
-                )}
-                style={{ background: stageView.background }}
-              >
-                {frame
-                  ? (
-                      <img
-                        src={frame.url}
-                        alt={frame.name}
-                        draggable={false}
-                        className={cn(
-                          'm-auto shrink-0',
-                          // 帧边界：勾出单张精灵图格子的范围
-                          stageView.showBounds && STAGE_BOUNDARY_CLASS,
-                        )}
-                        style={{
-                          width: frame.width * zoom,
-                          transform: `translate(${stagePan.offset.x}px, ${stagePan.offset.y}px)`,
-                          imageRendering: pixelated ? 'pixelated' : 'auto',
-                        }}
-                      />
-                    )
-                  : (
-                      frameCount > 0
-                        // 有上传但全部未勾选
-                        ? (
-                            <div className="m-auto flex flex-col items-center gap-2 px-6 text-center text-muted-foreground/60">
-                              <Images className="size-8" />
-                              <p className="text-sm">没有入选的帧：在下方帧序列里勾选后参与预览</p>
-                            </div>
-                          )
-                        : (
-                            <div className="m-auto flex flex-col items-center gap-3 px-6 text-center">
-                              <div className="flex size-12 items-center justify-center rounded-md border-2 border-border bg-chart-1 shadow-hard-xs -rotate-2">
-                                <Images className="size-6 text-foreground" />
-                              </div>
-                              <div>
-                                <p className="font-bold">拖拽图片 / ZIP 到此处，或</p>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                  可多选，按文件名自然排序
-                                </p>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button type="button" onClick={() => fileInputRef.current?.click()}>
-                                  <ImagePlus />
-                                  添加图片
-                                </Button>
-                                <Button type="button" variant="outline" onClick={() => dirInputRef.current?.click()}>
-                                  <FolderOpen />
-                                  添加文件夹
-                                </Button>
-                                <Button type="button" variant="outline" onClick={() => void loadDemo()}>
-                                  <Sparkles />
-                                  试试示例
-                                </Button>
-                              </div>
-                            </div>
-                          )
+            style={{ background: stageView.background }}
+          >
+            {frame
+              ? (
+                  <img
+                    src={frame.url}
+                    alt={frame.name}
+                    draggable={false}
+                    className={cn(
+                      'm-auto shrink-0',
+                      // 帧边界：勾出单张精灵图格子的范围
+                      stageView.showBounds && STAGE_BOUNDARY_CLASS,
                     )}
-              </div>
-              <StageZoomIndicator zoom={zoom} visible={stageZoom.zoomIndicatorVisible} />
-              <StageViewControls hasContent={Boolean(frame)} settings={stageView} />
-              {/* 有帧时：添加按钮悬浮在舞台右上角；平移后出现「回到居中」 */}
-              {frame && (
-                <div className="absolute top-2 right-2 flex gap-1.5">
-                  {(stagePan.offset.x !== 0 || stagePan.offset.y !== 0 || zoom !== 0.75) && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      title="重置视图（居中并恢复默认缩放）"
-                      aria-label="重置视图"
-                      onClick={() => {
-                        stagePan.resetPan()
-                        setZoom(0.75)
-                      }}
-                    >
-                      <RotateCcw />
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    title="添加图片"
-                    aria-label="添加图片"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <ImagePlus />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    title="添加文件夹"
-                    aria-label="添加文件夹"
-                    onClick={() => dirInputRef.current?.click()}
-                  >
-                    <FolderOpen />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    title="清除全部帧"
-                    aria-label="清除全部帧"
-                    onClick={clearAll}
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
-              )}
-            </div>
-            {/* 精灵图预览跟随右侧布局选项，放在舞台下方 */}
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">
-                精灵图预览（
-                {exportFrames.length}
-                {' 帧'}
-                {uniformFrameSize && ` · 单张 ${uniformFrameSize.w} × ${uniformFrameSize.h}`}
-                {' · '}
-                {spriteDims.cols}
-                {' 列 × '}
-                {spriteDims.rows}
-                {' 行'}
-                {' · '}
-                {cellW * spriteDims.cols}
-                {' × '}
-                {cellH * spriteDims.rows}
-                ）
-              </span>
-              <div
-                className="min-h-24 max-w-full overflow-hidden rounded-md border-2 border-border"
-                style={{ background: stageView.background }}
-              >
-                {sprite && sprite.key === spriteKey && spriteKey !== ''
-                  ? (
-                      <div className="flex min-h-24 w-full items-center justify-center p-2">
-                        <img
-                          src={sprite.url}
-                          alt="精灵图预览"
-                          draggable={false}
-                          className={cn('block h-auto max-w-full', stageView.showBounds && STAGE_BOUNDARY_CLASS)}
-                          style={{ imageRendering: pixelated ? 'pixelated' : 'auto' }}
-                        />
-                      </div>
-                    )
-                  : (
-                      <div className="flex min-h-24 items-center justify-center text-xs text-muted-foreground">
-                        {exportFrames.length > 0 ? '生成中…' : '暂无帧'}
-                      </div>
-                    )}
-              </div>
-            </div>
-            {importError && (
-              <p className="text-sm font-bold text-destructive">{importError}</p>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,.zip"
-              multiple
-              className="hidden"
-              onChange={onFileChange}
-            />
-            {/* 文件夹选择：webkitdirectory 非标准属性，React 类型里没有，绕一下 */}
-            <input
-              ref={dirInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={onFileChange}
-              {...{ webkitdirectory: '' } as Record<string, string>}
-            />
-            {/* 播放控制：左侧三个按钮 + 帧信息，右侧下载精灵图 */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  disabled={activeCount === 0}
-                  onClick={() => stepFrame(-1)}
-                  aria-label="上一帧"
-                >
-                  <ChevronLeft className="size-5" />
-                </Button>
-                <Button
-                  type="button"
-                  size="icon-lg"
-                  disabled={activeCount === 0}
-                  onClick={togglePlay}
-                  aria-label={playing ? '暂停' : '播放'}
-                >
-                  {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  disabled={activeCount === 0}
-                  onClick={() => stepFrame(1)}
-                  aria-label="下一帧"
-                >
-                  <ChevronRight className="size-5" />
-                </Button>
-                <div className="ml-2 min-w-0 text-sm text-muted-foreground">
-                  {frame
-                    ? (
-                        <>
-                          <span className="font-mono font-bold text-foreground">{safeIndex + 1}</span>
-                          {' / '}
-                          {activeCount}
-                          <span className="mx-2">·</span>
-                          <span className="break-all">{frame.name}</span>
-                          <span className="mx-2">·</span>
-                          {'一轮约 '}
-                          {duration}
-                          {' 秒'}
-                        </>
-                      )
-                    : '—'}
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={spriting || exportFrames.length === 0}
-                onClick={() => void downloadSprite()}
-              >
-                {spriting ? <LoaderCircle className="animate-spin" /> : <FileImage />}
-                下载精灵图
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 参数：统一「左标签 + 右控件」行式布局 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>动画参数</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 pb-6">
-            {/* 帧率 + 一轮时长（双向换算） */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-baseline justify-between">
-                <label htmlFor="fps" className="text-xs font-bold text-muted-foreground">帧率</label>
-                <span className="text-xs text-muted-foreground">
-                  {Number(fps.toFixed(2))}
-                  {' fps · 每帧 '}
-                  {frameMs}
-                  {' ms'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  id="fps"
-                  type="range"
-                  min={1}
-                  max={60}
-                  value={fps}
-                  onChange={e => setFps(Number(e.target.value))}
-                  className="min-w-0 flex-1 accent-primary"
-                />
-                <input
-                  type="number"
-                  min={1}
-                  max={120}
-                  value={Number(fps.toFixed(2))}
-                  aria-label="帧率（fps）"
-                  title="帧率（fps）"
-                  onChange={e => setFps(Math.min(120, Math.max(1, Number(e.target.value) || 1)))}
-                  className={NUM_INPUT_CLASS}
-                />
-                <span className="text-xs text-muted-foreground">fps</span>
-                <input
-                  type="number"
-                  min={0.01}
-                  step={0.05}
-                  disabled={activeCount === 0}
-                  value={rangeLen > 0 ? Number((rangeLen / fps).toFixed(2)) : 0}
-                  aria-label="所有帧总时长（秒），改了反推帧率"
-                  title="所有帧总时长（秒），改了反推帧率"
-                  onChange={(e) => {
-                    const d = Number(e.target.value)
-                    if (d > 0)
-                      setFps(Math.min(120, Math.max(1, rangeLen / d)))
-                  }}
-                  className={NUM_INPUT_CLASS}
-                />
-                <span className="text-xs text-muted-foreground">秒</span>
-              </div>
-            </div>
-
-            {/* 帧范围：双头滑块，播放与导出都按范围截断 */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs font-bold text-muted-foreground">帧范围</span>
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {activeCount > 0 ? `第 ${rangeStart + 1} → ${rangeEnd + 1} 帧` : '—'}
-                  {rangeRaw !== null && (
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      className="h-auto p-0 text-xs"
-                      onClick={() => setRangeRaw(null)}
-                    >
-                      恢复全程
-                    </Button>
-                  )}
-                </span>
-              </div>
-              <div className="relative h-4">
-                {/* 轨道 + 选中段高亮（视觉层，不响应指针） */}
-                <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
-                {activeCount > 1 && (
-                  <div
-                    className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary"
                     style={{
-                      left: `${(rangeStart / maxIdx) * 100}%`,
-                      right: `${(1 - rangeEnd / maxIdx) * 100}%`,
+                      width: frame.width * zoom,
+                      transform: `translate(${stagePan.offset.x}px, ${stagePan.offset.y}px)`,
+                      imageRendering: pixelated ? 'pixelated' : 'auto',
                     }}
                   />
+                )
+              : (
+                  frameCount > 0
+                  // 有上传但全部未勾选
+                    ? (
+                        <div className="m-auto flex flex-col items-center gap-2 px-6 text-center text-muted-foreground/60">
+                          <Images className="size-8" />
+                          <p className="text-sm">没有入选的帧：在下方帧序列里勾选后参与预览</p>
+                        </div>
+                      )
+                    : (
+                        <div className="m-auto flex flex-col items-center gap-3 px-6 text-center">
+                          <Images className="size-8 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium">拖拽图片 / ZIP 到此处，或</p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              可多选，按文件名自然排序
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap justify-center gap-2">
+                            <Button type="button" onClick={() => fileInputRef.current?.click()}>
+                              <ImagePlus />
+                              添加图片
+                            </Button>
+                            <Button type="button" variant="outline" onClick={() => dirInputRef.current?.click()}>
+                              <FolderOpen />
+                              添加文件夹
+                            </Button>
+                            <Button type="button" variant="outline" onClick={() => void loadDemo()}>
+                              <Sparkles />
+                              试试示例
+                            </Button>
+                          </div>
+                        </div>
+                      )
                 )}
-                <input
-                  type="range"
-                  min={0}
-                  max={maxIdx}
-                  step={1}
-                  value={rangeStart}
-                  disabled={activeCount < 2}
-                  aria-label="起始帧"
-                  onChange={e => setRangeRaw([Math.min(Number(e.target.value), rangeEnd), rangeEnd])}
-                  className={RANGE_INPUT_CLASS}
-                />
-                <input
-                  type="range"
-                  min={0}
-                  max={maxIdx}
-                  step={1}
-                  value={rangeEnd}
-                  disabled={activeCount < 2}
-                  aria-label="结束帧"
-                  onChange={e => setRangeRaw([rangeStart, Math.max(Number(e.target.value), rangeStart)])}
-                  className={RANGE_INPUT_CLASS}
-                />
-              </div>
-            </div>
-
-            {/* 方向 / 循环 / 缩放：左标签单行 */}
-            <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">方向</p>
-              <OptionGroup<Direction>
-                label="播放方向"
-                value={direction}
-                onChange={setDirection}
-                options={[
-                  { value: 'forward', label: '正序' },
-                  { value: 'reverse', label: '倒序' },
-                  { value: 'pingpong', label: '往返' },
-                ]}
-              />
-            </div>
-            <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">循环</p>
-              <div className="flex items-center gap-2">
-                <OptionGroup<string>
-                  label="循环方式"
-                  className="flex-1"
-                  value={loopInfinite ? 'infinite' : 'count'}
-                  onChange={v => setLoopInfinite(v === 'infinite')}
-                  options={[
-                    { value: 'infinite', label: '无限' },
-                    { value: 'count', label: '次数' },
-                  ]}
-                />
-                {!loopInfinite && (
-                  <>
-                    <input
-                      type="number"
-                      min={1}
-                      max={999}
-                      value={loopCount}
-                      aria-label="循环次数"
-                      title="循环次数，播完停在最后一帧"
-                      onChange={e => setLoopCount(Math.min(999, Math.max(1, Number(e.target.value) || 1)))}
-                      className={NUM_INPUT_CLASS}
-                    />
-                    <span className="text-xs text-muted-foreground">次</span>
-                  </>
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="mb-1.5 text-xs font-bold text-muted-foreground">排列</p>
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-                <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  <input
-                    type="number"
-                    min={1}
-                    max={Math.max(1, exportFrames.length)}
-                    value={spriteDims.cols}
-                    aria-label="精灵图列数"
-                    title="修改列数，行数自动计算"
-                    onChange={e => setSpriteDimension({ axis: 'cols', value: Math.max(1, Number(e.target.value) || 1) })}
-                    className={cn(NUM_INPUT_CLASS, 'min-w-0 w-auto flex-1 shrink')}
-                  />
-                  列
-                </label>
-                <span className="text-xs text-muted-foreground">×</span>
-                <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  <input
-                    type="number"
-                    min={1}
-                    max={Math.max(1, exportFrames.length)}
-                    value={spriteDims.rows}
-                    aria-label="精灵图行数"
-                    title="修改行数，列数自动计算"
-                    onChange={e => setSpriteDimension({ axis: 'rows', value: Math.max(1, Number(e.target.value) || 1) })}
-                    className={cn(NUM_INPUT_CLASS, 'min-w-0 w-auto flex-1 shrink')}
-                  />
-                  行
-                </label>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              <BrutalCheckbox
-                checked={pixelated}
-                onChange={setPixelated}
-                label="像素风"
-                title="放大时保持锐利，适合像素画"
-              />
-            </div>
-
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 样式代码 + 帧序列：与上方「预览 + 参数」同列对齐（帧序列 300px 与动画参数一致） */}
-      <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        {/* 样式导出（常驻；无入选帧时按钮禁用、代码区占位）；高度基准：两个板块等高对齐 */}
-        <Card className="min-w-0 lg:h-[35rem]">
-          <CardHeader>
-            <CardTitle>样式代码</CardTitle>
-            <CardAction>
-              <Button type="button" variant="outline" size="icon-sm" disabled={!exportText} title="复制" aria-label="复制" onClick={() => copyCss(exportText)}>
-                {copiedCss ? <Check /> : <Copy />}
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pb-6">
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-              <OptionGroup<ExportFormat>
-                label="导出格式"
-                className="w-fit"
-                value={exportFormat}
-                onChange={setExportFormat}
-                options={[
-                  { value: 'scss', label: 'SCSS' },
-                  { value: 'less', label: 'Less' },
-                  { value: 'css', label: 'CSS' },
-                ]}
-              />
-              <BrutalCheckbox
-                checked={exportVars}
-                onChange={setExportVars}
-                label="变量"
-                title="帧数 / 时长提取为变量，便于集中调整"
-              />
-              <BrutalCheckbox
-                checked={exportContainer}
-                onChange={setExportContainer}
-                label="容器"
-                title="宽高由容器控制（100% + aspect-ratio），帧切换走百分比定位；关闭则写死单帧 px 尺寸"
-              />
-            </div>
-            <pre
-              tabIndex={0}
-              aria-label="导出样式代码"
-              onKeyDown={selectCodeOnShortcut}
-              className="max-h-96 min-w-0 flex-1 overflow-auto rounded-md border-2 border-border bg-background px-4 py-3 font-mono text-sm leading-relaxed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          </div>
+          <StageZoomIndicator zoom={zoom} visible={stageZoom.zoomIndicatorVisible} />
+        </div>
+        <div className="frames-toolbar" aria-label="素材与画布工具">
+          <div className="frames-import-actions">
+            <Button type="button" variant="outline" title="添加图片或 ZIP" aria-label="添加图片或 ZIP" onClick={() => fileInputRef.current?.click()}>
+              <ImagePlus />
+              <span>图片 / ZIP</span>
+            </Button>
+            <Button type="button" variant="outline" title="添加文件夹" aria-label="添加文件夹" onClick={() => dirInputRef.current?.click()}>
+              <FolderOpen />
+              <span>目录</span>
+            </Button>
+            <Button type="button" variant="outline" title="载入示例" aria-label="载入示例" onClick={() => void loadDemo()}>
+              <Sparkles />
+              <span>示例</span>
+            </Button>
+            <Button type="button" variant="ghost" size="icon-sm" title="清除全部帧" aria-label="清除全部帧" disabled={frameCount === 0 && !importing && !importFeedback} onClick={clearAll}>
+              <Trash2 />
+            </Button>
+          </div>
+          <span className="frames-material-info" role="status">
+            {importing ? '正在导入…' : frameCount > 0 ? `${frameCount} 帧 · 入选 ${activeCount}` : '尚未导入素材'}
+          </span>
+          <div className="frames-view-controls">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              title="重置视图（居中并完整适配）"
+              aria-label="重置视图"
+              disabled={!frame || (stagePan.offset.x === 0 && stagePan.offset.y === 0 && zoom === stageFit)}
+              onClick={() => {
+                stagePan.resetPan()
+                resetStageZoom()
+              }}
             >
-              {exportText
-                ? exportText.split(/(url\("[^"]*"\))/g).map(part => (
-                    part.startsWith('url(')
-                      ? (
-                          <mark
-                            key={part}
-                            title="下载精灵图后，把这里换成项目里的实际路径"
-                            className="rounded-sm bg-chart-3/40 px-0.5 font-bold text-foreground"
-                          >
-                            {part}
-                          </mark>
-                        )
-                      : part
-                  ))
-                : '// 导入帧后生成样式代码'}
-            </pre>
-          </CardContent>
-        </Card>
+              <RotateCcw />
+            </Button>
+            <StageViewControls hasContent={Boolean(frame)} settings={stageView} />
+          </div>
+        </div>
 
-        {/* 帧列表（常驻）：列表一行一帧；勾选 = 入选预览，不提供删除（防误操作）；高度跟随样式代码板块 */}
-        <Card className="flex min-w-0 flex-col lg:h-[35rem]">
-          <CardHeader>
-            <CardTitle>
+      </div>
+      <input ref={fileInputRef} type="file" accept="image/*,.zip" multiple hidden onChange={onFileChange} aria-label="导入图片或 ZIP" />
+      <input ref={dirInputRef} type="file" multiple hidden onChange={onFileChange} {...{ webkitdirectory: '' } as Record<string, string>} aria-label="导入图片目录" />
+      {importFeedback && <div className="frames-import-error" role="alert" data-tone={importFeedback.tone}>{importFeedback.text}</div>}
+      <nav className="frames-workspace-nav" aria-label="帧动画工作区">
+        {([['canvas', '画布'], ['frames', '素材'], ['settings', '设置']] as const).map(([value, label]) => (
+          <button type="button" key={value} aria-pressed={workspace === value} onClick={() => setWorkspace(value)}>{label}</button>
+        ))}
+      </nav>
+      <div className="frames-playback-float" aria-label="播放控制">
+        <Button variant="ghost" size="icon-sm" disabled={activeCount === 0} onClick={() => stepFrame(-1)} aria-label="上一帧"><ChevronLeft /></Button>
+        <Button size="icon-sm" disabled={activeCount === 0} onClick={togglePlay} aria-label={playing ? '暂停' : '播放'}>{playing ? <Pause /> : <Play />}</Button>
+        <Button variant="ghost" size="icon-sm" disabled={activeCount === 0} onClick={() => stepFrame(1)} aria-label="下一帧"><ChevronRight /></Button>
+        <input
+          className="frames-progress"
+          type="range"
+          min={0}
+          max={maxIdx}
+          step={1}
+          value={safeIndex}
+          disabled={activeCount < 2}
+          aria-label="播放进度"
+          aria-valuetext={frame ? `第 ${safeIndex + 1} 帧，共 ${activeCount} 帧` : '暂无帧'}
+          title="拖动定位到指定帧"
+          onPointerDown={() => setPlaying(false)}
+          onChange={(event) => {
+            setPlaying(false)
+            jumpTo(Number(event.target.value))
+          }}
+        />
+        <span className="frames-playback-position">{frame ? `${safeIndex + 1} / ${activeCount}` : '— / —'}</span>
+        <span className="frames-duration">
+          {duration}
+          s ·
+          {' '}
+          {Number(fps.toFixed(2))}
+          {' '}
+          FPS
+        </span>
+        <Button variant="ghost" size="sm" onClick={() => setSequenceOpen(value => !value)} aria-expanded={sequenceOpen} aria-label={sequenceOpen ? '收起帧序列' : '展开帧序列'}>
+          素材
+          {frameCount}
+        </Button>
+      </div>
+      <div ref={sequenceRef} className="frames-sequence-float" aria-label="帧素材">
+        <section className="flex min-w-0 flex-col">
+          <div className="flex min-h-8 flex-wrap items-center justify-between gap-3 pb-3">
+            <h2 className="font-mono text-sm font-semibold tracking-tight">
               帧序列（
               {frameCount}
               ）
-            </CardTitle>
-            {/* 窄卡片：按钮组换行到标题下方；裁剪独占一行，全选 / 排序同一行 */}
-            <CardAction className="col-start-1 row-start-3 flex w-full flex-col gap-2">
+            </h2>
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="w-full"
-                disabled={cropping}
+                disabled={frameCount === 0 || cropping}
                 onClick={() => void prepareCrop()}
               >
                 {cropping ? <LoaderCircle className="animate-spin" /> : <Crop />}
                 裁透明边
               </Button>
-              <div className="flex w-full gap-2">
-                <Button type="button" variant="outline" size="sm" className="flex-1" onClick={toggleSelectAll}>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={frameCount === 0} onClick={toggleSelectAll}>
                   <Check />
                   {selected.size >= frameCount ? '全不选' : '全选'}
                 </Button>
-                <Button type="button" variant="outline" size="sm" className="flex-1" onClick={sortByName}>
+                <Button type="button" variant="outline" size="sm" disabled={frameCount === 0} onClick={sortByName}>
                   <ArrowDownAZ />
                   排序
                 </Button>
               </div>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="min-h-0 flex-1 overflow-y-auto pb-6">
+            </div>
+          </div>
+          <div className="min-w-0">
             {cropResult && (
-              <p className="mb-3 rounded-md border-2 border-border bg-secondary px-3 py-2 text-sm font-bold">
-                {cropResult}
+              <p role="status" data-tone={cropResult.tone} className="mb-3 rounded-md border px-3 py-2 text-sm font-medium">
+                {cropResult.text}
               </p>
             )}
-            <ul className="flex flex-col gap-2">
+            <ul aria-label="帧序列，可拖动调整顺序" className="flex gap-2 overflow-x-auto pb-3">
               {frames.map((f, i) => {
                 const isActive = selected.has(f.id)
                 const activeIdx = isActive ? activeFrames.indexOf(f) : -1
@@ -1827,9 +1687,10 @@ export default function FrameAnimationTool() {
                         return
                       e.preventDefault()
                       e.dataTransfer.dropEffect = 'move'
-                      // 列表布局：按指针在行的上 / 下半部分决定插入到目标之前还是之后
+                      // Use the pointer's horizontal half to choose the insertion side.
+                      // 横向序列按指针左右半区决定插入位置。
                       const rect = e.currentTarget.getBoundingClientRect()
-                      const after = e.clientY > rect.top + rect.height / 2
+                      const after = e.clientX > rect.left + rect.width / 2
                       setDropTarget({ index: i, after })
                     }}
                     onDrop={(e) => {
@@ -1837,7 +1698,7 @@ export default function FrameAnimationTool() {
                       const from = dragIndexRef.current
                       if (from !== null) {
                         const rect = e.currentTarget.getBoundingClientRect()
-                        moveFrameTo(from, i, e.clientY > rect.top + rect.height / 2)
+                        moveFrameTo(from, i, e.clientX > rect.left + rect.width / 2)
                       }
                       dragIndexRef.current = null
                       setDropTarget(null)
@@ -1847,13 +1708,14 @@ export default function FrameAnimationTool() {
                       setDropTarget(null)
                     }}
                     className={cn(
-                      'flex items-center gap-1.5 overflow-hidden rounded-md border-2 px-2 py-1.5 transition-colors',
+                      'relative flex w-28 shrink-0 flex-col gap-2 border p-2 transition-colors',
                       isActive ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-40',
-                      'border-border/40 hover:border-border',
-                      // 插入指示线：横向内阴影，颜色走令牌
+                      'border-border hover:border-foreground',
+                      // Mark the insertion side with the left or right border.
+                      // 用左右边框标记插入位置。
                       dropTarget?.index === i && (dropTarget.after
-                        ? 'shadow-[inset_0_-3px_0_0_var(--color-primary)]'
-                        : 'shadow-[inset_0_3px_0_0_var(--color-primary)]'),
+                        ? 'border-r-2 border-r-primary'
+                        : 'border-l-2 border-l-primary'),
                     )}
                     onClick={() => {
                       if (!isActive)
@@ -1862,100 +1724,509 @@ export default function FrameAnimationTool() {
                       jumpTo(activeIdx)
                     }}
                   >
-                    {/* 缩略图 */}
-                    {/* 勾选 = 入选预览（最左） */}
-                    <span
-                      className="shrink-0"
-                      onClick={e => e.stopPropagation()}
+                    <div className="flex items-center justify-between gap-2">
+                      <span onClick={e => e.stopPropagation()}>
+                        <FrameCheckbox
+                          checked={isActive}
+                          onChange={() => toggleSelect(f.id)}
+                          label={(
+                            <span className="sr-only">
+                              选择第
+                              {i + 1}
+                              {' '}
+                              帧
+                            </span>
+                          )}
+                          title={isActive ? `移出预览：${f.name}` : `加入预览：${f.name}`}
+                        />
+                      </span>
+                      <span className="font-mono text-[10px] tabular-nums text-muted-foreground">{i + 1}</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!isActive}
+                      aria-label={`预览第 ${i + 1} 帧：${f.name}`}
+                      className="flex min-w-0 flex-col gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                     >
-                      <BrutalCheckbox
-                        checked={isActive}
-                        onChange={() => toggleSelect(f.id)}
-                        title={isActive ? `移出预览：${f.name}` : `加入预览：${f.name}`}
+                      <img
+                        src={f.url}
+                        alt={f.name}
+                        draggable={false}
+                        className="h-16 w-full object-contain"
+                        style={{ background: stageView.background }}
                       />
-                    </span>
-                    <img
-                      src={f.url}
-                      alt={f.name}
-                      draggable={false}
-                      className="h-10 w-10 shrink-0 rounded-sm object-contain"
-                      style={{ background: stageView.background }}
-                    />
-                    {/* 文件名（去扩展名）+ 尺寸/体积（两行） */}
-                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="truncate text-sm font-bold">
-                        {f.name.replace(/\.[^.]+$/, '')}
+                      <span className="w-full truncate text-xs">{f.name.replace(/\.[^.]+$/, '')}</span>
+                      <span className="frames-source-info">
+                        {f.width}
+                        ×
+                        {f.height}
+                        {' · '}
+                        {formatSize(f.size)}
                       </span>
-                      <span className="truncate font-mono text-xs text-muted-foreground">
-                        {`${f.width}×${f.height} · ${formatSize(f.size)}`}
-                      </span>
-                    </span>
-                    {/* 上传序号：最右，重排不变 */}
-                    <span className="shrink-0 rounded-sm border-2 border-border bg-background px-1 font-mono text-[10px] leading-4 font-bold">
-                      #
-                      {f.seq}
-                    </span>
+                    </button>
                   </li>
                 )
               })}
             </ul>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>记录</CardTitle>
-          <CardDescription>保存整组帧、播放范围和导出参数，之后可以继续编辑。</CardDescription>
-        </CardHeader>
-        <CardContent className="pb-6">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              value={recordName}
-              onChange={event => setRecordName(event.target.value)}
-              placeholder={frames[0]?.name.replace(/\.[^.]+$/, '') || '项目名称'}
-              aria-label="项目名称"
-              className="h-9 min-w-0 flex-1 rounded-md border-2 border-border bg-background px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-ring/40"
-            />
-            <Button type="button" disabled={frames.length === 0} onClick={() => void saveRecord()}>
-              <Save />
-              保存当前项目
-            </Button>
+            {frameCount === 0 && <p className="border-b border-border py-5 text-xs text-muted-foreground">导入后在这里勾选帧，拖动缩略图调整顺序。</p>}
           </div>
-          {records.length > 0 && (
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {records.map(record => (
-                <div key={record.id} className="flex items-center gap-2 rounded-md border-2 border-border bg-muted/30 px-3 py-2">
-                  <button type="button" className="min-w-0 flex-1 truncate text-left text-sm font-bold hover:underline" title="加载项目" onClick={() => void loadRecord(record.id)}>
-                    {record.recordName}
-                  </button>
-                  <span className="shrink-0 text-xs text-muted-foreground">{record.frameCount} 帧</span>
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除项目 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
-                    <Trash2 />
+        </section>
+      </div>
+      <aside className="frames-panel" aria-label="帧动画设置">
+        <div
+          className="frames-panel-tabs"
+          role="tablist"
+          aria-label="设置面板"
+          onKeyDown={(event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key))
+              return
+            event.preventDefault()
+            event.stopPropagation()
+            const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+            const currentTab = tabs.indexOf(document.activeElement as HTMLButtonElement)
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (currentTab + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+            tabs[next]?.focus()
+            tabs[next]?.click()
+          }}
+        >
+          {([['playback', '播放'], ['sprite', '精灵图'], ['code', '代码'], ['records', '项目']] as const).map(([value, label]) => (
+            <button key={value} type="button" role="tab" tabIndex={panel === value ? 0 : -1} id={`frame-tab-${value}`} aria-selected={panel === value} aria-controls={`frame-panel-${value}`} onClick={() => setPanel(value)}>{label}</button>
+          ))}
+        </div>
+        <div className="frames-panel-scroll">
+          <div role="tabpanel" id="frame-panel-playback" aria-labelledby="frame-tab-playback" hidden={panel !== 'playback'}>
+            <section className="min-w-0">
+              <div className="pb-3">
+                <h2 className="font-mono text-sm font-semibold tracking-tight">播放参数</h2>
+              </div>
+              <div className="flex flex-col gap-4">
+                {/* 帧率 + 一轮时长（双向换算） */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-baseline justify-between">
+                    <label htmlFor="fps" className="text-xs font-medium text-muted-foreground">帧率</label>
+                    <span className="text-xs text-muted-foreground">
+                      {Number(fps.toFixed(2))}
+                      {' fps · 每帧 '}
+                      {frameMs}
+                      {' ms'}
+                    </span>
+                  </div>
+                  <div className="frames-rate-controls">
+                    <input
+                      id="fps"
+                      type="range"
+                      min={1}
+                      max={60}
+                      value={fps}
+                      onChange={e => setFps(Number(e.target.value))}
+                      className="min-w-0 flex-1 accent-primary"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      step="any"
+                      value={Number(fps.toFixed(2))}
+                      aria-label="帧率（fps）"
+                      title="帧率（fps）"
+                      onChange={e => setFps(Math.min(120, Math.max(1, Number(e.target.value) || 1)))}
+                      className={NUM_INPUT_CLASS}
+                    />
+                    <span className="text-xs text-muted-foreground">fps</span>
+                  </div>
+                  <div className="frames-total-duration">
+                    <label htmlFor="frames-duration" className="text-xs text-muted-foreground">周期时长</label>
+                    <input
+                      id="frames-duration"
+                      type="number"
+                      min={0.01}
+                      step={0.01}
+                      disabled={activeCount === 0}
+                      value={rangeLen > 0 ? Number((rangeLen / fps).toFixed(2)) : 0}
+                      aria-label="所有帧总时长（秒），改了反推帧率"
+                      title="所有帧总时长（秒），改了反推帧率"
+                      onChange={(e) => {
+                        const d = Number(e.target.value)
+                        if (d > 0)
+                          setFps(Math.min(120, Math.max(1, rangeLen / d)))
+                      }}
+                      className={NUM_INPUT_CLASS}
+                    />
+                    <span className="text-xs text-muted-foreground">秒</span>
+                  </div>
+                </div>
+
+                {/* 帧范围：双头滑块，播放与导出都按范围截断 */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">帧范围</span>
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {activeCount > 0 ? `第 ${rangeStart + 1} → ${rangeEnd + 1} 帧` : '—'}
+                      {rangeRaw !== null && (
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-xs"
+                          onClick={() => setRangeRaw(null)}
+                        >
+                          恢复全程
+                        </Button>
+                      )}
+                    </span>
+                  </div>
+                  <div className="relative h-4">
+                    {/* 轨道 + 选中段高亮（视觉层，不响应指针） */}
+                    <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
+                    {activeCount > 1 && (
+                      <div
+                        className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary"
+                        style={{
+                          left: `${(rangeStart / maxIdx) * 100}%`,
+                          right: `${(1 - rangeEnd / maxIdx) * 100}%`,
+                        }}
+                      />
+                    )}
+                    <input
+                      type="range"
+                      min={0}
+                      max={maxIdx}
+                      step={1}
+                      value={rangeStart}
+                      disabled={activeCount < 2}
+                      aria-label="起始帧"
+                      onChange={e => setRangeRaw([Math.min(Number(e.target.value), rangeEnd), rangeEnd])}
+                      className={RANGE_INPUT_CLASS}
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={maxIdx}
+                      step={1}
+                      value={rangeEnd}
+                      disabled={activeCount < 2}
+                      aria-label="结束帧"
+                      onChange={e => setRangeRaw([rangeStart, Math.max(Number(e.target.value), rangeStart)])}
+                      className={RANGE_INPUT_CLASS}
+                    />
+                  </div>
+                </div>
+
+                {/* 方向 / 循环 / 缩放：左标签单行 */}
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">方向</p>
+                  <OptionGroup<Direction>
+                    label="播放方向"
+                    value={direction}
+                    onChange={setDirection}
+                    options={[
+                      { value: 'forward', label: '正序' },
+                      { value: 'reverse', label: '倒序' },
+                      { value: 'pingpong', label: '往返' },
+                    ]}
+                  />
+                </div>
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">循环</p>
+                  <div className="flex items-center gap-2">
+                    <OptionGroup<string>
+                      label="循环方式"
+                      className="flex-1"
+                      value={loopInfinite ? 'infinite' : 'count'}
+                      onChange={v => setLoopInfinite(v === 'infinite')}
+                      options={[
+                        { value: 'infinite', label: '无限' },
+                        { value: 'count', label: '次数' },
+                      ]}
+                    />
+                    {!loopInfinite && (
+                      <>
+                        <input
+                          type="number"
+                          min={1}
+                          max={999}
+                          value={loopCount}
+                          aria-label="循环次数"
+                          title="循环次数，播完停在最后一帧"
+                          onChange={e => setLoopCount(Math.min(999, Math.max(1, Number(e.target.value) || 1)))}
+                          className={NUM_INPUT_CLASS}
+                        />
+                        <span className="text-xs text-muted-foreground">次</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <FrameCheckbox
+                    checked={pixelated}
+                    onChange={setPixelated}
+                    label="像素风"
+                    title="放大时保持锐利，适合像素画"
+                  />
+                </div>
+
+              </div>
+            </section>
+          </div>
+          <div role="tabpanel" id="frame-panel-sprite" aria-labelledby="frame-tab-sprite" hidden={panel !== 'sprite'}>
+            <section className="min-w-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
+                <h2 className="font-mono text-sm font-semibold tracking-tight">精灵图导出</h2>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  disabled={spriting || exportFrames.length === 0}
+                  onClick={() => void downloadSprite()}
+                >
+                  {spriting ? <LoaderCircle className="animate-spin" /> : <FileImage />}
+                  下载精灵图
+                </Button>
+              </div>
+              <div className="mb-4 max-w-xs">
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">排列</p>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                    <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      <input
+                        type="number"
+                        min={1}
+                        max={Math.max(1, exportFrames.length)}
+                        value={spriteDims.cols}
+                        aria-label="精灵图列数"
+                        title="修改列数，行数自动计算"
+                        onChange={e => setSpriteDimension({ axis: 'cols', value: Math.max(1, Number(e.target.value) || 1) })}
+                        className={cn(NUM_INPUT_CLASS, 'min-w-0 w-auto flex-1 shrink')}
+                      />
+                      列
+                    </label>
+                    <span className="text-xs text-muted-foreground">×</span>
+                    <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      <input
+                        type="number"
+                        min={1}
+                        max={Math.max(1, exportFrames.length)}
+                        value={spriteDims.rows}
+                        aria-label="精灵图行数"
+                        title="修改行数，列数自动计算"
+                        onChange={e => setSpriteDimension({ axis: 'rows', value: Math.max(1, Number(e.target.value) || 1) })}
+                        className={cn(NUM_INPUT_CLASS, 'min-w-0 w-auto flex-1 shrink')}
+                      />
+                      行
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <span className="text-xs text-muted-foreground">
+                  精灵图预览（
+                  {exportFrames.length}
+                  {' 帧'}
+                  {exportFrames.length > 0 && ` · 单元格 ${cellW} × ${cellH}`}
+                  {uniformFrameSize && ` · 单张 ${uniformFrameSize.w} × ${uniformFrameSize.h}`}
+                  {' · '}
+                  {spriteDims.cols}
+                  {' 列 × '}
+                  {spriteDims.rows}
+                  {' 行'}
+                  {' · '}
+                  {cellW * spriteDims.cols}
+                  {' × '}
+                  {cellH * spriteDims.rows}
+                  ）
+                </span>
+                <div
+                  className="h-48 max-w-full overflow-auto rounded-md border border-border"
+                  style={{ background: stageView.background }}
+                >
+                  {sprite && sprite.key === spriteKey && spriteKey !== ''
+                    ? (
+                        <div className="flex min-h-full w-full items-center justify-center p-2">
+                          <img
+                            src={sprite.url}
+                            alt="精灵图预览"
+                            draggable={false}
+                            className={cn('block h-auto max-h-44 max-w-full object-contain', stageView.showBounds && STAGE_BOUNDARY_CLASS)}
+                            style={{ imageRendering: pixelated ? 'pixelated' : 'auto' }}
+                          />
+                        </div>
+                      )
+                    : (
+                        <div className="flex min-h-full items-center justify-center text-xs text-muted-foreground">
+                          {exportFrames.length === 0
+                            ? '暂无帧'
+                            : spriteError === spriteKey
+                              ? (
+                                  <div role="alert" className="flex flex-col items-center gap-2">
+                                    <span>精灵图预览失败，请重试</span>
+                                    <Button size="sm" variant="outline" onClick={() => setSpriteRetry(value => value + 1)}>重新生成</Button>
+                                  </div>
+                                )
+                              : '生成中…'}
+                        </div>
+                      )}
+                </div>
+              </div>
+
+            </section>
+          </div>
+          <div role="tabpanel" id="frame-panel-code" aria-labelledby="frame-tab-code" hidden={panel !== 'code'}>
+            <section className="flex min-w-0 flex-col">
+              <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
+                <h2 className="font-mono text-sm font-semibold tracking-tight">样式代码</h2>
+                <Button type="button" variant="outline" size="icon-sm" disabled={!exportText} title="复制" aria-label="复制" onClick={() => copyCss(exportText)}>
+                  {copiedCss ? <Check data-feedback="success" /> : <Copy />}
+                </Button>
+              </div>
+              {copyError && <p role="alert" className="mb-2 text-xs text-destructive">复制失败，请重试或手动选择代码复制</p>}
+              <div className="flex min-h-0 flex-1 flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <OptionGroup<ExportFormat>
+                    label="导出格式"
+                    className="w-fit"
+                    value={exportFormat}
+                    onChange={setExportFormat}
+                    options={[
+                      { value: 'scss', label: 'SCSS' },
+                      { value: 'less', label: 'Less' },
+                      { value: 'css', label: 'CSS' },
+                    ]}
+                  />
+                  <FrameCheckbox
+                    checked={exportVars}
+                    onChange={setExportVars}
+                    label="变量"
+                    title="帧数 / 时长提取为变量，便于集中调整"
+                  />
+                  <FrameCheckbox
+                    checked={exportContainer}
+                    onChange={setExportContainer}
+                    label="容器"
+                    title="宽高由容器控制（100% + aspect-ratio），帧切换走百分比定位；关闭则写死单帧 px 尺寸"
+                  />
+                </div>
+                <pre
+                  tabIndex={0}
+                  aria-label="导出样式代码"
+                  onKeyDown={selectCodeOnShortcut}
+                  className="min-h-48 max-h-96 min-w-0 flex-1 overflow-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  {exportText
+                    ? exportText.split(/(url\("[^"]*"\))/g).map(part => (
+                        part.startsWith('url(')
+                          ? (
+                              <mark
+                                key={part}
+                                title="下载精灵图后，把这里换成项目里的实际路径"
+                                className="rounded-sm bg-chart-3/40 px-0.5 font-medium text-foreground"
+                              >
+                                {part}
+                              </mark>
+                            )
+                          : part
+                      ))
+                    : '// 导入帧后生成样式代码'}
+                </pre>
+              </div>
+            </section>
+          </div>
+          <div role="tabpanel" id="frame-panel-records" aria-labelledby="frame-tab-records" hidden={panel !== 'records'}>
+            <section className="min-w-0 frames-record-section">
+              <div className="pb-1">
+                <h2 className="font-mono text-sm font-semibold tracking-tight">记录</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">保存整组帧、播放范围和导出参数，之后可以继续编辑。</p>
+              </div>
+              <div>
+                <div className="flex max-w-xl items-center gap-2">
+                  <input
+                    value={recordName}
+                    onChange={event => setRecordName(event.target.value)}
+                    placeholder={frames[0]?.name.replace(/\.[^.]+$/, '') || '项目名称'}
+                    aria-label="项目名称"
+                    className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                  />
+                  <Button type="button" variant="outline" size="icon-sm" title="保存当前项目" aria-label="保存当前项目" disabled={frames.length === 0 || saving || importing || cropping} onClick={() => void saveRecord()}>
+                    {saving ? <LoaderCircle className="animate-spin" /> : <Save />}
                   </Button>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 裁剪确认弹窗：所有帧叠放预览（最后一帧垫底），虚线框出保留区域 */}
+                {recordFeedback && <p role={recordFeedback.error ? 'alert' : 'status'} className={cn('mt-2 text-xs', recordFeedback.error ? 'text-destructive' : 'text-muted-foreground')}>{recordFeedback.text}</p>}
+                {recordsLoading && <p role="status" className="mt-2 text-xs text-muted-foreground">加载项目列表…</p>}
+                {!recordsLoading && records.length === 0 && <p className="mt-2 text-xs text-muted-foreground">暂无保存的项目</p>}
+                {records.length > 0 && (
+                  <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
+                    {records.map(record => (
+                      <div key={record.id} className="flex items-center gap-2 border-b border-border py-2">
+                        <button type="button" className="min-w-0 flex-1 truncate text-left text-sm hover:underline" title="加载项目" disabled={importing} onClick={() => void loadRecord(record.id)}>
+                          {record.recordName}
+                        </button>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {record.frameCount}
+                          {' '}
+                          帧
+                        </span>
+                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除项目 ${record.recordName}`} disabled={deletingId !== null} onClick={() => void deleteRecord(record.id)}>
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+        {exportError && <p role="alert" className="px-3 py-2 text-xs text-destructive">导出失败，请重试</p>}
+        <div className="frames-panel-footer">
+          <span>
+            {exportFrames.length}
+            {' '}
+            帧 ·
+            {' '}
+            {spriteDims.cols}
+            ×
+            {spriteDims.rows}
+            {' '}
+            格
+          </span>
+          <Button size="sm" disabled={spriting || exportFrames.length === 0} onClick={() => void downloadSprite()}>
+            {spriting ? <LoaderCircle className="animate-spin" /> : <FileImage />}
+            下载 PNG
+          </Button>
+        </div>
+      </aside>
       {cropPreview && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-4"
           onClick={closeCropPreview}
         >
           <div
+            ref={cropDialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="裁剪公共透明边"
-            className="w-full max-w-lg rounded-lg border-2 border-border bg-card p-6 shadow-hard-lg"
+            tabIndex={-1}
+            className="w-full max-w-lg border border-border bg-popover p-6"
             onClick={e => e.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== 'Tab')
+                return
+              const controls = event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)')
+              const first = controls[0]
+              const last = controls[controls.length - 1]
+              if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
+                event.preventDefault()
+                last?.focus()
+              }
+              else if (!event.shiftKey && (document.activeElement === last || document.activeElement === event.currentTarget)) {
+                event.preventDefault()
+                first?.focus()
+              }
+            }}
           >
-            <h2 className="text-lg font-black tracking-tight">裁剪公共透明边</h2>
+            <h2 className="font-mono text-lg font-semibold tracking-tight">裁剪公共透明边</h2>
             {cropPreview.mixedSize && (
-              <p className="mt-2 flex items-start gap-1.5 rounded-md border-2 border-border bg-secondary px-2 py-1.5 text-xs text-muted-foreground">
+              <p data-tone="warning" className="mt-2 flex items-start gap-1.5 rounded-md border px-2 py-1.5 text-xs">
                 <TriangleAlert className="mt-px size-3.5 shrink-0" />
                 <span>
                   图片宽高不一致：框线以最大画布
@@ -1983,7 +2254,7 @@ export default function FrameAnimationTool() {
                 : '当前阈值下所有帧均为透明，无法裁剪'}
             </p>
             <div className="mt-3 flex items-center gap-2">
-              <label htmlFor="alpha-threshold" className="shrink-0 text-sm font-bold">透明阈值</label>
+              <label htmlFor="alpha-threshold" className="shrink-0 text-sm font-medium">透明阈值</label>
               <input
                 id="alpha-threshold"
                 type="range"
@@ -2006,7 +2277,7 @@ export default function FrameAnimationTool() {
             </div>
             <div className="mt-4 flex justify-center">
               <div
-                className="rounded-md border-2 border-border p-2"
+                className="rounded-md border border-border p-2"
                 style={{ background: stageView.checkerBackground }}
               >
                 <div className="relative w-fit">

@@ -34,7 +34,7 @@ function projectWith(...images: ResolvedImageAsset[]): LoadedLottieProject {
   }
 }
 
-describe('Lottie image sequence assets', () => {
+describe('lottie image sequence assets', () => {
   const stillAsset: LottieAsset = { id: 'still', h: 100, p: 'still.png', w: 100 }
   const sequenceAsset: LottieAsset = { id: 'sequence', h: 100, p: 'frame-0.png', t: 'seq', w: 100 }
 
@@ -63,5 +63,23 @@ describe('Lottie image sequence assets', () => {
 
     expect(isPreviewImageAsset(stillAsset)).toBe(true)
     expect(isAtlasOptimizableImage(animated)).toBe(false)
+  })
+})
+
+describe('safe transient preview', () => {
+  it('replaces unresolved image URLs without changing the original project', () => {
+    const project = projectWith()
+    project.animation.assets = [
+      { id: 'remote', w: 10, h: 10, u: 'https://example.invalid/', p: 'image.png' },
+      { id: 'missing', w: 10, h: 10, p: 'missing.png' },
+    ]
+    const preview = createPreviewAnimation(project)
+    for (const asset of preview.assets ?? []) {
+      expect(asset.p).toMatch(/^data:image\/png;base64,/)
+      expect(asset.u).toBe('')
+      expect(asset.e).toBe(1)
+    }
+    expect(project.animation.assets[0].u).toBe('https://example.invalid/')
+    expect(project.animation.assets[1].p).toBe('missing.png')
   })
 })

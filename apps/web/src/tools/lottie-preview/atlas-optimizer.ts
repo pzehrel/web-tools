@@ -239,6 +239,8 @@ function atlasLayer(atlasId: string, placement: PlacedSprite): LottieLayer {
   const position = placement.rotated
     ? [placement.trimLeft, placement.trimTop + placement.contentHeight, 0]
     : [placement.trimLeft, placement.trimTop, 0]
+  const maskWidth = placement.rotated ? placement.contentHeight : placement.contentWidth
+  const maskHeight = placement.rotated ? placement.contentWidth : placement.contentHeight
   return {
     ddd: 0,
     ind: 1,
@@ -259,9 +261,9 @@ function atlasLayer(atlasId: string, placement: PlacedSprite): LottieLayer {
             o: [[0, 0], [0, 0], [0, 0], [0, 0]],
             v: [
               [placement.contentX, placement.contentY],
-              [placement.contentX + placement.contentWidth, placement.contentY],
-              [placement.contentX + placement.contentWidth, placement.contentY + placement.contentHeight],
-              [placement.contentX, placement.contentY + placement.contentHeight],
+              [placement.contentX + maskWidth, placement.contentY],
+              [placement.contentX + maskWidth, placement.contentY + maskHeight],
+              [placement.contentX, placement.contentY + maskHeight],
             ],
           },
         },
@@ -424,7 +426,8 @@ export async function optimizeLottie(project: LoadedLottieProject, options: Atla
   const animation = rewriteAnimation(project.animation, atlasAssets, placements)
   const previewAnimation = resolveImageAssetsForPreview(animation, project.images)
   for (const asset of previewAnimation.assets ?? []) {
-    const atlas = atlases.find(item => item.filename === asset.p)
+    const sourceAsset = animation.assets?.find(item => item.id === asset.id)
+    const atlas = atlases.find(item => item.filename === sourceAsset?.p)
     if (!atlas)
       continue
     asset.u = ''
@@ -451,7 +454,7 @@ function triggerDownload(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export async function exportOptimizedProject(project: LoadedLottieProject, result: OptimizedLottieResult): Promise<void> {
+async function createOptimizedArchive(project: LoadedLottieProject, result: OptimizedLottieResult): Promise<Blob> {
   const entries: Record<string, Uint8Array> = {
     'data.json': new TextEncoder().encode(JSON.stringify(result.animation, null, 2)),
   }
@@ -463,5 +466,19 @@ export async function exportOptimizedProject(project: LoadedLottieProject, resul
     entries[image.sourceName] = new Uint8Array(await image.blob.arrayBuffer())
   }
   const zip = zipSync(entries, { level: 6 })
-  triggerDownload(new Blob([zip as BlobPart], { type: 'application/zip' }), `${project.name}-atlas.zip`)
+  return new Blob([zip as BlobPart], { type: 'application/zip' })
+}
+
+/**
+ * Build the archive, then download only if the caller still owns the operation. Omitted ownership checks allow the download.
+ * 构建归档后，仅在调用方仍拥有任务时下载；未提供所有权检查时允许下载。
+ */
+export async function exportOptimizedProject(
+  project: LoadedLottieProject,
+  result: OptimizedLottieResult,
+  isCurrent: () => boolean = () => true,
+): Promise<void> {
+  const archive = await createOptimizedArchive(project, result)
+  if (isCurrent())
+    triggerDownload(archive, `${project.name}-atlas.zip`)
 }

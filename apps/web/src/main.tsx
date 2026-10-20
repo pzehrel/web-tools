@@ -1,6 +1,7 @@
 import type { DataRouteObject, DOMRouterOpts } from 'react-router'
-import { createBrowserRouter, Navigate } from 'react-router'
+import { createBrowserRouter } from 'react-router'
 import { ViteReactSSG } from 'vite-react-ssg'
+import { LegacyToolRedirect } from '@/components/legacy-tool-redirect'
 import App from './App.tsx'
 import { RootLayout } from './root-layout.tsx'
 import CssShineTool from './tools/css-shine'
@@ -30,8 +31,8 @@ export const createRoot = ViteReactSSG({
       children: [
         { id: 'home', path: '/', element: <App /> },
         // 旧 URL 解析和二维码工具均已合并进「URL 与二维码」，保留入口重定向以兼容已有链接。
-        { id: 'qrcode-generator', path: '/tools/qrcode-generator', element: <Navigate to="/tools/url-qrcode" replace /> },
-        { id: 'url-parser', path: '/tools/url-parser', element: <Navigate to="/tools/url-qrcode" replace /> },
+        { id: 'qrcode-generator', path: '/tools/qrcode-generator', element: <LegacyToolRedirect /> },
+        { id: 'url-parser', path: '/tools/url-parser', element: <LegacyToolRedirect /> },
         { id: 'url-qrcode', path: '/tools/url-qrcode', element: <UrlParserTool /> },
         { id: 'frame-animation', path: '/tools/frame-animation', element: <FrameAnimationTool /> },
         { id: 'lottie-preview', path: '/tools/lottie-preview', element: <LottiePreviewTool /> },
