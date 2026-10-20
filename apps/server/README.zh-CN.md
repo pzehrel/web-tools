@@ -125,7 +125,7 @@ wrangler d1 migrations apply web-tools-db --local --config wrangler.jsonc
 wrangler deploy --config wrangler.jsonc
 ```
 
-首次生产部署前，将 `CORS_ORIGINS` 设置为允许的前端源，并确保 Cloudflare token 具有 Workers Scripts、D1 和 R2 的编辑权限。发版标签的 CI 会在部署 API Worker 前应用远程 D1 迁移；Pull request 和推送到 `main` 会上传预览版本。
+首次生产部署前，将 `CORS_ORIGINS` 设置为允许的前端源，并确保 Cloudflare token 具有 Workers Scripts、D1 和 R2 的编辑权限。当 `database_id` 仍为供本地开发使用的全零占位 ID 时，CI 跳过 API 初始化、迁移和部署；前端验证与部署仍会运行。替换该占位 ID 后，发版标签的 CI 会在部署 API Worker 前应用远程 D1 迁移；Pull request 和推送到 `main` 会上传预览版本。
 
 ## Schema 改动
 

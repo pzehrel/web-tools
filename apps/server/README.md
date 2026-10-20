@@ -125,7 +125,7 @@ wrangler d1 migrations apply web-tools-db --local --config wrangler.jsonc
 wrangler deploy --config wrangler.jsonc
 ```
 
-Before the first production deploy, set `CORS_ORIGINS` to the allowed frontend origins and ensure the Cloudflare token has Workers Scripts, D1, and R2 edit permissions. Release-tag CI applies remote D1 migrations before deploying the API Worker; pull requests and `main` pushes upload preview versions.
+Before the first production deploy, set `CORS_ORIGINS` to the allowed frontend origins and ensure the Cloudflare token has Workers Scripts, D1, and R2 edit permissions. CI skips API initialization, migrations and deployment while `database_id` is the all-zero local-development placeholder; frontend validation and deployment still run. After replacing that placeholder, release-tag CI applies remote D1 migrations before deploying the API Worker; pull requests and `main` pushes upload preview versions.
 
 ## Schema changes
 
