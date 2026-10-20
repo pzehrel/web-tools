@@ -344,7 +344,7 @@ function resolveSpriteDims(frameCount: number, axis: SpriteDimensionAxis, value:
     : { cols: Math.ceil(count / primary), rows: primary }
 }
 
-/** 语言差异适配：变量引用 / 变量声明 / 注释 / 「帧数 × 单元宽 px」表达式 / keyframes 能否嵌进选择器 */
+/** 语言差异适配：变量引用 / 变量声明 / 注释 / 「末帧偏移 px」表达式 / keyframes 能否嵌进选择器 */
 interface LangSpec {
   v: (name: string) => string
   decl: (name: string, value: string) => string
@@ -359,53 +359,58 @@ const LANG: Record<ExportFormat, LangSpec> = {
     v: n => `var(--${n})`,
     decl: (n, val) => `  --${n}: ${val};`,
     comment: t => `/* ${t} */`,
-    framesTimesPx: w => `calc(var(--frames) * -${w}px)`,
+    framesTimesPx: w => `calc((var(--frames) - 1) * -${w}px)`,
     nestedKeyframes: false,
   },
   less: {
     v: n => `@${n}`,
     decl: (n, val) => `  @${n}: ${val};`,
     comment: t => `// ${t}`,
-    framesTimesPx: w => `(@frames * -${w}px)`,
+    framesTimesPx: w => `((@frames - 1) * -${w}px)`,
     nestedKeyframes: true,
   },
   scss: {
     v: n => `$${n}`,
     decl: (n, val) => `  $${n}: ${val};`,
     comment: t => `// ${t}`,
-    framesTimesPx: w => `($frames * -${w}px)`,
+    framesTimesPx: w => `(($frames - 1) * -${w}px)`,
     nestedKeyframes: true,
   },
 }
 
 /** 网格模式的逐格 keyframes：第 k 帧 = 第 (k%cols, floor(k/cols)) 格 */
 function gridKeyframeLines(p: ExportParams): string[] {
-  const lines: string[] = []
-  for (let k = 0; k < p.frames; k++) {
-    const c = k % p.cols
-    const r = Math.floor(k / p.cols)
+  const sequence = Array.from({ length: p.frames }, (_, index) => index)
+  if (p.direction === 'alternate')
+    sequence.push(...sequence.slice(1, -1).reverse())
+  const position = (index: number) => {
+    const c = index % p.cols
+    const r = Math.floor(index / p.cols)
     const x = p.useContainer
       ? `${num(p.cols > 1 ? (c / (p.cols - 1)) * 100 : 0)}%`
       : `${-c * p.cellW}px`
     const y = p.useContainer
       ? `${num(p.rows > 1 ? (r / (p.rows - 1)) * 100 : 0)}%`
       : `${-r * p.cellH}px`
-    lines.push(`  ${num((k / p.frames) * 100)}% { background-position: ${x} ${y}; }`)
+    return `${x} ${y}`
   }
-  lines.push(`  100% { background-position: ${p.useContainer ? '0% 0%' : '0 0'}; }`)
+  const lines = sequence.map((index, tick) => `  ${Number(((tick / sequence.length) * 100).toFixed(6))}% { background-position: ${position(index)}; }`)
+  lines.push(`  100% { background-position: ${position(p.direction === 'alternate' ? 0 : sequence.at(-1)!)}; }`)
   return lines
 }
 
 /**
  * 落位方式：
  * - 长条 + 容器：background-size 为 N×100%，0% → 100% 恰好扫过 N 帧，用 steps(N, jump-none)；
- * - 长条 + px：原始尺寸平铺，0 → -N×W px，steps(N)；
+ * - 长条 + px：原始尺寸平铺，0 → -(N-1)×W px，steps(N, jump-none)；
+ * - 单帧使用 step-end；有限循环用 both 保留终帧，往返用完整返回序列计数。
  * - 网格：逐格 keyframes + step-end（段内保持、段末瞬移），行列百分比分母是 列-1 / 行-1。
  */
 function buildExport(p: ExportParams, lang: LangSpec): string {
   const frames = p.useVars ? lang.v('frames') : String(p.frames)
   const duration = p.useVars ? lang.v('duration') : `${p.duration}s`
   const isGrid = p.layout === 'grid'
+  const discrete = isGrid || p.direction === 'alternate'
 
   const varLines: string[] = []
   if (p.useVars) {
@@ -429,20 +434,20 @@ function buildExport(p: ExportParams, lang: LangSpec): string {
     bgSizeLine = `  background-size: ${bgSize};`
   }
 
-  const timing = isGrid ? 'step-end' : (p.useContainer ? `steps(${frames}, jump-none)` : `steps(${frames})`)
+  const timing = discrete || p.frames === 1 ? 'step-end' : `steps(${frames}, jump-none)`
 
   let keyframesComment: string | null = null
   let keyframeLines: string[]
-  if (isGrid) {
-    keyframesComment = lang.comment('逐格定位：step-end 段内保持、段末瞬移；末行不足留空即可')
+  if (discrete) {
+    keyframesComment = lang.comment('逐格定位：step-end 段内保持、段末瞬移；往返包含返回序列')
     keyframeLines = gridKeyframeLines(p)
   }
   else {
     if (p.useContainer)
       keyframesComment = lang.comment('配合 steps(N, jump-none)，0% → 100% 每步正好一帧')
     const to = p.useContainer
-      ? '100%'
-      : (p.useVars ? lang.framesTimesPx(p.cellW) : `-${p.cellW * p.frames}px`)
+      ? (p.frames === 1 ? '0%' : '100%')
+      : (p.useVars ? lang.framesTimesPx(p.cellW) : `${-p.cellW * (p.frames - 1)}px`)
     keyframeLines = [
       `  from { background-position: 0${p.useContainer ? '%' : ''} 0; }`,
       `  to { background-position: ${to} 0; }`,
@@ -465,7 +470,7 @@ function buildExport(p: ExportParams, lang: LangSpec): string {
     '  background-repeat: no-repeat;',
     ...(bgSizeLine ? [bgSizeLine] : []),
     ...(p.pixelated ? ['  image-rendering: pixelated;'] : []),
-    `  animation: frame-anim-play ${duration} ${timing} ${p.iteration} ${p.direction};`,
+    `  animation: frame-anim-play ${duration} ${timing} ${p.iteration} ${p.direction === 'alternate' ? 'normal' : p.direction} both;`,
     // SCSS / Less：keyframes 嵌进选择器内（编译时冒泡到顶层），CSS：平铺在外
     ...(lang.nestedKeyframes ? ['', ...keyframesBlock] : []),
     '}',
@@ -574,8 +579,13 @@ export default function FrameAnimation() {
   const [sequenceOpen, setSequenceOpen] = useState(true)
   const sequenceRef = useRef<HTMLDivElement>(null)
   const [frames, setFrames] = useState<FrameItem[]>([])
-  const { records, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useFrameAnimationRecords()
+  const { records, loading: recordsLoading, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useFrameAnimationRecords()
   const [recordName, setRecordName] = useState('')
+  const [recordFeedback, setRecordFeedback] = useState<{ text: string, error?: boolean } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const deletingRef = useRef(false)
   const [current, setCurrent] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -630,7 +640,12 @@ export default function FrameAnimation() {
   const cropDialogOpen = Boolean(cropPreview)
   /** 样式导出：复制反馈与精灵图生成中状态 */
   const [copiedCss, setCopiedCss] = useState(false)
+  const [copyError, setCopyError] = useState(false)
   const [spriting, setSpriting] = useState(false)
+  const spriteBusyRef = useRef(false)
+  const [exportError, setExportError] = useState(false)
+  const [spriteError, setSpriteError] = useState<string | null>(null)
+  const [spriteRetry, setSpriteRetry] = useState(0)
   const [exportFormat, setExportFormat] = useState<ExportFormat>('scss')
   /** 精灵图排列：记录最后编辑的是列还是行，另一维由帧数自动推导 */
   const [spriteDimension, setSpriteDimension] = useState<{ axis: SpriteDimensionAxis, value: number }>({ axis: 'rows', value: 1 })
@@ -956,55 +971,101 @@ export default function FrameAnimation() {
     closeCropPreview()
     setCropResult(null)
     setImportFeedback(null)
+    setRecordFeedback(null)
+    setExportError(false)
+    setCopyError(false)
     setDragOver(false)
     dragIndexRef.current = null
     setDropTarget(null)
   }, [closeCropPreview])
 
   const saveRecord = useCallback(async () => {
-    if (frames.length === 0)
+    if (frames.length === 0 || savingRef.current)
       return
-    const archive = await createFrameArchive(frames.map(frame => ({
-      id: frame.id,
-      seq: frame.seq,
-      name: frame.name,
-      blob: frame.blob,
-      selected: selected.has(frame.id),
-    })))
-    const meta: FrameAnimationRecordMeta = {
-      name: recordName.trim() || frames[0].name.replace(/\.[^.]+$/, '') || '帧动画项目',
-      frames: archive.frames,
-      fps,
-      direction,
-      loopInfinite,
-      loopCount,
-      range: rangeRaw,
-      pixelated,
-      alphaThreshold,
-      exportFormat,
-      spriteDimension,
-      exportVars,
-      exportContainer,
+    savingRef.current = true
+    setSaving(true)
+    setRecordFeedback(null)
+    const epoch = materialEpochRef.current
+    try {
+      const archive = await createFrameArchive(frames.map(frame => ({
+        id: frame.id,
+        seq: frame.seq,
+        name: frame.name,
+        blob: frame.blob,
+        selected: selected.has(frame.id),
+      })))
+      const meta: FrameAnimationRecordMeta = {
+        name: recordName.trim() || frames[0].name.replace(/\.[^.]+$/, '') || '帧动画项目',
+        frames: archive.frames,
+        fps,
+        direction,
+        loopInfinite,
+        loopCount,
+        range: rangeRaw,
+        pixelated,
+        alphaThreshold,
+        exportFormat,
+        spriteDimension,
+        exportVars,
+        exportContainer,
+      }
+      await saveRecordItem(createFrameAnimationItem(crypto.randomUUID(), archive.blob, meta))
+      if (epoch === materialEpochRef.current) {
+        setRecordName('')
+        setRecordFeedback({ text: '项目已保存' })
+      }
     }
-    await saveRecordItem(createFrameAnimationItem(crypto.randomUUID(), archive.blob, meta))
-    setRecordName('')
+    catch {
+      if (epoch === materialEpochRef.current)
+        setRecordFeedback({ text: '保存失败，素材和项目名称已保留，请重试', error: true })
+    }
+    finally {
+      savingRef.current = false
+      setSaving(false)
+    }
   }, [alphaThreshold, direction, exportContainer, exportFormat, exportVars, fps, frames, loopCount, loopInfinite, pixelated, rangeRaw, recordName, saveRecordItem, selected, spriteDimension])
+
+  const deleteRecord = useCallback(async (id: string) => {
+    if (deletingRef.current)
+      return
+    deletingRef.current = true
+    setDeletingId(id)
+    setRecordFeedback(null)
+    try {
+      await removeRecordItem(id)
+      setRecordFeedback({ text: '项目已删除' })
+    }
+    catch {
+      setRecordFeedback({ text: '删除失败，请重试', error: true })
+    }
+    finally {
+      deletingRef.current = false
+      setDeletingId(null)
+    }
+  }, [removeRecordItem])
 
   const loadRecord = useCallback(async (id: string) => {
     const epoch = ++materialEpochRef.current
     const request = ++replacementRequestRef.current
     importCountRef.current = 0
     setImporting(true)
+    setRecordFeedback(null)
     closeCropPreview()
     try {
       const item = await getRecordItem(id)
       if (!item || !(item.payload instanceof Blob))
-        return
+        throw new Error('Missing project archive')
       const meta = item.meta as unknown as Partial<FrameAnimationRecordMeta>
-      if (!Array.isArray(meta.frames))
-        return
+      if (!Array.isArray(meta.frames) || meta.frames.length === 0 || meta.frames.some(saved => !saved || typeof saved.path !== 'string' || typeof saved.name !== 'string'))
+        throw new Error('Invalid frame manifest')
       const archive = await extractFrameArchive(item.payload)
-      const loaded = (await Promise.all(meta.frames.map(async (saved) => {
+      const ids = new Set<string>()
+      const manifest = meta.frames.map((saved, index) => {
+        const id = typeof saved.id === 'string' && saved.id && !ids.has(saved.id) ? saved.id : crypto.randomUUID()
+        ids.add(id)
+        return { ...saved, id, seq: Number.isFinite(saved.seq) && saved.seq > 0 ? Math.floor(saved.seq) : index + 1, selected: typeof saved.selected === 'boolean' ? saved.selected : true }
+      })
+      const loaded = (await Promise.all(manifest.map(async (saved) => {
         const blob = archive.get(saved.path)
         if (!blob)
           return null
@@ -1020,8 +1081,10 @@ export default function FrameAnimation() {
         loaded.forEach(frame => URL.revokeObjectURL(frame.url))
         return
       }
-      if (loaded.length === 0)
-        return
+      if (loaded.length !== manifest.length) {
+        loaded.forEach(frame => URL.revokeObjectURL(frame.url))
+        throw new Error('Incomplete or invalid frame archive')
+      }
       setPlaying(false)
       setCurrent(0)
       playRef.current = { index: 0, dir: 1, cycles: 0 }
@@ -1031,36 +1094,38 @@ export default function FrameAnimation() {
         return loaded.map(({ selected: _selected, ...frame }) => frame)
       })
       setSelected(new Set(loaded.filter(frame => frame.selected).map(frame => frame.id)))
-      setRangeRaw(meta.range ?? null)
-      if (typeof meta.fps === 'number')
-        setFps(meta.fps)
-      if (meta.direction)
-        setDirection(meta.direction)
-      if (typeof meta.loopInfinite === 'boolean')
-        setLoopInfinite(meta.loopInfinite)
-      if (typeof meta.loopCount === 'number')
-        setLoopCount(meta.loopCount)
-      if (typeof meta.pixelated === 'boolean')
-        setPixelated(meta.pixelated)
-      if (typeof meta.alphaThreshold === 'number')
-        setAlphaThreshold(meta.alphaThreshold)
-      if (meta.exportFormat)
-        setExportFormat(meta.exportFormat)
-      if (meta.spriteDimension)
-        setSpriteDimension(meta.spriteDimension)
-      if (typeof meta.exportVars === 'boolean')
-        setExportVars(meta.exportVars)
-      if (typeof meta.exportContainer === 'boolean')
-        setExportContainer(meta.exportContainer)
+      const bounded = (value: unknown, fallback: number, min: number, max: number) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
+      const count = loaded.filter(frame => frame.selected).length
+      const last = Math.max(0, count - 1)
+      const validRange = Array.isArray(meta.range) && meta.range.length === 2 && meta.range.every(value => typeof value === 'number' && Number.isFinite(value))
+      const start = validRange ? Math.floor(bounded(meta.range![0], 0, 0, last)) : 0
+      const end = validRange ? Math.floor(bounded(meta.range![1], last, start, last)) : last
+      setRangeRaw(validRange ? [start, end] : null)
+      setFps(bounded(meta.fps, 12, 1, 120))
+      setDirection(meta.direction === 'reverse' || meta.direction === 'pingpong' ? meta.direction : 'forward')
+      setLoopInfinite(typeof meta.loopInfinite === 'boolean' ? meta.loopInfinite : true)
+      setLoopCount(Math.floor(bounded(meta.loopCount, 3, 1, 999)))
+      setPixelated(typeof meta.pixelated === 'boolean' ? meta.pixelated : false)
+      setAlphaThreshold(Math.floor(bounded(meta.alphaThreshold, DEFAULT_ALPHA_THRESHOLD, 0, 254)))
+      setExportFormat(meta.exportFormat === 'css' || meta.exportFormat === 'less' ? meta.exportFormat : 'scss')
+      setSpriteDimension({
+        axis: meta.spriteDimension?.axis === 'cols' ? 'cols' : 'rows',
+        value: Math.floor(bounded(meta.spriteDimension?.value, 1, 1, loaded.length)),
+      })
+      setExportVars(typeof meta.exportVars === 'boolean' ? meta.exportVars : true)
+      setExportContainer(typeof meta.exportContainer === 'boolean' ? meta.exportContainer : true)
       seqRef.current = Math.max(...loaded.map(frame => frame.seq)) + 1
       setRecordName(typeof meta.name === 'string' ? meta.name : '')
       setImportFeedback(null)
+      setRecordFeedback({ text: '项目已加载' })
       setCropResult(null)
       closeCropPreview()
     }
     catch {
-      if (epoch === materialEpochRef.current && request === replacementRequestRef.current)
-        setImportFeedback({ text: '加载项目失败，请重试', tone: 'error' })
+      if (epoch === materialEpochRef.current && request === replacementRequestRef.current) {
+        setImportFeedback({ text: '加载项目失败，当前素材已保留，请重试', tone: 'error' })
+        setRecordFeedback({ text: '加载项目失败，当前素材已保留，请重试', error: true })
+      }
     }
     finally {
       if (epoch === materialEpochRef.current && request === replacementRequestRef.current)
@@ -1180,14 +1245,15 @@ export default function FrameAnimation() {
         }
       }
       else {
-        // 往返：lo..hi..lo+1 为一轮，回到前进方向时记一次循环
+        // 往返：回到 lo 就完成一轮，避免有限循环多等待一帧。
+        // Count a full ping-pong cycle on return, without an extra held tick.
         index += dir
-        if (index > hi) {
-          index = hi - 1
+        if (index >= hi) {
+          index = hi
           dir = -1
         }
-        else if (index < lo) {
-          index = lo + 1
+        else if (index <= lo) {
+          index = lo
           dir = 1
           cycles += 1
         }
@@ -1269,20 +1335,27 @@ export default function FrameAnimation() {
   /* ---------- 样式导出 ---------- */
 
   const copyCss = useCallback((text: string) => {
-    void navigator.clipboard.writeText(text).then(() => {
+    setCopiedCss(false)
+    setCopyError(false)
+    void Promise.resolve().then(() => navigator.clipboard.writeText(text)).then(() => {
       setCopiedCss(true)
       setTimeout(setCopiedCss, 1200, false)
-    })
+    }).catch(() => setCopyError(true))
   }, [])
 
   const downloadSprite = useCallback(async () => {
-    if (exportFrames.length === 0 || spriting)
+    if (exportFrames.length === 0 || spriteBusyRef.current)
       return
+    const epoch = materialEpochRef.current
+    spriteBusyRef.current = true
     setSpriting(true)
+    setExportError(false)
     try {
       const blob = await buildSpriteSheet(exportFrames, { cols: spriteCols, rows: spriteRows })
-      if (!blob)
+      if (epoch !== materialEpochRef.current)
         return
+      if (!blob)
+        throw new Error('Sprite encoding failed')
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -1291,10 +1364,15 @@ export default function FrameAnimation() {
       // 延迟回收，确保下载已拿到引用
       setTimeout(URL.revokeObjectURL, 10_000, url)
     }
+    catch {
+      if (epoch === materialEpochRef.current)
+        setExportError(true)
+    }
     finally {
+      spriteBusyRef.current = false
       setSpriting(false)
     }
-  }, [exportFrames, spriteCols, spriteRows, spriting])
+  }, [exportFrames, spriteCols, spriteRows])
 
   /* ---------- 精灵图预览：入选 + 范围变化后防抖重建 ---------- */
 
@@ -1327,22 +1405,28 @@ export default function FrameAnimation() {
     }
     let cancelled = false
     const timer = setTimeout(() => {
+      setSpriteError(null)
       void buildSpriteSheet(exportFramesRef.current, { cols: spriteCols, rows: spriteRows }).then((blob) => {
-        if (cancelled || !blob)
+        if (cancelled)
           return
+        if (!blob)
+          throw new Error('Sprite preview encoding failed')
         const url = URL.createObjectURL(blob)
         setSprite((prev) => {
           if (prev)
             URL.revokeObjectURL(prev.url)
           return { key: spriteKey, url }
         })
+      }).catch(() => {
+        if (!cancelled)
+          setSpriteError(spriteKey)
       })
     }, 250)
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [spriteKey, spriteCols, spriteRows, disposeSprite])
+  }, [spriteKey, spriteCols, spriteRows, spriteRetry, disposeSprite])
 
   // 卸载回收精灵图预览的 objectURL
   useEffect(() => () => {
@@ -1365,7 +1449,9 @@ export default function FrameAnimation() {
     : null
   const exportParams: ExportParams = {
     frames: exportFrames.length,
-    duration,
+    // Ping-pong includes both legs and counts a complete return as one loop.
+    // 往返包含前进和返回，回到起点才计一次循环。
+    duration: String(Number(((direction === 'pingpong' ? Math.max(1, (rangeLen - 1) * 2) : rangeLen) / fps).toFixed(6))),
     iteration: loopInfinite ? 'infinite' : String(loopCount),
     direction: direction === 'forward' ? 'normal' : direction === 'reverse' ? 'reverse' : 'alternate',
     pixelated,
@@ -1932,6 +2018,7 @@ export default function FrameAnimation() {
                   精灵图预览（
                   {exportFrames.length}
                   {' 帧'}
+                  {exportFrames.length > 0 && ` · 单元格 ${cellW} × ${cellH}`}
                   {uniformFrameSize && ` · 单张 ${uniformFrameSize.w} × ${uniformFrameSize.h}`}
                   {' · '}
                   {spriteDims.cols}
@@ -1962,7 +2049,16 @@ export default function FrameAnimation() {
                       )
                     : (
                         <div className="flex min-h-full items-center justify-center text-xs text-muted-foreground">
-                          {exportFrames.length > 0 ? '生成中…' : '暂无帧'}
+                          {exportFrames.length === 0
+                            ? '暂无帧'
+                            : spriteError === spriteKey
+                              ? (
+                                  <div role="alert" className="flex flex-col items-center gap-2">
+                                    <span>精灵图预览失败，请重试</span>
+                                    <Button size="sm" variant="outline" onClick={() => setSpriteRetry(value => value + 1)}>重新生成</Button>
+                                  </div>
+                                )
+                              : '生成中…'}
                         </div>
                       )}
                 </div>
@@ -1978,6 +2074,7 @@ export default function FrameAnimation() {
                   {copiedCss ? <Check data-feedback="success" /> : <Copy />}
                 </Button>
               </div>
+              {copyError && <p role="alert" className="mb-2 text-xs text-destructive">复制失败，请重试或手动选择代码复制</p>}
               <div className="flex min-h-0 flex-1 flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                   <OptionGroup<ExportFormat>
@@ -2044,15 +2141,18 @@ export default function FrameAnimation() {
                     aria-label="项目名称"
                     className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                   />
-                  <Button type="button" variant="outline" size="icon-sm" title="保存当前项目" aria-label="保存当前项目" disabled={frames.length === 0} onClick={() => void saveRecord()}>
-                    <Save />
+                  <Button type="button" variant="outline" size="icon-sm" title="保存当前项目" aria-label="保存当前项目" disabled={frames.length === 0 || saving || importing || cropping} onClick={() => void saveRecord()}>
+                    {saving ? <LoaderCircle className="animate-spin" /> : <Save />}
                   </Button>
                 </div>
+                {recordFeedback && <p role={recordFeedback.error ? 'alert' : 'status'} className={cn('mt-2 text-xs', recordFeedback.error ? 'text-destructive' : 'text-muted-foreground')}>{recordFeedback.text}</p>}
+                {recordsLoading && <p role="status" className="mt-2 text-xs text-muted-foreground">加载项目列表…</p>}
+                {!recordsLoading && records.length === 0 && <p className="mt-2 text-xs text-muted-foreground">暂无保存的项目</p>}
                 {records.length > 0 && (
                   <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
                     {records.map(record => (
                       <div key={record.id} className="flex items-center gap-2 border-b border-border py-2">
-                        <button type="button" className="min-w-0 flex-1 truncate text-left text-sm hover:underline" title="加载项目" onClick={() => void loadRecord(record.id)}>
+                        <button type="button" className="min-w-0 flex-1 truncate text-left text-sm hover:underline" title="加载项目" disabled={importing} onClick={() => void loadRecord(record.id)}>
                           {record.recordName}
                         </button>
                         <span className="shrink-0 text-xs text-muted-foreground">
@@ -2060,7 +2160,7 @@ export default function FrameAnimation() {
                           {' '}
                           帧
                         </span>
-                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除项目 ${record.recordName}`} onClick={() => void removeRecordItem(record.id)}>
+                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除项目 ${record.recordName}`} disabled={deletingId !== null} onClick={() => void deleteRecord(record.id)}>
                           <Trash2 />
                         </Button>
                       </div>
@@ -2071,6 +2171,7 @@ export default function FrameAnimation() {
             </section>
           </div>
         </div>
+        {exportError && <p role="alert" className="px-3 py-2 text-xs text-destructive">导出失败，请重试</p>}
         <div className="frames-panel-footer">
           <span>
             {exportFrames.length}
