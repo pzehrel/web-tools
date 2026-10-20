@@ -1152,9 +1152,13 @@ export default function FrameAnimation() {
     const advance = (): boolean => {
       const lo = rangeStart
       const hi = rangeEnd
-      if (hi <= lo)
-        return false
       const ps = playRef.current
+      if (hi <= lo) {
+        ps.index = lo
+        ps.cycles += 1
+        setCurrent(lo)
+        return !loopInfinite && ps.cycles >= loopCount
+      }
       let { index, dir, cycles } = ps
       if (index < lo || index > hi) {
         // 范围外（刚调过范围或点过范围外的帧）：先归位，不计循环
@@ -1188,9 +1192,12 @@ export default function FrameAnimation() {
           cycles += 1
         }
       }
+      const finished = !loopInfinite && cycles >= loopCount
+      if (finished)
+        index = direction === 'forward' ? hi : lo
       playRef.current = { index, dir, cycles }
       setCurrent(index)
-      return !loopInfinite && cycles >= loopCount
+      return finished
     }
 
     const tick = (now: number) => {
@@ -1214,7 +1221,7 @@ export default function FrameAnimation() {
     setPlaying((prev) => {
       const next = !prev
       // 有限循环播完后再次播放：从范围起点开始
-      if (next && finishedRef.current) {
+      if (next && (finishedRef.current || playRef.current.index < rangeStart || playRef.current.index > rangeEnd)) {
         playRef.current = { index: direction === 'reverse' ? rangeEnd : rangeStart, dir: 1, cycles: 0 }
         setCurrent(playRef.current.index)
         finishedRef.current = false
@@ -1727,6 +1734,7 @@ export default function FrameAnimation() {
                       type="number"
                       min={1}
                       max={120}
+                      step="any"
                       value={Number(fps.toFixed(2))}
                       aria-label="帧率（fps）"
                       title="帧率（fps）"
@@ -1741,7 +1749,7 @@ export default function FrameAnimation() {
                       id="frames-duration"
                       type="number"
                       min={0.01}
-                      step={0.05}
+                      step={0.01}
                       disabled={activeCount === 0}
                       value={rangeLen > 0 ? Number((rangeLen / fps).toFixed(2)) : 0}
                       aria-label="所有帧总时长（秒），改了反推帧率"
