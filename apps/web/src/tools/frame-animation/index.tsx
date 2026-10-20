@@ -3,7 +3,6 @@ import type { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, React
 import { unzipSync } from 'fflate'
 import {
   ArrowDownAZ,
-  ArrowLeft,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -23,7 +22,6 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
 
 import { Seo } from '@/components/seo'
 import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
@@ -1222,18 +1220,6 @@ export default function FrameAnimationTool() {
         description="导入多张图片逐帧预览动画效果，可调帧率、播放方向、循环次数、缩放与背景。"
         path="/tools/frame-animation"
       />
-      {/* 顶栏（底边发丝线与工作区分隔） */}
-      <header className="flex min-h-16 items-center gap-3 border-b border-border py-3">
-        <Button asChild variant="outline" size="icon">
-          <Link to="/" aria-label="返回首页">
-            <ArrowLeft className="size-5" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="font-mono text-lg font-semibold tracking-tight">帧动画预览</h1>
-          <p className="text-sm text-muted-foreground">导入多张图片逐帧播放，帧率 / 方向 / 循环 / 缩放可调</p>
-        </div>
-      </header>
 
       {/* 预览 + 参数（导入已融入预览：舞台即拖放区，添加按钮在舞台里）；
           去卡片分栏——列间垂直发丝线，无卡片间距浪费 */}

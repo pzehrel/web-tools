@@ -1,7 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, PointerEvent as ReactPointerEvent } from 'react'
 import {
-  ArrowLeft,
   Check,
   Copy,
   Download,
@@ -18,7 +17,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Link } from 'react-router'
 
 import { Seo } from '@/components/seo'
 import { StageViewControls, STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
@@ -904,18 +902,6 @@ export default function NinePatchTool() {
         description="上传图片并拖动四条切线定义九宫格切片，实时预览 border-image 的拉伸 / 平铺效果，一键复制 CSS / SCSS / Less 代码，并可裁剪中心区域导出最小体积的 PNG。"
         path="/tools/nine-patch"
       />
-      {/* 顶栏（紧凑：纵向空间尽量让给画布；底边发丝线与工作区分隔） */}
-      <header className="flex min-h-16 items-center gap-3 border-b border-border py-3">
-        <Button asChild variant="outline" size="icon">
-          <Link to="/" aria-label="返回首页">
-            <ArrowLeft className="size-5" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="font-mono text-lg font-semibold tracking-tight">点九图工具</h1>
-          <p className="hidden text-sm text-muted-foreground sm:block">拖动四条切线定义九宫格，实时预览 border-image 效果，导出 CSS 与裁剪后的最小 PNG</p>
-        </div>
-      </header>
 
       {/* 主工作区（左右）：去卡片分栏——列间垂直发丝线、同列上下水平线，无卡片间距浪费。
           左列参数 + 样式代码，右列上方紧凑预览、下方编辑舞台占满剩余高度；
