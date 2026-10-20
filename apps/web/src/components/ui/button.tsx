@@ -6,8 +6,10 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * 瑞士极简按钮：1px 描边、无阴影、无位移。
- * 交互语言：悬停只做颜色变化（填充加深 / 边框加重），150ms 过渡。
+ * Compact actions use semantic colors and a visible keyboard focus ring; icon sizes omit borders.
+ * Hover feedback changes colors over 150ms without moving the control.
+ * 紧凑操作使用语义颜色和可见键盘焦点环；图标尺寸不显示边框。
+ * 悬停反馈在 150ms 内改变颜色，不移动控件。
  */
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border bg-background text-sm font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*=\'size-\'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
@@ -28,9 +30,9 @@ const buttonVariants = cva(
         'default': 'h-9 px-4 py-2 has-[>svg]:px-3',
         'sm': 'h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5',
         'lg': 'h-11 rounded-md px-6 has-[>svg]:px-4 text-base',
-        'icon': 'size-9',
-        'icon-sm': 'size-8',
-        'icon-lg': 'size-10',
+        'icon': 'size-9 border-0',
+        'icon-sm': 'size-8 border-0',
+        'icon-lg': 'size-10 border-0',
       },
     },
     defaultVariants: {

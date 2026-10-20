@@ -23,7 +23,7 @@ export interface ToolMeta {
 export const tools: ToolMeta[] = [
   {
     id: 'url-qrcode',
-    name: '链接解析',
+    name: 'URL 与二维码',
     description: '拆解 URL 参数，和二维码互相转换',
     icon: Link2,
     status: 'ready',
@@ -58,7 +58,7 @@ export const tools: ToolMeta[] = [
     name: 'CSS 扫光',
     description: '调出扫光动效并复制即用 CSS',
     icon: Sparkles,
-    status: 'ready',
+    status: 'hidden',
     accentClass: 'bg-chart-2',
   },
   {
@@ -70,3 +70,5 @@ export const tools: ToolMeta[] = [
     accentClass: 'bg-chart-2',
   },
 ]
+
+export const publicTools = tools.filter(tool => tool.status === 'ready')

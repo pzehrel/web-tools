@@ -1,12 +1,12 @@
 import { Outlet } from 'react-router'
-import { SiteActions } from '@/components/site-actions'
+import { SiteHeader } from '@/components/site-header'
+import './site-layout.scss'
 
-/** 全局布局：页面出口 + 右上角站点操作 */
 export function RootLayout() {
   return (
     <>
+      <SiteHeader />
       <Outlet />
-      <SiteActions />
     </>
   )
 }

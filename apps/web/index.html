@@ -23,7 +23,11 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Keep the extra root attribute: vite-react-ssg 0.9.2's string-replacement fast path
+         consumes literal $$ in prerendered content. This uses its AST insertion path instead.
+         保留根节点额外属性：vite-react-ssg 0.9.2 的字符串替换快路径会吞掉预渲染内容中的 $$，
+         该属性使其改走 AST 插入路径。 -->
+    <div id="root" data-app-root="true"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
