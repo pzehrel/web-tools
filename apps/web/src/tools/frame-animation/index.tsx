@@ -1514,13 +1514,13 @@ export default function FrameAnimation() {
                   frameCount > 0
                   // 有上传但全部未勾选
                     ? (
-                        <div className="m-auto flex flex-col items-center gap-2 px-6 text-center text-muted-foreground/60">
+                        <div className="canvas-empty-state m-auto flex flex-col items-center gap-2 text-center text-muted-foreground/60">
                           <Images className="size-8" />
                           <p className="text-sm">没有入选的帧：在下方帧序列里勾选后参与预览</p>
                         </div>
                       )
                     : (
-                        <div className="m-auto flex flex-col items-center gap-3 px-6 text-center">
+                        <div className="canvas-empty-state m-auto flex flex-col items-center gap-3 text-center">
                           <Images className="size-8 text-muted-foreground" />
                           <div>
                             <p className="font-medium">拖拽图片 / ZIP 到此处，或</p>

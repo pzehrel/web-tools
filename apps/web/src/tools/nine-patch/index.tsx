@@ -1138,13 +1138,13 @@ export default function NinePatchTool() {
                   </div>
                 )
               : (
-                  <div className="m-auto flex flex-col items-center gap-3 px-6 text-center">
+                  <div className="canvas-empty-state m-auto flex flex-col items-center gap-3 text-center">
                     <Frame className="size-8 text-muted-foreground" />
                     <div>
                       <p className="font-medium">拖拽图片到此处，或</p>
                       <p className="mt-1 text-sm text-muted-foreground">PNG / SVG / WebP 均可</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap justify-center gap-2">
                       <Button type="button" onClick={() => fileInputRef.current?.click()}>
                         <ImagePlus />
                         选择图片

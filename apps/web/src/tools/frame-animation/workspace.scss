@@ -22,9 +22,6 @@
   .frames-view-controls > button, .frames-view-controls > .absolute > button { width: 28px; padding-inline: 5px; border-radius: 4px; }
   .frames-view-controls > [data-stage-background-panel] { top: calc(100% + 12px); right: 0; left: auto; }
   .frames-stage-viewport img { max-width: none; }
-  .frames-stage-viewport > div:first-child > .m-auto:not(img) { max-width: 400px; padding: 20px; background: var(--popover); border: 1px solid var(--border); border-radius: 10px; }
-  .frames-stage-viewport > div:first-child > .m-auto .size-8 { width: 24px; height: 24px; }
-  .frames-stage-viewport > div:first-child > .m-auto p { font-size: 12px; }
   .frames-workspace-nav { display: none; }
   .frames-import-error { position: absolute; z-index: 35; right: 12px; bottom: calc(var(--frames-sequence-height, 160px) + 68px); left: var(--frames-workspace-left); max-height: 25dvh; overflow: auto; overflow-wrap: anywhere; padding: 8px 12px; border: 1px solid var(--border); border-radius: 7px; color: var(--destructive); background: var(--popover); }
   .frames-playback-float { position: absolute; z-index: 25; bottom: calc(var(--frames-sequence-height, 160px) + 20px); left: calc(50% + var(--frames-panel-width) / 2 + 6px); transform: translateX(-50%); display: flex; align-items: center; gap: 4px; width: min(440px, calc(100% - var(--frames-workspace-left) - 24px)); padding: 5px; border: 1px solid var(--border); border-radius: 8px; background: var(--popover); }
@@ -109,7 +106,6 @@
     .frames-playback-float > button:last-child { display: none; }
     .frames-stage-viewport > div:first-child, &.sequence-collapsed .frames-stage-viewport > div:first-child { padding: 116px 12px 160px; }
     .frames-fit-area, &.sequence-collapsed .frames-fit-area { inset: 116px 12px 160px; }
-    .frames-stage-viewport > div:first-child > .m-auto:not(img) { max-width: 100%; padding: 12px; }
     .frames-stage-viewport > div:first-child > .m-auto > .flex { gap: 6px; }
     .frames-sequence-float, &.sequence-collapsed .frames-sequence-float { display: none; top: 116px; right: 12px; bottom: 58px; left: 12px; max-height: none; overflow: auto; overscroll-behavior: contain; padding: 10px; }
     &.workspace-frames .frames-sequence-float { display: block; }

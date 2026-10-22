@@ -168,3 +168,18 @@
     color: var(--accent-foreground);
   }
 }
+
+.canvas-empty-state {
+  max-width: min(400px, 100%);
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--popover);
+
+  .size-8 { width: 24px; height: 24px; }
+  p { font-size: 12px; }
+
+  @media (width <= 700px) {
+    padding: 12px;
+  }
+}

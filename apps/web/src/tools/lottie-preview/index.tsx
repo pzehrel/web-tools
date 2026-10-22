@@ -713,7 +713,7 @@ export default function LottiePreviewTool() {
                   </div>
                 )
               : (
-                  <div className="m-auto flex w-full max-w-md flex-col items-center gap-3 p-4 text-center sm:p-8">
+                  <div className="canvas-empty-state m-auto flex w-full flex-col items-center gap-3 text-center">
                     <div className="flex items-center justify-center text-muted-foreground">
                       <FileArchive className="size-8" />
                     </div>
@@ -721,7 +721,20 @@ export default function LottiePreviewTool() {
                       <p className="font-semibold">把 Lottie ZIP 拖到这里</p>
                       <p className="mt-1 text-sm text-muted-foreground">ZIP 或目录内必须包含 data.json，并保持其中记录的资源路径</p>
                     </div>
-
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <Button type="button" onClick={() => zipInputRef.current?.click()} disabled={busy}>
+                        {busy ? <LoaderCircle className="animate-spin" /> : <FileArchive />}
+                        选择 ZIP
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => directoryInputRef.current?.click()} disabled={busy}>
+                        <FolderOpen />
+                        选择目录
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => void loadDemo()} disabled={busy}>
+                        <Sparkles />
+                        试试示例
+                      </Button>
+                    </div>
                   </div>
                 )}
           {activeAnimation && stageView.showBounds && (
