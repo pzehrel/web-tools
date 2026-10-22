@@ -22,13 +22,14 @@ import {
   X,
 } from 'lucide-react'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Seo } from '@/components/seo'
 import { STAGE_BOUNDARY_CLASS, StageViewControls, useStageViewSettings } from '@/components/stage-view-controls'
 
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
-import { clampZoom, useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
+import { clampZoom, measureUnobstructedStageFit, useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
+import { saveContentRecord } from '@/lib/storage/content-record'
 import { cn } from '@/lib/utils'
 import { createDemoProject } from '../demos/lottie-preview'
 import { countAtlasOptimizableImages, disposeOptimizedResult, exportOptimizedProject, optimizeLottie } from './atlas-optimizer'
@@ -221,8 +222,11 @@ export default function LottiePreviewTool() {
   const projectRef = useRef<LoadedLottieProject | null>(null)
   const resultRef = useRef<OptimizedLottieResult | null>(null)
   const [project, setProject] = useState<LoadedLottieProject | null>(null)
+  const [mainSafeLayout, setMainSafeLayout] = useState<{ project: LoadedLottieProject, fit: 'meet' | 'slice', zoom: number, offset: { x: number, y: number } } | null>(null)
   const { records, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useLottieRecords()
   const [recordName, setRecordName] = useState('')
+  const currentRecordIdRef = useRef<string | null>(null)
+  const [autoSaveTick, setAutoSaveTick] = useState(0)
   const [optimized, setOptimized] = useState<OptimizedLottieResult | null>(null)
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
   const [optimizationEnabled, setOptimizationEnabled] = useState(true)
@@ -283,8 +287,65 @@ export default function LottiePreviewTool() {
   const meetScale = useStageFitScale(stageRef, animationWidth, animationHeight, Boolean(project), 0)
   const marginFitScale = useStageFitScale(stageRef, animationWidth, animationHeight, Boolean(project), 24)
   const stageFitZoom = meetScale > 0 ? clampZoom(marginFitScale / meetScale) : 1
-  const [zoom, setZoom, resetStageZoom] = useAutoFitZoom(stageFitZoom, project)
+  const activeMainLayout = mainSafeLayout?.project === project && mainSafeLayout.fit === fit ? mainSafeLayout : null
+  const [zoom, setZoom, resetStageZoom] = useAutoFitZoom(activeMainLayout?.zoom ?? stageFitZoom, project)
   const stageZoom = useStageZoom(stageRef, zoom, setZoom, Boolean(project))
+
+  const measureMainStageView = useCallback(() => {
+    const stage = stageRef.current
+    if (!stage || !project)
+      return null
+    const overlays = stage.closest('.lottie-workspace')?.querySelectorAll<HTMLElement>('.full-lottie-atlas') ?? []
+    const contentWidth = fit === 'slice' ? stage.clientWidth : project.animation.w
+    const contentHeight = fit === 'slice' ? stage.clientHeight : project.animation.h
+    const target = measureUnobstructedStageFit(stage, overlays, contentWidth, contentHeight, 24)
+    const meet = Math.min(stage.clientWidth / project.animation.w, stage.clientHeight / project.animation.h)
+    return { zoom: target.scale / (fit === 'slice' ? 1 : meet), offset: target.offset }
+  }, [fit, project])
+
+  const updateMainSafeLayout = useCallback(() => {
+    const target = measureMainStageView()
+    if (target && project)
+      setMainSafeLayout({ project, fit, ...target })
+    return target
+  }, [fit, measureMainStageView, project])
+
+  const resetMainStageView = useCallback(() => {
+    const target = updateMainSafeLayout()
+    if (!target)
+      return
+    resetStagePan()
+    resetStageZoom(target.zoom)
+  }, [resetStagePan, resetStageZoom, updateMainSafeLayout])
+
+  const initializedProjectRef = useRef<LoadedLottieProject | null>(null)
+  useLayoutEffect(() => {
+    if (!project) {
+      initializedProjectRef.current = null
+      return
+    }
+    const target = updateMainSafeLayout()
+    if (target && initializedProjectRef.current !== project) {
+      initializedProjectRef.current = project
+      resetStagePan()
+      resetStageZoom(target.zoom)
+    }
+  }, [project, resetStagePan, resetStageZoom, updateMainSafeLayout])
+
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || !project)
+      return
+    const observer = new ResizeObserver(() => updateMainSafeLayout())
+    observer.observe(stage)
+    const atlas = stage.closest('.lottie-workspace')?.querySelector<HTMLElement>('.full-lottie-atlas')
+    if (atlas)
+      observer.observe(atlas)
+    return () => observer.disconnect()
+  }, [project, updateMainSafeLayout])
+
+  const stageOffsetX = (activeMainLayout?.offset.x ?? 0) + stagePan.offset.x
+  const stageOffsetY = (activeMainLayout?.offset.y ?? 0) + stagePan.offset.y
   const resourceSizeComparison = formatSizeComparison(project?.sourceBytes ?? null, optimized ? resourceMetrics?.optimizedResourceBytes ?? null : null)
   const texturePixelComparison = formatPixelComparison(resourceMetrics?.sourcePixels ?? null, optimized && resourceMetrics ? resourceMetrics.activeTextureBytes / 4 : null)
   const textureMemoryComparison = formatSizeComparison(resourceMetrics?.sourceDecodedBytes ?? null, optimized ? resourceMetrics?.activeTextureBytes ?? null : null)
@@ -329,6 +390,8 @@ export default function LottiePreviewTool() {
   /** 清除项目：释放素材与图集结果，回到空状态 */
   const clearProject = useCallback(() => {
     operationRef.current += 1
+    currentRecordIdRef.current = null
+    setAutoSaveTick(0)
     setBusy(false)
     const previous = projectRef.current
     projectRef.current = null
@@ -404,6 +467,8 @@ export default function LottiePreviewTool() {
         return
       }
       replaceProject(next)
+      currentRecordIdRef.current = null
+      setAutoSaveTick(value => value + 1)
     }
     catch (reason) {
       if (operation === operationRef.current)
@@ -415,7 +480,7 @@ export default function LottiePreviewTool() {
     }
   }, [replaceProject])
 
-  const saveRecord = useCallback(async () => {
+  const saveRecord = useCallback(async (automatic = false) => {
     if (!project || busy)
       return
     const operation = ++operationRef.current
@@ -438,9 +503,11 @@ export default function LottiePreviewTool() {
         direction,
         fit,
       }
-      await saveRecordItem(createLottieItem(crypto.randomUUID(), archive, meta))
-      if (operation === operationRef.current)
+      const result = await saveContentRecord('lottie-preview', archive, meta, currentRecordIdRef.current, automatic, createLottieItem, saveRecordItem)
+      if (operation === operationRef.current) {
+        currentRecordIdRef.current = result.id
         setRecordName('')
+      }
     }
     catch (reason) {
       if (operation === operationRef.current)
@@ -452,7 +519,17 @@ export default function LottiePreviewTool() {
     }
   }, [busy, direction, fit, library, loop, optimizationEnabled, options, project, recordName, renderer, saveRecordItem, speed])
 
+  const saveRecordRef = useRef(saveRecord)
+  saveRecordRef.current = saveRecord
+  useEffect(() => {
+    if (autoSaveTick === 0)
+      return
+    const timer = window.setTimeout(() => void saveRecordRef.current(true), 300)
+    return () => window.clearTimeout(timer)
+  }, [autoSaveTick])
+
   const loadRecord = useCallback(async (id: string) => {
+    setAutoSaveTick(0)
     const operation = ++operationRef.current
     setBusy(true)
     setError(null)
@@ -470,6 +547,7 @@ export default function LottiePreviewTool() {
         return
       }
       replaceProject(next)
+      currentRecordIdRef.current = id
       const restored = normalizeRecordSettings(meta)
       setOptions(restored.options)
       setOptimizationEnabled(restored.optimizationEnabled)
@@ -499,6 +577,8 @@ export default function LottiePreviewTool() {
     setError(null)
     try {
       await removeRecordItem(id)
+      if (currentRecordIdRef.current === id)
+        currentRecordIdRef.current = null
     }
     catch (reason) {
       if (operation === operationRef.current)
@@ -511,6 +591,7 @@ export default function LottiePreviewTool() {
   }
 
   async function loadDemo(): Promise<void> {
+    setAutoSaveTick(0)
     const operation = ++operationRef.current
     setError(null)
     setBusy(true)
@@ -521,6 +602,7 @@ export default function LottiePreviewTool() {
         return
       }
       replaceProject(next)
+      currentRecordIdRef.current = null
     }
     catch (reason) {
       if (operation === operationRef.current)
@@ -661,7 +743,7 @@ export default function LottiePreviewTool() {
             ? (
                 <div
                   className="pointer-events-none m-auto size-full shrink-0 origin-center"
-                  style={{ transform: `translate(${stagePan.offset.x}px, ${stagePan.offset.y}px) scale(${zoom})` }}
+                  style={{ transform: `translate(${stageOffsetX}px, ${stageOffsetY}px) scale(${zoom})` }}
                 >
                   <PreviewErrorBoundary key={`${library}-${renderer}-${fit}`} animation={activeAnimation} onError={setError}>
                     {library === 'lottie-web'
@@ -745,7 +827,7 @@ export default function LottiePreviewTool() {
               style={{
                 width: `${zoom * 100}%`,
                 height: `${zoom * 100}%`,
-                transform: `translate(calc(-50% + ${stagePan.offset.x}px), calc(-50% + ${stagePan.offset.y}px))`,
+                transform: `translate(calc(-50% + ${stageOffsetX}px), calc(-50% + ${stageOffsetY}px))`,
               }}
             />
           )}
@@ -807,10 +889,7 @@ export default function LottiePreviewTool() {
             title="适配并居中"
             aria-label="重置视图"
             disabled={!activeAnimation}
-            onClick={() => {
-              stagePan.resetPan()
-              resetStageZoom()
-            }}
+            onClick={resetMainStageView}
           >
             <RotateCcw />
           </Button>
@@ -981,7 +1060,7 @@ export default function LottiePreviewTool() {
           <section className="min-w-0" role="tabpanel" id="lottie-panel-records" aria-labelledby="lottie-tab-records" hidden={panelTab !== 'records'}>
             <div className="pb-1">
               <h2 className="font-mono text-sm font-semibold tracking-tight">记录</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">保存完整 Lottie 素材包和优化参数，之后可以继续预览与导出。</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">导入后自动保存素材包；调整参数后点保存更新项目。相同素材不会新增记录。</p>
             </div>
             <div>
               <div className="flex items-center gap-2">

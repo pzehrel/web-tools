@@ -28,7 +28,8 @@ import { Seo } from '@/components/seo'
 import { STAGE_BOUNDARY_CLASS, StageViewControls, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
-import { useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
+import { measureUnobstructedStageFit, useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
+import { saveContentRecord } from '@/lib/storage/content-record'
 import { cn } from '@/lib/utils'
 import { createDemoFrames } from '../demos/frame-animation'
 import { createFrameAnimationItem, createFrameArchive, extractFrameArchive, useFrameAnimationRecords } from './records'
@@ -584,9 +585,13 @@ export default function FrameAnimation() {
   const [frames, setFrames] = useState<FrameItem[]>([])
   const { records, loading: recordsLoading, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useFrameAnimationRecords()
   const [recordName, setRecordName] = useState('')
+  const currentRecordIdRef = useRef<string | null>(null)
+  const [autoSaveTick, setAutoSaveTick] = useState(0)
   const [recordFeedback, setRecordFeedback] = useState<{ text: string, error?: boolean } | null>(null)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
+  const pendingAutoSaveRef = useRef(false)
+  const saveRecordRef = useRef<(automatic?: boolean) => Promise<void>>(async () => {})
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const deletingRef = useRef(false)
   const [current, setCurrent] = useState(0)
@@ -697,6 +702,19 @@ export default function FrameAnimation() {
   const stageFit = useStageFitScale(fitAreaRef, frame?.width ?? 0, frame?.height ?? 0, Boolean(frame), 24)
   const [zoom, setZoom, resetStageZoom] = useAutoFitZoom(stageFit, frameCount > 0 ? 'content' : null)
   const stageZoom = useStageZoom(stageRef, zoom, setZoom, frameCount > 0)
+
+  const resetFrameStageView = () => {
+    const area = fitAreaRef.current
+    if (!area || !frame)
+      return
+    const overlays = area.closest('.frame-workspace')?.querySelectorAll<HTMLElement>('.frames-panel, .frames-playback-float, .frames-sequence-float') ?? []
+    const target = measureUnobstructedStageFit(area, overlays, frame.width, frame.height, 24)
+    stagePan.setOffset(target.offset)
+    if (target.offset.x === 0 && target.offset.y === 0)
+      resetStageZoom()
+    else
+      resetStageZoom(target.scale)
+  }
   /** 播放范围（收敛后）：在入选帧里截取；帧数变化时自动夹回有效区间 */
   const maxIdx = Math.max(0, activeCount - 1)
   const rangeStart = rangeRaw ? Math.min(rangeRaw[0], maxIdx) : 0
@@ -712,7 +730,7 @@ export default function FrameAnimation() {
 
   /* ---------- 帧管理 ---------- */
 
-  const addFiles = useCallback(async (list: FileList | File[]) => {
+  const addFiles = useCallback(async (list: FileList | File[], persist = true) => {
     const epoch = materialEpochRef.current
     replacementRequestRef.current += 1
     const inputs = [...list].filter(f => f.type.startsWith('image/') || imageMimeOf(f.name) || /\.zip$/i.test(f.name))
@@ -780,6 +798,8 @@ export default function FrameAnimation() {
         withSeq.forEach(f => next.add(f.id))
         return next
       })
+      if (persist)
+        setAutoSaveTick(value => value + 1)
     }
     catch {
       if (epoch === materialEpochRef.current)
@@ -808,10 +828,11 @@ export default function FrameAnimation() {
 
   /** 载入内置示例帧（canvas 只有客户端可用，用户点「试试示例」时现场生成） */
   const loadDemo = useCallback(async () => {
+    setAutoSaveTick(0)
     const epoch = materialEpochRef.current
     const files = await createDemoFrames()
     if (files && epoch === materialEpochRef.current)
-      await addFiles(files)
+      await addFiles(files, false)
   }, [addFiles])
 
   /** 跳到指定帧：同步 rAF 游标并打断往返方向 / 循环计数 */
@@ -959,6 +980,8 @@ export default function FrameAnimation() {
   /** 清除全部帧：回收所有 objectURL，回到空状态（精灵图预览随 spriteKey 变空自动清理） */
   const clearAll = useCallback(() => {
     materialEpochRef.current += 1
+    currentRecordIdRef.current = null
+    setAutoSaveTick(0)
     importCountRef.current = 0
     setImporting(false)
     setPlaying(false)
@@ -982,9 +1005,14 @@ export default function FrameAnimation() {
     setDropTarget(null)
   }, [closeCropPreview])
 
-  const saveRecord = useCallback(async () => {
-    if (frames.length === 0 || savingRef.current)
+  const saveRecord = useCallback(async (automatic = false) => {
+    if (frames.length === 0)
       return
+    if (savingRef.current) {
+      if (automatic)
+        pendingAutoSaveRef.current = true
+      return
+    }
     savingRef.current = true
     setSaving(true)
     setRecordFeedback(null)
@@ -1012,10 +1040,13 @@ export default function FrameAnimation() {
         exportVars,
         exportContainer,
       }
-      await saveRecordItem(createFrameAnimationItem(crypto.randomUUID(), archive.blob, meta))
+      if (epoch !== materialEpochRef.current)
+        return
+      const result = await saveContentRecord('frame-animation', archive.blob, meta, currentRecordIdRef.current, automatic, createFrameAnimationItem, saveRecordItem)
       if (epoch === materialEpochRef.current) {
+        currentRecordIdRef.current = result.id
         setRecordName('')
-        setRecordFeedback({ text: '项目已保存' })
+        setRecordFeedback({ text: result.saved ? '项目已保存' : '相同素材已有项目' })
       }
     }
     catch {
@@ -1025,8 +1056,20 @@ export default function FrameAnimation() {
     finally {
       savingRef.current = false
       setSaving(false)
+      if (pendingAutoSaveRef.current) {
+        pendingAutoSaveRef.current = false
+        queueMicrotask(() => void saveRecordRef.current(true))
+      }
     }
   }, [alphaThreshold, direction, exportContainer, exportFormat, exportVars, fps, frames, loopCount, loopInfinite, pixelated, rangeRaw, recordName, saveRecordItem, selected, spriteDimension])
+
+  saveRecordRef.current = saveRecord
+  useEffect(() => {
+    if (autoSaveTick === 0)
+      return
+    const timer = window.setTimeout(() => void saveRecordRef.current(true), 300)
+    return () => window.clearTimeout(timer)
+  }, [autoSaveTick])
 
   const deleteRecord = useCallback(async (id: string) => {
     if (deletingRef.current)
@@ -1036,6 +1079,8 @@ export default function FrameAnimation() {
     setRecordFeedback(null)
     try {
       await removeRecordItem(id)
+      if (currentRecordIdRef.current === id)
+        currentRecordIdRef.current = null
       setRecordFeedback({ text: '项目已删除' })
     }
     catch {
@@ -1048,6 +1093,7 @@ export default function FrameAnimation() {
   }, [removeRecordItem])
 
   const loadRecord = useCallback(async (id: string) => {
+    setAutoSaveTick(0)
     const epoch = ++materialEpochRef.current
     const request = ++replacementRequestRef.current
     importCountRef.current = 0
@@ -1119,6 +1165,7 @@ export default function FrameAnimation() {
       setExportContainer(typeof meta.exportContainer === 'boolean' ? meta.exportContainer : true)
       seqRef.current = Math.max(...loaded.map(frame => frame.seq)) + 1
       setRecordName(typeof meta.name === 'string' ? meta.name : '')
+      currentRecordIdRef.current = id
       setImportFeedback(null)
       setRecordFeedback({ text: '项目已加载' })
       setCropResult(null)
@@ -1576,11 +1623,8 @@ export default function FrameAnimation() {
               size="icon-sm"
               title="重置视图（居中并完整适配）"
               aria-label="重置视图"
-              disabled={!frame || (stagePan.offset.x === 0 && stagePan.offset.y === 0 && zoom === stageFit)}
-              onClick={() => {
-                stagePan.resetPan()
-                resetStageZoom()
-              }}
+              disabled={!frame}
+              onClick={resetFrameStageView}
             >
               <RotateCcw />
             </Button>
@@ -2135,7 +2179,7 @@ export default function FrameAnimation() {
             <section className="min-w-0 frames-record-section">
               <div className="pb-1">
                 <h2 className="font-mono text-sm font-semibold tracking-tight">记录</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">保存整组帧、播放范围和导出参数，之后可以继续编辑。</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">导入后自动保存素材；调整参数后点保存更新项目。相同素材不会新增记录。</p>
               </div>
               <div>
                 <div className="flex max-w-xl items-center gap-2">

@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router'
 import { SiteActions } from '@/components/site-actions'
@@ -27,11 +27,6 @@ export function SiteHeader() {
     <header className="site-header">
       <div className="site-header-inner">
         <div className="site-brand-group">
-          {current && (
-            <Link className="site-icon-action" to="/" aria-label="返回首页" title="返回首页">
-              <ArrowLeft className="size-4" aria-hidden="true" />
-            </Link>
-          )}
           <Link className={`site-brand ${current ? 'is-tool' : ''}`} to="/" aria-label="Web Tools 首页">Web Tools</Link>
           {current?.status === 'ready' && <h1>{current.name}</h1>}
         </div>

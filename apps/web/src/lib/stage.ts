@@ -35,6 +35,75 @@ export function calculateStageFitScale(
   return Math.min(availableWidth / contentWidth, availableHeight / contentHeight)
 }
 
+interface StageRect { left: number, top: number, right: number, bottom: number }
+
+// Choose the largest useful rectangle that does not intersect a visible HUD.
+// 选择不与可见 HUD 相交、且最适合完整展示内容的矩形。
+export function calculateUnobstructedStageFit(
+  viewport: StageRect,
+  overlays: StageRect[],
+  contentWidth: number,
+  contentHeight: number,
+  inset = 8,
+  gap = 8,
+): { scale: number, offset: { x: number, y: number } } {
+  if (contentWidth <= 0 || contentHeight <= 0)
+    return { scale: 1, offset: { x: 0, y: 0 } }
+
+  const clipped = overlays.map(rect => ({
+    left: Math.max(viewport.left, rect.left - gap),
+    top: Math.max(viewport.top, rect.top - gap),
+    right: Math.min(viewport.right, rect.right + gap),
+    bottom: Math.min(viewport.bottom, rect.bottom + gap),
+  })).filter(rect => rect.left < rect.right && rect.top < rect.bottom)
+  const xs = [...new Set([viewport.left, viewport.right, ...clipped.flatMap(rect => [rect.left, rect.right])])].sort((a, b) => a - b)
+  const ys = [...new Set([viewport.top, viewport.bottom, ...clipped.flatMap(rect => [rect.top, rect.bottom])])].sort((a, b) => a - b)
+  let best: { rect: StageRect, scale: number, area: number } | null = null
+
+  for (let left = 0; left < xs.length - 1; left++) {
+    for (let right = left + 1; right < xs.length; right++) {
+      for (let top = 0; top < ys.length - 1; top++) {
+        for (let bottom = top + 1; bottom < ys.length; bottom++) {
+          const rect = { left: xs[left], right: xs[right], top: ys[top], bottom: ys[bottom] }
+          if (clipped.some(hud => rect.left < hud.right && rect.right > hud.left && rect.top < hud.bottom && rect.bottom > hud.top))
+            continue
+          const width = rect.right - rect.left
+          const height = rect.bottom - rect.top
+          const scale = calculateStageFitScale(width, height, contentWidth, contentHeight, inset)
+          const area = width * height
+          if (!best || scale > best.scale || (scale === best.scale && area > best.area))
+            best = { rect, scale, area }
+        }
+      }
+    }
+  }
+
+  const rect = best?.rect ?? viewport
+  return {
+    scale: best?.scale ?? calculateStageFitScale(viewport.right - viewport.left, viewport.bottom - viewport.top, contentWidth, contentHeight, inset),
+    offset: {
+      x: (rect.left + rect.right - viewport.left - viewport.right) / 2,
+      y: (rect.top + rect.bottom - viewport.top - viewport.bottom) / 2,
+    },
+  }
+}
+
+// Measure only HUDs currently painted on the stage when the user resets the view.
+// 用户重置视图时，仅测量当前实际显示在舞台上的 HUD。
+export function measureUnobstructedStageFit(
+  area: HTMLElement,
+  overlays: Iterable<HTMLElement>,
+  contentWidth: number,
+  contentHeight: number,
+  inset = 8,
+) {
+  const visibleRects = [...overlays].filter((node) => {
+    const style = getComputedStyle(node)
+    return style.display !== 'none' && style.visibility !== 'hidden'
+  }).map(node => node.getBoundingClientRect())
+  return calculateUnobstructedStageFit(area.getBoundingClientRect(), visibleRects, contentWidth, contentHeight, inset)
+}
+
 /** 监听舞台尺寸，为一个或多个内容的联合矩形计算“适配 = 100%”基础比例。 */
 export function useStageFitScale(
   ref: RefObject<HTMLElement | null>,
@@ -65,18 +134,28 @@ export function useStageFitScale(
 }
 
 /**
+ * Follow the fitted scale until manual wheel or pinch zoom. Stage and content size
+ * changes keep the whole content visible while untouched. Changing resetKey clears
+ * manual zoom and restores fit. resetToFit serves the reset-view button and may
+ * accept a measured safe-area scale. Later fit changes still update untouched views.
+ *
  * 自动适配缩放：用户未手动缩放（滚轮 / 捏合）时，zoom 始终跟随传入的适配值——
  * 内容加载、舞台尺寸变化都会重新完整展示内容；resetKey 变化（换内容）时
  * 清除手动标记回到适配。resetToFit 供「重置视图」按钮使用。
+ * 重置可传入按无遮挡区域测得的比例；之后适配比例变化时，未手动缩放的视图仍会更新。
  */
 export function useAutoFitZoom(
   fit: number,
   resetKey: unknown,
-): [number, Dispatch<SetStateAction<number>>, () => void] {
+): [number, Dispatch<SetStateAction<number>>, (override?: number) => void] {
   const [zoom, setZoomState] = useState(fit)
   const [touched, setTouched] = useState(false)
   const fitRef = useRef(fit)
-  fitRef.current = fit
+  const previousFitRef = useRef(fit)
+  if (previousFitRef.current !== fit) {
+    previousFitRef.current = fit
+    fitRef.current = fit
+  }
 
   /** 手动缩放入口：标记 touched 后不再自动适配 */
   const setZoom = useCallback<Dispatch<SetStateAction<number>>>((update) => {
@@ -86,7 +165,7 @@ export function useAutoFitZoom(
 
   useEffect(() => {
     if (!touched)
-      setZoomState(clampZoom(fit))
+      setZoomState(clampZoom(fitRef.current))
   }, [fit, touched])
 
   // 换内容：回到适配视图（fit 可能尚未更新，交给上面的 effect 纠正）
@@ -95,7 +174,9 @@ export function useAutoFitZoom(
     setZoomState(clampZoom(fitRef.current))
   }, [resetKey])
 
-  const resetToFit = useCallback(() => {
+  const resetToFit = useCallback((override?: number) => {
+    if (override !== undefined)
+      fitRef.current = override
     setTouched(false)
     setZoomState(clampZoom(fitRef.current))
   }, [])
@@ -252,6 +333,7 @@ export function useStagePan(ref: RefObject<HTMLElement | null>, guard: () => boo
   return {
     panning,
     offset,
+    setOffset,
     resetPan,
     panHandlers: { onPointerDown, onPointerMove, onPointerUp: onPointerEnd, onPointerCancel: onPointerEnd },
   }

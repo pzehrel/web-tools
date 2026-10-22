@@ -1,10 +1,9 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { ArrowLeft, Check, Copy, MousePointer2, Play, RotateCcw, Sparkles, Upload } from 'lucide-react'
+import { Check, Copy, MousePointer2, Play, RotateCcw, Sparkles, Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
 
 import { Seo } from '@/components/seo'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import './index.scss'
 
@@ -329,13 +328,6 @@ export default function CssShineTool() {
 
       <header className="flex min-h-24 items-center justify-between gap-4 border-b border-border py-5">
         <div>
-          <Link
-            to="/"
-            className={buttonVariants({ variant: 'ghost', size: 'sm', className: '-ml-3 mb-2' })}
-          >
-            <ArrowLeft />
-            返回工具箱
-          </Link>
           <h1 className="font-mono text-2xl font-semibold tracking-tight sm:text-3xl">CSS 扫光动效</h1>
           <p className="mt-1 text-sm text-muted-foreground">调参数、看效果、复制代码，一气呵成。</p>
         </div>

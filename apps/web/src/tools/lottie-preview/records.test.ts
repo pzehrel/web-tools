@@ -1,7 +1,7 @@
 import type { LoadedLottieProject } from './types'
 import { unzipSync } from 'fflate'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createLottieArchive } from './records'
 
 describe('lottie records', () => {
@@ -36,5 +36,26 @@ describe('lottie records', () => {
     expect(Object.keys(archive).sort()).toEqual(['data.json', 'images/dot.png'])
     expect(new TextDecoder().decode(archive['images/dot.png'])).toBe('image')
     expect(JSON.parse(new TextDecoder().decode(archive['data.json']))).toMatchObject({ w: 320, h: 180, fr: 30 })
+  })
+
+  it('produces identical archive bytes at different times', async () => {
+    const project: LoadedLottieProject = {
+      name: 'demo',
+      animation: { fr: 30, ip: 0, op: 60, w: 320, h: 180, layers: [] },
+      images: new Map(),
+      warnings: [],
+      sourceBytes: 0,
+    }
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+      const first = await createLottieArchive(project)
+      vi.setSystemTime(new Date('2026-02-01T00:00:00Z'))
+      const second = await createLottieArchive(project)
+      expect(new Uint8Array(await first.arrayBuffer())).toEqual(new Uint8Array(await second.arrayBuffer()))
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 })

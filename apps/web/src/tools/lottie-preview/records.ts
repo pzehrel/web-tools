@@ -53,7 +53,7 @@ export async function createLottieArchive(project: LoadedLottieProject): Promise
     if (path)
       entries[path] = new Uint8Array(await image.blob.arrayBuffer())
   }
-  const zip = zipSync(entries, { level: 6 })
+  const zip = zipSync(entries, { level: 6, mtime: new Date(2000, 0, 1) })
   return new Blob([zip as BlobPart], { type: 'application/zip' })
 }
 

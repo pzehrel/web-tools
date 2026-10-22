@@ -2,7 +2,6 @@ import type { ChangeEvent, DragEvent } from 'react'
 import type { FontCheckReport, FontFormat, ParsedFont, SubsetResult } from './font-engine'
 import {
   Activity,
-  ArrowLeft,
   Check,
   Download,
   FileType,
@@ -14,7 +13,6 @@ import {
   Type,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
 
 import { Seo } from '@/components/seo'
 import { Button } from '@/components/ui/button'
@@ -488,11 +486,9 @@ export default function FontToolkitTool() {
         path="/tools/font-toolkit"
       />
 
-      {/* 顶部导航 */}
+      {/* Tool title. */}
+      {/* 工具标题。 */}
       <div className="flex min-h-16 items-center gap-3 border-b border-border py-3">
-        <Button variant="outline" size="icon-sm" asChild>
-          <Link to="/" aria-label="返回首页"><ArrowLeft className="size-4" /></Link>
-        </Button>
         <div className="flex items-center gap-2">
           <h1 className="font-mono text-lg font-semibold tracking-tight">字体工具箱</h1>
         </div>

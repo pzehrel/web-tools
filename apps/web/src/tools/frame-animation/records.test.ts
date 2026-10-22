@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createFrameArchive, extractFrameArchive } from './records'
 
@@ -17,5 +17,20 @@ describe('frame animation records', () => {
     await expect(restored.get(result.frames[1].path)?.text()).resolves.toBe('one')
     expect(restored.get(result.frames[0].path)?.type).toBe('image/png')
     expect(restored.get(result.frames[1].path)?.type).toBe('image/webp')
+  })
+
+  it('produces identical archive bytes at different times', async () => {
+    const frames = [{ id: 'a', seq: 1, name: 'a.png', blob: new Blob(['image'], { type: 'image/png' }), selected: true }]
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+      const first = await createFrameArchive(frames)
+      vi.setSystemTime(new Date('2026-02-01T00:00:00Z'))
+      const second = await createFrameArchive(frames)
+      expect(new Uint8Array(await first.blob.arrayBuffer())).toEqual(new Uint8Array(await second.blob.arrayBuffer()))
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 })

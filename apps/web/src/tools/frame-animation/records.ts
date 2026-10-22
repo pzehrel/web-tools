@@ -66,7 +66,7 @@ export async function createFrameArchive(frames: FrameArchiveInput[]): Promise<{
     entries[path] = new Uint8Array(await frame.blob.arrayBuffer())
     return { path, id: frame.id, seq: frame.seq, name: frame.name, selected: frame.selected }
   }))
-  const zip = zipSync(entries, { level: 6 })
+  const zip = zipSync(entries, { level: 6, mtime: new Date(2000, 0, 1) })
   return {
     blob: new Blob([zip as BlobPart], { type: 'application/zip' }),
     frames: archived,

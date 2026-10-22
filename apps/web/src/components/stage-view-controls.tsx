@@ -69,30 +69,31 @@ export function useStageViewSettings(): StageViewSettings {
 }
 
 export function StageViewControls({ hasContent, settings }: { hasContent: boolean, settings: StageViewSettings }) {
-  if (!hasContent)
-    return null
-
   const activePalette = settings.stageBackground === 'checker' ? settings.checkerIndex : settings.solidIndex
 
   return (
     <>
       <div className="absolute top-2 left-2 z-30 flex gap-1.5">
+        {hasContent && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className={cn('bg-transparent hover:bg-transparent', settings.showBounds ? 'text-primary hover:text-primary/80' : 'text-muted-foreground hover:text-foreground')}
+            title={`${settings.showBounds ? '隐藏' : '显示'}边界（仅影响画布查看，不影响导出）`}
+            aria-label={`${settings.showBounds ? '隐藏' : '显示'}边界`}
+            aria-pressed={settings.showBounds}
+            data-stage-boundary-toggle
+            onClick={() => settings.setShowBounds(value => !value)}
+          >
+            <Scan />
+          </Button>
+        )}
         <Button
           type="button"
-          variant={settings.showBounds ? 'default' : 'outline'}
+          variant="ghost"
           size="icon-sm"
-          title={`${settings.showBounds ? '隐藏' : '显示'}边界（仅影响画布查看，不影响导出）`}
-          aria-label={`${settings.showBounds ? '隐藏' : '显示'}边界`}
-          aria-pressed={settings.showBounds}
-          data-stage-boundary-toggle
-          onClick={() => settings.setShowBounds(value => !value)}
-        >
-          <Scan />
-        </Button>
-        <Button
-          type="button"
-          variant={settings.backgroundOpen ? 'secondary' : 'outline'}
-          size="icon-sm"
+          className={cn('bg-transparent hover:bg-transparent', settings.backgroundOpen ? 'text-primary hover:text-primary/80' : 'text-muted-foreground hover:text-foreground')}
           title="画布背景"
           aria-label="画布背景"
           aria-expanded={settings.backgroundOpen}

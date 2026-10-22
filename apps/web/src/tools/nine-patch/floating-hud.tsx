@@ -40,7 +40,7 @@ function releaseHudPointer(active: { owner: HTMLElement, pointerId: number } | n
 
 // Outer HUD gestures never change the logical stretch dimensions or output parameters.
 // 外层 HUD 手势不改变内部拉伸逻辑尺寸，也不改变输出参数。
-export function NinePreviewHud({ controls, children }: { controls: ReactNode, children: ReactNode }) {
+export function NineFloatingHud({ className, title, controls, children }: { className: string, title: string, controls?: ReactNode, children: ReactNode }) {
   const hudRef = useRef<HTMLElement>(null)
   const [rect, setRect] = useState<HudRect | null>(null)
   const dragRef = useRef<{ pointerId: number, owner: HTMLElement, x: number, y: number, base: HudRect, action: 'move' | HudEdge } | null>(null)
@@ -104,8 +104,8 @@ export function NinePreviewHud({ controls, children }: { controls: ReactNode, ch
   return (
     <section
       ref={hudRef}
-      className="nine-preview"
-      aria-label="拉伸预览"
+      className={className}
+      aria-label={title}
       data-hud-custom={Boolean(rect)}
       style={rect ? { left: rect.x, top: rect.y, width: rect.width, height: rect.height, right: 'auto', bottom: 'auto', maxWidth: 'none' } : undefined}
       onPointerMove={(event) => {
@@ -121,9 +121,9 @@ export function NinePreviewHud({ controls, children }: { controls: ReactNode, ch
     >
       <header onPointerDown={event => begin(event, 'move')}>
         <h2>
-          <button type="button" className="nine-hud-drag" data-hud-drag aria-label="移动拉伸预览 HUD" title="拖动移动 HUD；方向键微调，Shift 加速" onKeyDown={event => keyboard(event, 'move')}>
+          <button type="button" className="nine-hud-drag" data-hud-drag aria-label={`移动${title} HUD`} title="拖动移动 HUD；方向键微调，Shift 加速" onKeyDown={event => keyboard(event, 'move')}>
             <Move />
-            拉伸预览
+            {title}
           </button>
         </h2>
         {controls}
@@ -133,7 +133,7 @@ export function NinePreviewHud({ controls, children }: { controls: ReactNode, ch
           size="icon-sm"
           disabled={!rect}
           title="重置 HUD 位置与大小"
-          aria-label="重置 HUD 位置与大小"
+          aria-label={`重置${title} HUD 位置与大小`}
           onClick={() => {
             const active = dragRef.current
             dragRef.current = null

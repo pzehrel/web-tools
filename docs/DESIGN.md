@@ -6,7 +6,7 @@ The public directory and tool switcher expose only URL and QR, frame animation, 
 
 ## Navigation and density
 
-- `SiteHeader` owns the shared header, return-home action on the left, public-tool switcher, theme controls and repository link. Do not duplicate these in tool workspaces or add permanent sidebar navigation.
+- `SiteHeader` owns the shared header, home-linked brand on desktop, public-tool switcher, theme controls and repository link. Tool workspaces do not add return buttons or permanent sidebar navigation.
 - The header stays above ordinary canvas controls and below modal backdrops. The switcher closes after navigation, outside pointer interaction or Escape; Escape returns focus to its summary.
 - Use compact spacing and controls. Avoid a large hero above tools. Canvas workspaces place narrow task controls beside the main canvas; mobile layouts stack or tab the controls so core actions remain reachable.
 - Home entries form a compact four-column directory on desktop and two columns on phones. Distinguish groups with fine borders and spacing; avoid decorative shadows, gradients and raised cards.
@@ -41,7 +41,7 @@ Each feedback family has solid, `-foreground`, `-muted` and `-muted-foreground` 
 Reuse `apps/web/src/lib/stage.ts` and `StageViewControls` / `useStageViewSettings` for image viewing.
 
 - Fit the union of visible content to the stage as the default view. Zoom from 1% to 800% through wheel, trackpad pinch or two fingers; zoom and pan never change exported pixels or output parameters.
-- Show the current zoom briefly after a zoom gesture. Reset view restores fitting and centering independently of editing/output settings.
+- Show the current zoom briefly after a zoom gesture. Initial import and reset use the same fit and center in canvas space unobstructed by visible HUDs, independently of editing/output settings.
 - Dragging pans at any zoom. Guard cut lines, resize handles, buttons and other editing interactions before pan captures the pointer. Use native non-passive wheel handlers and `touch-none` where the canvas owns touch gestures.
 - The outer layout determines the stage height. Keep its content clipped, with a positioned inner stage when needed to prevent large images from expanding the layout.
 - Keep image import/replacement actions near the canvas. Viewing controls float separately: boundaries and themed checker/solid backgrounds affect viewing only and appear when content exists.
