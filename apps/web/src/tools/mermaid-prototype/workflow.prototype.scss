@@ -92,7 +92,7 @@ body:has(.mermaid-prototype-hud) .site-header { visibility: hidden; }
   .prototype-dialog h2 { font-size: 16px; }
   .prototype-dialog p { margin: 14px 0 20px; }
   .prototype-dialog .action-row { justify-content: end; }
-  .react-flow { --xy-background-color: var(--card); --xy-edge-stroke: var(--muted-foreground); --xy-connectionline-stroke: var(--primary); --xy-controls-button-background-color: var(--background); --xy-controls-button-background-color-hover: var(--secondary); --xy-controls-button-color: var(--foreground); --xy-controls-button-border-color: var(--border); --xy-selection-background-color: var(--secondary); --xy-selection-border: 1px solid var(--primary); }
+  .react-flow { --xy-background-color: var(--card); --xy-edge-stroke: var(--muted-foreground); --xy-connectionline-stroke: var(--primary); --xy-controls-button-background-color: var(--background); --xy-controls-button-background-color-hover: var(--secondary); --xy-controls-button-color: var(--foreground); --xy-controls-button-border-color: var(--border); --xy-selection-background-color: color-mix(in srgb, var(--primary) 8%, transparent); --xy-selection-border: 1px solid var(--primary); }
   .react-flow__controls { box-shadow: none; border: 1px solid var(--border); }
   .react-flow__attribution { background: var(--card); color: var(--muted-foreground); }
   .react-flow__node { border: none; border-radius: 0; padding: 0; background: transparent; }

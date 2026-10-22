@@ -8,6 +8,18 @@
 
 默认样例有 11 个图对象，包含三个具有嵌套关系的分组容器，以及 12 条连线。它覆盖条件、回路、自连边、平行边、跨组连线、分组之间的连线和普通注释。浏览器实际运行 React Flow 12.12.0、elkjs 0.12.0 与 Mermaid 12.2.0。
 
+## 框选可见性修复与画布库边界
+
+用户反馈多选框内的内容不可见，并提出使用专门的图编辑库，在其基础上兼容 Mermaid 导入导出。原型的视口、矩形框选和连接端点已经交给 React Flow；已接受的 React Flow＋ELK＋Mermaid 路线保持不变。复用编辑器并增加 Mermaid 兼容层符合这条边界，文档层仍负责导入原稿、错误草稿和代码/画布统一历史。本次反馈尚未决定迁移到其他引擎。
+
+临时 Playwright 脚本拖动矩形框住 Browser 和 App。修复前反复失败，报错为 `Selection fill hides enclosed content: alpha=1`；截图显示实色矩形遮住了两个已选节点。原因是主题覆盖将不透明的 `secondary` 用作 React Flow 选框背景。此次仅修改该变量：语义主色以 8% 不透明度填充，保留底层内容可见。同一脚本在亮/暗主题均通过，采样 alpha 为 `0.0784313725490196`，两个节点 ID 均被选中，11 个图对象均保留。松开指针后多选范围框仍在，撤销/重做计数仍为零。已查看截图，没有添加持久的原型测试套件。
+
+- [修复前：实色选框](evidence/selection-before-light.png)
+- [修复后：浅色选框](evidence/selection-light.png)
+- [修复后：暗色选框](evidence/selection-dark.png)
+
+2026-10-22 核对的一手资料：[React Flow 视口控件](https://reactflow.dev/learn/concepts/the-viewport) 说明拖动框选与视图控件；[React Flow 主题](https://reactflow.dev/learn/customization/theming) 说明选框颜色变量和半透明默认值。[AntV X6](https://x6.antv.antgroup.com/en) 是另一种图编辑引擎，提供框选等编辑扩展；当前路线验证失败时可考虑它，尚未选作替代。这些库不能证明任意 Mermaid 源码往返保真。
+
 ## 视觉风格对齐修改
 
 用户反馈图标太粗，整体风格与当前站点不搭。本次以当前 `docs/DESIGN.md` 和帧动画/九宫格 HUD 样式为参照。浏览器检查发现，之前的工具图标实际为 24 px，没有达到共享按钮预期的尺寸。局部 HUD 规则现采用 14 px 图标、1.5 描边宽度（起止形状为 17×11 px）、28 px 桌面按钮、11 px 控件文字、40 px 顶部工具条、6 px 面板圆角，并沿用现有语义半透明底色与模糊处理。手机形状按钮保留 32 px 点击区域。React Flow 的实心缩放/适应图标已替换为相同的 Lucide 线框控件，视图操作行为保持有效。

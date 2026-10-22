@@ -8,6 +8,18 @@ Run `pnpm prototype:mermaid` in the prototype worktree. Open `http://localhost:1
 
 The default fixture contains 11 graph objects, including three nested/group containers, and 12 connections. It includes a condition, cycle, self-loop, parallel connections, cross-group links, a group-to-group connection, and an ordinary comment. The browser really runs React Flow 12.12.0, elkjs 0.12.0 and Mermaid 12.2.0.
 
+## Marquee visibility fix and canvas-library boundary
+
+The user reported that enclosed content disappeared while selecting multiple objects, and proposed using a dedicated diagram library with Mermaid import/export compatibility. The prototype already delegates its viewport, rectangle selection and handles to React Flow; the accepted React Flow + ELK + Mermaid route remains unchanged. A reusable editor plus a Mermaid compatibility layer matches that boundary, while the document layer still owns imported originals, invalid drafts and unified code/canvas history. This feedback does not settle a migration to another engine.
+
+A temporary Playwright harness dragged a rectangle around Browser and App. Before the fix it repeatedly failed with `Selection fill hides enclosed content: alpha=1`; the screenshot shows a solid rectangle covering both selected nodes. The theme override assigned opaque `secondary` to React Flow’s selection background. Only that variable changed: a semantic primary tint at 8% opacity now preserves the underlying content. The same harness passes in light and dark themes with sampled alpha `0.0784313725490196`, both node IDs selected and all 11 graph objects present. After pointer release the group rectangle remains and undo/redo counts are still zero. Screenshots were visually checked. No persistent prototype test suite was added.
+
+- [Before: opaque marquee](evidence/selection-before-light.png)
+- [Fixed: light marquee](evidence/selection-light.png)
+- [Fixed: dark marquee](evidence/selection-dark.png)
+
+Primary references checked on 2026-10-22: [React Flow viewport controls](https://reactflow.dev/learn/concepts/the-viewport) documents drag selection and viewing controls; [React Flow theming](https://reactflow.dev/learn/customization/theming) documents the selection tint variables and translucent defaults. [AntV X6](https://x6.antv.antgroup.com/en) is another diagram-editing engine with selection and other editor extensions; it is a candidate if the chosen route fails validation, rather than a selected replacement. These libraries do not establish arbitrary Mermaid-source round-trip fidelity.
+
 ## Visual alignment follow-up
 
 The user reported that the icons were too heavy and the overall styling did not match the current site. The reference is the current workspace styling in `docs/DESIGN.md` and the frame-animation/nine-patch HUDs. Browser inspection found the previous tool icons rendered at 24 px despite the shared button’s sizing intent. Scoped HUD rules now use 14 px icons with 1.5 stroke width (the stadium silhouette is 17×11 px), 28 px desktop buttons, 11 px control text, 40 px top bars, 6 px surface corners and the existing semantic translucent surface/blur treatment. Phone shape buttons retain a 32 px target. React Flow’s filled zoom/fit glyphs were replaced by the same outlined Lucide controls; their viewing behavior remains intact.
