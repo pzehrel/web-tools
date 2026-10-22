@@ -8,6 +8,17 @@ Run `pnpm prototype:mermaid` in the prototype worktree. Open `http://localhost:1
 
 The default fixture contains 11 graph objects, including three nested/group containers, and 12 connections. It includes a condition, cycle, self-loop, parallel connections, cross-group links, a group-to-group connection, and an ordinary comment. The browser really runs React Flow 12.12.0, elkjs 0.12.0 and Mermaid 12.2.0.
 
+## Visual alignment follow-up
+
+The user reported that the icons were too heavy and the overall styling did not match the current site. The reference is the current workspace styling in `docs/DESIGN.md` and the frame-animation/nine-patch HUDs. Browser inspection found the previous tool icons rendered at 24 px despite the shared button’s sizing intent. Scoped HUD rules now use 14 px icons with 1.5 stroke width (the stadium silhouette is 17×11 px), 28 px desktop buttons, 11 px control text, 40 px top bars, 6 px surface corners and the existing semantic translucent surface/blur treatment. Phone shape buttons retain a 32 px target. React Flow’s filled zoom/fit glyphs were replaced by the same outlined Lucide controls; their viewing behavior remains intact.
+
+Chromium checks confirmed the computed icon dimensions/stroke, functional zoom/fit, unchanged full-viewport canvas when opening code, and a phone toolbar within the 390 px viewport. Light/dark desktop, code-overlay and dark phone screenshots were inspected. Lint, typecheck and build passed with the same 21 lint warnings. The style revision remains subject to user review.
+
+- [Refined HUD: light desktop](evidence/hud-refined-desktop-light.png)
+- [Refined HUD: dark desktop](evidence/hud-refined-desktop-dark.png)
+- [Refined code overlay: dark desktop](evidence/hud-refined-code-dark.png)
+- [Refined HUD: dark phone width](evidence/hud-refined-mobile-dark.png)
+
 ## Full-screen HUD revision
 
 User feedback: “原型不太行，要全屏画布+hud的模式。” The prior A/B/C arrangements are rejected, rather than accepted as a baseline. The canvas now owns the viewport; document, view, history and shape controls float around its edges. Code and properties overlay the canvas without resizing it. The shared site header is hidden only while this prototype is mounted; the HUD retains return, import and theme actions.

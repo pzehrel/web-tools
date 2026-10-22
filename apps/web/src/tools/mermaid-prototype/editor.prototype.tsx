@@ -1,7 +1,7 @@
 import type { Connection, Edge, EdgeProps, Node, NodeChange, NodeProps } from '@xyflow/react'
 import type { Document, Graph, Item } from './document.prototype'
 import { Background, BaseEdge, Controls, EdgeLabelRenderer, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react'
-import { ArrowLeft, Braces, ChevronDown, Circle, Code2, Database, Diamond, FolderPlus, Hand, HelpCircle, LayoutGrid, MousePointer2, Plus, Redo2, Settings2, Square, Trash2, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Braces, ChevronDown, Circle, Code2, Database, Diamond, FolderPlus, Hand, HelpCircle, LayoutGrid, Maximize, Minus, MousePointer2, Plus, Redo2, Settings2, Square, Trash2, Undo2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -750,7 +750,11 @@ function Editor() {
             }}
           >
             <Background color="var(--border)" />
-            <Controls showInteractive={false} />
+            <Controls showInteractive={false} showZoom={false} showFitView={false}>
+              <Button size="icon-sm" variant="ghost" aria-label="Zoom In" title="放大" onClick={() => { void flow.zoomIn() }}><Plus /></Button>
+              <Button size="icon-sm" variant="ghost" aria-label="Zoom Out" title="缩小" onClick={() => { void flow.zoomOut() }}><Minus /></Button>
+              <Button size="icon-sm" variant="ghost" aria-label="Fit View" title="适应画布" onClick={() => { void flow.fitView({ padding: 0.15 }) }}><Maximize /></Button>
+            </Controls>
           </ReactFlow>
           {!enabled && (
             <div className="canvas-lock">

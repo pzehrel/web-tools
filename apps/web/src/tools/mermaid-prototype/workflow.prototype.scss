@@ -7,9 +7,17 @@ body:has(.mermaid-prototype-hud) .site-header { visibility: hidden; }
   overflow: hidden;
   background: var(--background);
   color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.45;
 
   button, input, select, textarea { font: inherit; }
-  button { appearance: none; }
+  button { appearance: none; box-shadow: none; }
+  .hud-surface button[data-slot='button'] { height: 28px; min-height: 28px; gap: 5px; padding: 3px 7px; border-radius: 4px; font-size: 11px; font-weight: 400; }
+  .hud-surface button[data-size^='icon'] { width: 28px; padding: 0; }
+  .hud-surface button[data-variant='ghost'] { color: var(--muted-foreground); background: transparent; }
+  .hud-surface button[data-variant='ghost']:hover { color: var(--foreground); background: var(--accent); }
+  .hud-surface .lucide, .react-flow__controls .lucide { width: 14px; height: 14px; stroke-width: 1.5; }
+
   h2 { font-size: 13px; font-weight: 600; }
   p { font-size: 12px; line-height: 1.65; }
   select, input:not([type=file]), textarea { background: var(--background); color: var(--foreground); border: 1px solid var(--input); border-radius: 5px; padding: 7px 9px; }
@@ -24,39 +32,40 @@ body:has(.mermaid-prototype-hud) .site-header { visibility: hidden; }
   .canvas-lock p { max-width: 500px; overflow-wrap: anywhere; }
   .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0 8px; }
   .action-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .hud-surface { position: absolute; z-index: 20; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--border); border-radius: 9px; }
-  .hud-title { top: 16px; left: 16px; height: 48px; padding: 6px 8px; display: flex; align-items: center; gap: 10px; }
-  .hud-title > a { padding: 7px; border-radius: 4px; }
+  .hud-surface { position: absolute; z-index: 20; background: color-mix(in srgb, var(--popover) 60%, transparent); color: var(--popover-foreground); border: 1px solid var(--border); border-radius: 6px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .hud-title { top: 12px; left: 12px; height: 40px; padding: 5px 7px; display: flex; align-items: center; gap: 10px; }
+  .hud-title > a { display: grid; place-items: center; width: 28px; height: 28px; color: var(--muted-foreground); border-radius: 4px; }
   .hud-title > a:hover { background: var(--accent); }
-  .hud-title h1 { display: flex; align-items: baseline; gap: 12px; font-size: 14px; font-weight: 600; font-family: var(--font-mono); }
+  .hud-title h1 { display: flex; align-items: baseline; gap: 10px; font-size: 13px; font-weight: 500; font-family: var(--font-mono); }
   .hud-title h1 span { color: var(--muted-foreground); font-family: var(--font-sans); font-size: 12px; font-weight: 400; }
   .hud-prototype-label { border: 1px solid var(--border); border-radius: 4px; color: var(--muted-foreground); padding: 2px 5px; font-size: 10px; }
-  .hud-view-actions { top: 16px; right: 16px; height: 48px; padding: 6px; display: flex; align-items: center; gap: 4px; }
+  .hud-view-actions { top: 12px; right: 12px; height: 40px; padding: 5px; display: flex; align-items: center; gap: 4px; }
   .hud-view-tabs { display: flex; align-items: center; gap: 2px; }
-  .hud-view-tabs button { font-size: 12px; }
-  .hud-divider { display: block; width: 1px; height: 22px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
-  .hud-mode { position: absolute; top: 80px; left: 23px; z-index: 10; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted-foreground); pointer-events: none; }
+  .hud-view-tabs button { font-size: 11px; }
+  .hud-divider { display: block; width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+  .hud-mode { position: absolute; top: 66px; left: 19px; z-index: 10; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted-foreground); pointer-events: none; }
   .hud-mode strong { color: var(--foreground); font-weight: 400; }
   .hud-mode-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
   .mode-checking, .mode-code { background: var(--warning); }
   .mode-error { background: var(--destructive); }
-  .hud-selection { left: 16px; top: 108px; display: flex; align-items: center; gap: 4px; padding: 3px 5px 3px 12px; font-size: 11px; }
-  .hud-history { bottom: 18px; left: 64px; padding: 3px; display: flex; gap: 2px; }
-  .hud-tools { left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 3px; padding: 5px; }
-  .hud-tools button[aria-label='添加圆角'] svg { border-radius: 4px; }
+  .hud-selection { left: 12px; top: 92px; display: flex; align-items: center; gap: 4px; padding: 3px 5px 3px 12px; font-size: 11px; }
+  .hud-history { bottom: 12px; left: 116px; padding: 3px; display: flex; gap: 2px; }
+  .hud-tools { left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 3px; padding: 5px; }
+  .hud-tools button[aria-label='添加圆角'] svg rect { rx: 5px; }
+  .hud-tools button[aria-label='添加起止'] svg { width: 17px; height: 11px; }
   .hud-canvas-hint { position: absolute; z-index: 10; right: 20px; bottom: 19px; display: flex; flex-direction: column; gap: 4px; align-items: end; color: var(--muted-foreground); font-size: 10px; pointer-events: none; }
   .hud-canvas-hint span { opacity: .7; }
-  .hud-notice { top: 78px; left: 50%; transform: translateX(-50%); display: flex; align-items: start; gap: 12px; padding: 9px 12px; max-width: 480px; font-size: 11px; line-height: 1.6; }
+  .hud-notice { top: 64px; left: 50%; transform: translateX(-50%); display: flex; align-items: start; gap: 12px; padding: 9px 12px; max-width: 480px; font-size: 11px; line-height: 1.6; }
   .hud-notice > button { border: none; background: transparent; padding: 2px; color: var(--muted-foreground); }
   .hud-more-shapes { display: none; padding: 0; }
-  .hud-more-shapes summary { list-style: none; width: 36px; height: 36px; display: grid; place-items: center; cursor: pointer; border-radius: 5px; }
+  .hud-more-shapes summary { list-style: none; width: 28px; height: 28px; display: grid; place-items: center; cursor: pointer; border-radius: 5px; }
   .hud-more-shapes summary::-webkit-details-marker { display: none; }
   .hud-more-shapes summary:hover { background: var(--accent); }
-  .shape-popover { bottom: 58px; right: 8px; width: 120px; display: flex; flex-direction: column; align-items: stretch; padding: 5px; }
+  .shape-popover { bottom: 48px; right: 8px; width: 120px; display: flex; flex-direction: column; align-items: stretch; padding: 5px; }
   .shape-popover button { justify-content: start; }
-  .hud-panel { top: 76px; right: 16px; bottom: 82px; width: 380px; display: flex; flex-direction: column; overflow: hidden; }
-  .hud-panel-header { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 7px 9px 7px 16px; font-size: 12px; }
-  .hud-panel-content { padding: 14px; overflow: auto; min-height: 0; flex: 1; }
+  .hud-panel { top: 64px; right: 12px; bottom: 64px; width: 380px; display: flex; flex-direction: column; overflow: hidden; }
+  .hud-panel-header { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 5px 7px 5px 12px; font-size: 11px; }
+  .hud-panel-content { padding: 10px; overflow: auto; min-height: 0; flex: 1; }
   .hud-panel-code .hud-panel-content { display: flex; }
   .code-section { min-width: 0; display: flex; flex-direction: column; flex: 1; }
   .code-section > .section-heading { justify-content: end; padding: 0 0 8px; }
@@ -66,7 +75,7 @@ body:has(.mermaid-prototype-hud) .site-header { visibility: hidden; }
   .property-fields { display: flex; flex-direction: column; gap: 18px; }
   .property-fields label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
   .property-selection { padding-bottom: 12px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); overflow-wrap: anywhere; }
-  .hud-panel-file { left: 16px; right: auto; bottom: auto; width: 285px; }
+  .hud-panel-file { left: 12px; right: auto; bottom: auto; width: 285px; }
   .hud-file-actions { display: flex; flex-direction: column; align-items: stretch; gap: 7px; }
   .hud-file-actions > p { font-weight: 500; padding: 0 5px 10px; }
   .hud-file-actions > p span { display: block; color: var(--muted-foreground); font-weight: 400; font-size: 11px; }
@@ -97,7 +106,7 @@ body:has(.mermaid-prototype-hud) .site-header { visibility: hidden; }
   .shape-diamond { border: none; background: transparent; }
   .diamond-outline { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--node-fill, var(--secondary)); stroke: var(--node-stroke, var(--primary)); pointer-events: none; }
   .shape-diamond .node-label { position: relative; z-index: 1; padding: 10px 24px; }
-  .shape-cylinder { border-radius: 50% / 14%; border-top-width: 4px; border-bottom-width: 3px; }
+  .shape-cylinder { border-radius: 50% / 14%; }
   .shape-group { background: color-mix(in oklch, var(--muted) 38%, transparent); border-color: var(--border); border-style: dashed; }
   .shape-group .node-label { height: 36px; text-align: left; padding: 9px 12px; font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); }
   .react-flow__handle { width: 10px; height: 10px; background: var(--primary); border: 2px solid var(--card); }
@@ -118,7 +127,10 @@ body:has(.mermaid-prototype-hud) .site-header { visibility: hidden; }
   .guide-section ol { padding-left: 20px; font-size: 12px; line-height: 1.9; color: var(--muted-foreground); margin: 9px 0; }
   .current-step { color: var(--foreground); font-weight: 500; }
 
-  .react-flow__controls { left: 16px; bottom: 18px; margin: 0; border-radius: 6px; overflow: hidden; }
+  .react-flow__controls { left: 12px; bottom: 12px; display: flex; flex-direction: row; gap: 2px; margin: 0; padding: 3px; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--popover) 60%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .react-flow__controls > button { width: 28px; height: 28px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); }
+  .react-flow__controls > button:hover { background: var(--accent); color: var(--foreground); }
+
 
   @media (width <= 1150px) {
     .hud-canvas-hint { bottom: 78px; }
@@ -138,11 +150,11 @@ body:has(.mermaid-prototype-hud) .site-header { visibility: hidden; }
     .hud-tools { bottom: 10px; gap: 1px; padding: 4px; }
     .hud-tools .additional-shape { display: none; }
     .hud-more-shapes { display: block; }
-    .hud-tools button, .hud-more-shapes summary { width: 34px; height: 34px; }
+    .hud-tools button[data-slot='button'], .hud-more-shapes summary { width: 32px; height: 32px; }
     .hud-tools .hud-divider { margin: 0 2px; height: 18px; }
     .hud-history { bottom: 66px; left: 10px; }
     .react-flow__controls { left: auto; right: 10px; bottom: 66px; flex-direction: row; }
-    .react-flow__controls-button { border-bottom: none; border-right: 1px solid var(--border); }
+
     .hud-canvas-hint { bottom: 72px; right: 115px; font-size: 9px; }
     .hud-canvas-hint > span { display: none; }
     .hud-canvas-hint { max-width: 140px; text-align: center; }
