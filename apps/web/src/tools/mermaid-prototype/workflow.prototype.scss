@@ -1,38 +1,91 @@
-.mermaid-prototype {
-  max-width: 1600px;
-  margin: auto;
-  padding: 18px 22px 90px;
+body:has(.mermaid-prototype-hud) .site-header { visibility: hidden; }
+
+.mermaid-prototype-hud {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  background: var(--background);
   color: var(--foreground);
 
   button, input, select, textarea { font: inherit; }
-  h1 { font-size: 20px; font-weight: 600; }
-  h1 span { font-size: 11px; padding: 3px 7px; color: var(--info-muted-foreground); background: var(--info-muted); }
+  button { appearance: none; }
   h2 { font-size: 13px; font-weight: 600; }
   p { font-size: 12px; line-height: 1.65; }
-  select, input:not([type=file]), textarea { background: var(--background); color: var(--foreground); border: 1px solid var(--input); border-radius: 4px; padding: 5px 7px; }
-  select:focus-visible, input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  select, input:not([type=file]), textarea { background: var(--background); color: var(--foreground); border: 1px solid var(--input); border-radius: 5px; padding: 7px 9px; }
+  select:focus-visible, input:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   button:disabled, select:disabled, input:disabled { opacity: .5; }
-  .prototype-heading { display: flex; justify-content: space-between; align-items: start; gap: 15px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-  .prototype-heading p { margin: 6px 0 0; color: var(--muted-foreground); }
-  .prototype-heading a { font-size: 12px; color: var(--primary); white-space: nowrap; }
-  .session-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; }
-  .document-state { display: flex; flex-wrap: wrap; gap: 12px 24px; background: var(--muted); padding: 10px 12px; font-size: 11px; color: var(--muted-foreground); }
-  .document-state strong { color: var(--foreground); font-weight: 500; margin-left: 5px; }
-  .notice { padding: 8px 0; min-height: 32px; margin: 0; color: var(--info); }
-  .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0 8px; }
-  .action-row, .view-tabs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .editor-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 8px 0 12px; }
-  .editor-actions label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-  .editor-actions select { max-width: 180px; font-size: 12px; }
-  .canvas-section, .code-section { min-width: 0; }
-  .canvas-stage { height: min(62vh, 680px); min-height: 390px; position: relative; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; background: var(--card); }
+  .canvas-section { position: absolute; inset: 0; }
+  .canvas-section > .section-heading, .canvas-footnote { display: none; }
+  .canvas-stage { width: 100%; height: 100%; position: relative; overflow: hidden; background: var(--card); }
   .canvas-layer { position: absolute; inset: 0; }
   .hidden { visibility: hidden; pointer-events: none; }
-  .canvas-footnote { margin: 4px 0; color: var(--muted-foreground); font-size: 10px; }
-  .canvas-lock { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; background: var(--card); padding: 25px; text-align: center; }
+  .canvas-lock { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; background: color-mix(in oklch, var(--card) 94%, transparent); padding: 100px 25px; text-align: center; }
   .canvas-lock p { max-width: 500px; overflow-wrap: anywhere; }
+  .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0 8px; }
+  .action-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .hud-surface { position: absolute; z-index: 20; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--border); border-radius: 9px; }
+  .hud-title { top: 16px; left: 16px; height: 48px; padding: 6px 8px; display: flex; align-items: center; gap: 10px; }
+  .hud-title > a { padding: 7px; border-radius: 4px; }
+  .hud-title > a:hover { background: var(--accent); }
+  .hud-title h1 { display: flex; align-items: baseline; gap: 12px; font-size: 14px; font-weight: 600; font-family: var(--font-mono); }
+  .hud-title h1 span { color: var(--muted-foreground); font-family: var(--font-sans); font-size: 12px; font-weight: 400; }
+  .hud-prototype-label { border: 1px solid var(--border); border-radius: 4px; color: var(--muted-foreground); padding: 2px 5px; font-size: 10px; }
+  .hud-view-actions { top: 16px; right: 16px; height: 48px; padding: 6px; display: flex; align-items: center; gap: 4px; }
+  .hud-view-tabs { display: flex; align-items: center; gap: 2px; }
+  .hud-view-tabs button { font-size: 12px; }
+  .hud-divider { display: block; width: 1px; height: 22px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+  .hud-mode { position: absolute; top: 80px; left: 23px; z-index: 10; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted-foreground); pointer-events: none; }
+  .hud-mode strong { color: var(--foreground); font-weight: 400; }
+  .hud-mode-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+  .mode-checking, .mode-code { background: var(--warning); }
+  .mode-error { background: var(--destructive); }
+  .hud-selection { left: 16px; top: 108px; display: flex; align-items: center; gap: 4px; padding: 3px 5px 3px 12px; font-size: 11px; }
+  .hud-history { bottom: 18px; left: 64px; padding: 3px; display: flex; gap: 2px; }
+  .hud-tools { left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 3px; padding: 5px; }
+  .hud-tools button[aria-label='添加圆角'] svg { border-radius: 4px; }
+  .hud-canvas-hint { position: absolute; z-index: 10; right: 20px; bottom: 19px; display: flex; flex-direction: column; gap: 4px; align-items: end; color: var(--muted-foreground); font-size: 10px; pointer-events: none; }
+  .hud-canvas-hint span { opacity: .7; }
+  .hud-notice { top: 78px; left: 50%; transform: translateX(-50%); display: flex; align-items: start; gap: 12px; padding: 9px 12px; max-width: 480px; font-size: 11px; line-height: 1.6; }
+  .hud-notice > button { border: none; background: transparent; padding: 2px; color: var(--muted-foreground); }
+  .hud-more-shapes { display: none; padding: 0; }
+  .hud-more-shapes summary { list-style: none; width: 36px; height: 36px; display: grid; place-items: center; cursor: pointer; border-radius: 5px; }
+  .hud-more-shapes summary::-webkit-details-marker { display: none; }
+  .hud-more-shapes summary:hover { background: var(--accent); }
+  .shape-popover { bottom: 58px; right: 8px; width: 120px; display: flex; flex-direction: column; align-items: stretch; padding: 5px; }
+  .shape-popover button { justify-content: start; }
+  .hud-panel { top: 76px; right: 16px; bottom: 82px; width: 380px; display: flex; flex-direction: column; overflow: hidden; }
+  .hud-panel-header { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 7px 9px 7px 16px; font-size: 12px; }
+  .hud-panel-content { padding: 14px; overflow: auto; min-height: 0; flex: 1; }
+  .hud-panel-code .hud-panel-content { display: flex; }
+  .code-section { min-width: 0; display: flex; flex-direction: column; flex: 1; }
+  .code-section > .section-heading { justify-content: end; padding: 0 0 8px; }
+  .code-section > .section-heading h2 { display: none; }
+  .code-section textarea { resize: none; flex: 1; min-height: 120px; }
+  .hud-panel-properties { width: 290px; }
+  .property-fields { display: flex; flex-direction: column; gap: 18px; }
+  .property-fields label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
+  .property-selection { padding-bottom: 12px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); overflow-wrap: anywhere; }
+  .hud-panel-file { left: 16px; right: auto; bottom: auto; width: 285px; }
+  .hud-file-actions { display: flex; flex-direction: column; align-items: stretch; gap: 7px; }
+  .hud-file-actions > p { font-weight: 500; padding: 0 5px 10px; }
+  .hud-file-actions > p span { display: block; color: var(--muted-foreground); font-weight: 400; font-size: 11px; }
+  .hud-file-actions > button { justify-content: start; }
+  .import-code { position: relative; display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 5px; cursor: pointer; }
+  .import-code input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+  .hud-theme-row { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 6px; font-size: 12px; color: var(--muted-foreground); }
+  .hud-theme-row .theme-toggle { display: flex; gap: 4px; }
+  .hud-explanation { margin-top: 16px; color: var(--muted-foreground); }
+  .hud-issue-link { display: block; margin-top: 14px; font-size: 12px; color: var(--primary); }
+  .prototype-boundaries { border-top: 1px solid var(--border); margin-top: 18px; padding: 12px 0; }
+  .prototype-backdrop { position: fixed; inset: 0; background: color-mix(in oklch, var(--foreground) 25%, transparent); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 20px; }
+  .prototype-dialog { background: var(--popover); color: var(--popover-foreground); max-width: 460px; width: 100%; padding: 24px; border: 1px solid var(--border); border-radius: 8px; }
+  .prototype-dialog h2 { font-size: 16px; }
+  .prototype-dialog p { margin: 14px 0 20px; }
+  .prototype-dialog .action-row { justify-content: end; }
   .react-flow { --xy-background-color: var(--card); --xy-edge-stroke: var(--muted-foreground); --xy-connectionline-stroke: var(--primary); --xy-controls-button-background-color: var(--background); --xy-controls-button-background-color-hover: var(--secondary); --xy-controls-button-color: var(--foreground); --xy-controls-button-border-color: var(--border); --xy-selection-background-color: var(--secondary); --xy-selection-border: 1px solid var(--primary); }
   .react-flow__controls { box-shadow: none; border: 1px solid var(--border); }
+  .react-flow__attribution { background: var(--card); color: var(--muted-foreground); }
   .react-flow__node { border: none; border-radius: 0; padding: 0; background: transparent; }
   .react-flow__node.selected .diagram-item { outline: 2px solid var(--ring); outline-offset: 4px; }
   .diagram-item { position: relative; width: 100%; height: 100%; color: var(--node-color, var(--foreground)); background: var(--node-fill, var(--secondary)); border: 1px solid var(--node-stroke, var(--primary)); border-radius: 3px; }
@@ -49,7 +102,7 @@
   .shape-group .node-label { height: 36px; text-align: left; padding: 9px 12px; font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); }
   .react-flow__handle { width: 10px; height: 10px; background: var(--primary); border: 2px solid var(--card); }
   .edge-label { position: absolute; font-size: 11px; color: var(--foreground); background: var(--card); padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
-  .mermaid-stage { height: 100%; overflow: auto; padding: 14px; }
+  .mermaid-stage { height: 100%; overflow: auto; padding: 110px 70px 100px; }
   .preview-caption { margin: 0 0 12px; color: var(--info); }
   .svg-output { min-height: 200px; display: flex; align-items: center; justify-content: center; }
   .svg-output svg { width: 100%; min-width: 500px; height: auto; max-height: none; }
@@ -64,39 +117,38 @@
   .scenario-tabs button[aria-selected=true] { color: var(--primary); border-bottom-color: var(--primary); }
   .guide-section ol { padding-left: 20px; font-size: 12px; line-height: 1.9; color: var(--muted-foreground); margin: 9px 0; }
   .current-step { color: var(--foreground); font-weight: 500; }
-  .below-canvas { display: grid; grid-template-columns: .8fr 1.2fr; gap: 24px; margin-top: 12px; }
-  .layout-a textarea { min-height: 210px; }
-  .split-view { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, .9fr); gap: 20px; }
-  .layout-b .code-section { border-left: 1px solid var(--border); padding-left: 20px; }
-  .layout-b textarea { min-height: 440px; }
-  .layout-b .guide-section { border-top: 1px solid var(--border); margin-top: 10px; }
-  .layout-c { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 22px; }
-  .guided-column { border-right: 1px solid var(--border); padding-right: 18px; }
-  .guided-column .editor-actions { flex-direction: column; align-items: start; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 16px; }
-  .layout-c textarea { min-height: 190px; }
-  .prototype-boundaries { border-top: 1px solid var(--border); margin-top: 18px; padding: 12px 0; }
-  .import-code { position: relative; font-size: 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
-  .import-code input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
-  .prototype-switcher { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 5px 8px; background: var(--popover); border: 1px solid var(--primary); border-radius: 7px; z-index: 30; font-size: 12px; }
-  .prototype-switcher span { min-width: 120px; text-align: center; }
-  .prototype-backdrop { position: fixed; inset: 0; background: color-mix(in oklch, var(--foreground) 25%, transparent); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 20px; }
-  .prototype-dialog { background: var(--popover); color: var(--popover-foreground); max-width: 460px; width: 100%; padding: 24px; border: 1px solid var(--border); border-radius: 6px; }
-  .prototype-dialog h2 { font-size: 16px; }
-  .prototype-dialog p { margin: 14px 0 20px; }
-  .prototype-dialog .action-row { justify-content: end; }
 
-  @media (width <= 820px) {
-    padding: 12px 10px 80px;
-    .prototype-heading { display: block; }
-    .prototype-heading a { display: inline-block; margin-top: 8px; }
-    h1 { font-size: 17px; }
-    .below-canvas, .split-view, .layout-c { display: flex; flex-direction: column; gap: 14px; }
-    .layout-b .code-section, .guided-column { border: none; padding: 0; }
-    .guided-column .editor-actions { flex-direction: row; margin-top: 5px; padding-top: 8px; }
-    .canvas-stage { height: 54vh; min-height: 370px; }
-    .document-state { gap: 8px 16px; }
-    .session-toolbar { gap: 6px; }
-    .code-section textarea { min-height: 220px; }
-    .prototype-switcher { bottom: 10px; }
+  .react-flow__controls { left: 16px; bottom: 18px; margin: 0; border-radius: 6px; overflow: hidden; }
+
+  @media (width <= 1150px) {
+    .hud-canvas-hint { bottom: 78px; }
+    .hud-title h1 span { display: none; }
+  }
+
+  @media (width <= 700px) {
+    .hud-title { top: 10px; left: 10px; height: 40px; padding: 3px 5px; gap: 5px; }
+    .hud-title h1 { font-size: 12px; }
+    .hud-prototype-label { display: none; }
+    .hud-view-actions { top: 58px; left: 10px; right: auto; height: 40px; gap: 1px; padding: 3px; }
+    .hud-view-actions button { padding-left: 8px; padding-right: 8px; font-size: 11px; }
+    .hud-view-actions .hud-divider { margin: 0 2px; }
+    .hud-mode { top: 21px; left: auto; right: 12px; font-size: 10px; gap: 5px; }
+    .hud-mode > span:last-child { display: none; }
+    .hud-selection { top: 109px; left: 10px; }
+    .hud-tools { bottom: 10px; gap: 1px; padding: 4px; }
+    .hud-tools .additional-shape { display: none; }
+    .hud-more-shapes { display: block; }
+    .hud-tools button, .hud-more-shapes summary { width: 34px; height: 34px; }
+    .hud-tools .hud-divider { margin: 0 2px; height: 18px; }
+    .hud-history { bottom: 66px; left: 10px; }
+    .react-flow__controls { left: auto; right: 10px; bottom: 66px; flex-direction: row; }
+    .react-flow__controls-button { border-bottom: none; border-right: 1px solid var(--border); }
+    .hud-canvas-hint { bottom: 72px; right: 115px; font-size: 9px; }
+    .hud-canvas-hint > span { display: none; }
+    .hud-canvas-hint { max-width: 140px; text-align: center; }
+    .hud-notice { top: auto; bottom: 112px; left: 10px; right: 10px; max-width: none; transform: none; }
+    .hud-panel { top: 108px; right: 10px; left: 10px; bottom: 112px; width: auto; }
+    .hud-panel-file { top: 58px; left: 10px; right: auto; bottom: auto; width: 285px; }
+    .mermaid-stage { padding: 115px 12px 120px; }
   }
 }

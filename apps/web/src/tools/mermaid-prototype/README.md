@@ -4,15 +4,17 @@ Throwaway, memory-only UI prototype for [Mermaid editor: validate canvas and cod
 
 ## Run
 
-From this prototype worktree, run `pnpm prototype:mermaid` and open [the prototype](http://localhost:1421/tools/mermaid-prototype?variant=B). Dependencies are recorded in the worktree lockfile; run `pnpm install --frozen-lockfile` first in a fresh checkout.
+From this prototype worktree, run `pnpm prototype:mermaid` and open [the prototype](http://localhost:1421/tools/mermaid-prototype). Dependencies are recorded in the worktree lockfile; run `pnpm install --frozen-lockfile` first in a fresh checkout.
 
-Three structural alternatives share one in-memory document: `?variant=A` prioritizes the canvas with code below; `?variant=B` places canvas and code side by side; `?variant=C` puts guided scenarios and commands beside the workspace. The bottom switcher appears in development. Switching variants preserves the document; reloading, importing, choosing another example, or resetting a scenario starts a new session and discards the previous in-memory edits.
+The current revision follows the user’s feedback: a full-viewport canvas with floating HUD controls. The top-left document menu contains import, reset and theme actions; top-right controls switch canvas/preview or open the code, properties and guided-scenario overlays. Selection/pan, shapes and layout float at the bottom; undo/redo and view controls sit separately. Opening an overlay preserves canvas dimensions and the viewing transform. Escape closes it.
+
+The previous A/B/C arrangements were rejected. Their screenshots remain historical evidence; the current route ignores the old `variant` parameter. Closing overlays and switching canvas/preview preserve the document. Reloading, importing, choosing another example, or resetting a scenario starts a new session and discards the previous in-memory edits.
 
 ## Try
 
-1. Follow the four guided scenarios: normal round-trip, errors and unsupported syntax, grouping and comments, layout and conversion failure.
-2. Drag a node, connect the small handles, double-click a label, or use the selected object's text field. Shift/Meta/Control allows multiple selection. Use the explicit group selector to change membership.
-3. Compare the editing canvas with the Mermaid preview, then use undo/redo. Inspect the original source and the document-state panel to see what changed.
+1. Open the help HUD to follow the four guided scenarios: normal round-trip, errors and unsupported syntax, grouping and comments, layout and conversion failure.
+2. Drag a node, connect the small handles, double-click a label, or use the selected object's text field. Shift/Meta/Control allows multiple selection. Open the properties HUD and use the explicit group selector to change membership.
+3. Compare the editing canvas with the Mermaid preview, then use undo/redo. Inspect the original source in the code HUD and diagnostic state in the help HUD to see what changed.
 
 The group-dissolution dialog is a proposal awaiting user feedback: it offers removing edges attached to the dissolved group while retaining members, or cancelling. It never guesses which child should inherit an endpoint. Comment association uses a prototype heuristic; preserving comment text is checked, but universal comment ownership is not established.
 

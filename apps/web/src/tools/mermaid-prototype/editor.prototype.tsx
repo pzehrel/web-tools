@@ -1,8 +1,9 @@
 import type { Connection, Edge, EdgeProps, Node, NodeChange, NodeProps } from '@xyflow/react'
 import type { Document, Graph, Item } from './document.prototype'
 import { Background, BaseEdge, Controls, EdgeLabelRenderer, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react'
+import { ArrowLeft, Braces, ChevronDown, Circle, Code2, Database, Diamond, FolderPlus, Hand, HelpCircle, LayoutGrid, MousePointer2, Plus, Redo2, Settings2, Square, Trash2, Undo2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { compatibleLayout, descendants, emptyDocument, removeItems, sameMeaning, sample, writeGraph } from './document.prototype'
 import { arrange, readCode, renderCode } from './engines.prototype'
@@ -12,47 +13,6 @@ import './workflow.prototype.scss'
 type ProtoNode = Node<{ item: Item, edit: (id: string, label: string) => void, vertical: boolean }>
 interface Pending { title: string, detail: string, accept: string, action: () => void }
 interface History { past: Document[], future: Document[], group: string, at: number }
-interface ViewParts { canvas: React.ReactNode, code: React.ReactNode, actions: React.ReactNode, guide: React.ReactNode }
-
-function VariantA(p: ViewParts) {
-  return (
-    <div className="layout-a">
-      <div className="commands">{p.actions}</div>
-      {p.canvas}
-      <div className="below-canvas">
-        {p.guide}
-        {p.code}
-      </div>
-    </div>
-  )
-}
-function VariantB(p: ViewParts) {
-  return (
-    <div className="layout-b">
-      <div className="commands">{p.actions}</div>
-      <div className="split-view">
-        {p.canvas}
-        {p.code}
-      </div>
-      {p.guide}
-    </div>
-  )
-}
-function VariantC(p: ViewParts) {
-  return (
-    <div className="layout-c">
-      <div className="guided-column">
-        {p.guide}
-        {p.actions}
-      </div>
-      <div className="guided-work">
-        {p.canvas}
-        {p.code}
-      </div>
-    </div>
-  )
-}
-
 function DiagramNode({ data }: NodeProps<ProtoNode>) {
   const { item, edit, vertical } = data
 
@@ -88,7 +48,7 @@ function DiagramNode({ data }: NodeProps<ProtoNode>) {
               type="button"
               className="node-label"
               onDoubleClick={() => setEditing(true)}
-              title="双击编辑文字；也可使用下方属性栏"
+              title="双击编辑文字；也可展开属性 HUD"
             >
               {item.label}
             </button>
@@ -126,8 +86,6 @@ function DiagramEdge(props: EdgeProps) {
 const nodeTypes = { prototype: DiagramNode }
 const edgeTypes = { prototype: DiagramEdge }
 const clone = <T,>(value: T): T => structuredClone(value)
-const variants = ['A', 'B', 'C']
-const variantNames: Record<string, string> = { A: '画布优先', B: '代码并排', C: '引导工作台' }
 
 function Editor() {
   const [doc, setDoc] = useState(emptyDocument)
@@ -150,7 +108,7 @@ function Editor() {
 
   const [busy, setBusy] = useState(false)
 
-  const [notice, setNotice] = useState('原型内存会话：刷新和切换示例会清空修改；没有自动保存。')
+  const [notice, setNotice] = useState('')
 
   const [preview, setPreview] = useState({ code: '', svg: '', error: '' })
 
@@ -181,9 +139,15 @@ function Editor() {
   const sequenceRef = useRef(0)
   const injectFailureRef = useRef(false)
 
-  const [search, setSearch] = useSearchParams()
-
-  const variant = variants.includes(search.get('variant') ?? '') ? search.get('variant')! : 'A'
+  const [panel, setPanel] = useState<'code' | 'properties' | 'guide' | 'file' | null>(null)
+  const [tool, setTool] = useState<'select' | 'pan'>('select')
+  useEffect(() => {
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [])
 
   const flow = useReactFlow<ProtoNode>()
 
@@ -578,35 +542,23 @@ function Editor() {
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
-      const el = event.target as HTMLElement
-
-      const input = el.closest('input,textarea,select,[contenteditable]')
-
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z' && !composition) {
         event.preventDefault()
 
         moveHistory(event.shiftKey)
       }
 
-      if (input)
-        return
-
-      if (event.key === 'Escape')
+      if (event.key === 'Escape' && !composition) {
         setPending(null)
-
-      if (!el.closest('.react-flow') && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
-        const i = variants.indexOf(variant)
-
-        const next = variants[(i + (event.key === 'ArrowRight' ? 1 : 2)) % 3]
-
-        setSearch({ variant: next }, { replace: true })
+        setPanel(null)
+        injectFailureRef.current = false
       }
     }
 
     window.addEventListener('keydown', listener)
 
     return () => window.removeEventListener('keydown', listener)
-  }, [composition, moveHistory, setSearch, variant])
+  }, [composition, moveHistory])
 
   const item = doc.graph?.items.find(i => selected.includes(i.id))
 
@@ -679,86 +631,68 @@ function Editor() {
     setStep(old => Math.min(old + 1, 3))
   }
 
-  const actions = (
-    <section className="editor-actions" aria-label="画布工具">
-      <div className="action-row">
-        {[['square', '矩形'], ['round', '圆角'], ['diamond', '条件'], ['stadium', '起止'], ['circle', '圆形'], ['cylinder', '数据库'], ['group', '分组']].map(([shape, label]) => (
-          <Button size="sm" variant="secondary" key={shape} disabled={!enabled} onClick={() => addItem(shape)}>
-            ＋
-            {label}
-          </Button>
-        ))}
-      </div>
-      <div className="action-row">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!enabled}
-          onClick={() => {
-            void autoLayout()
-          }}
-        >
-          自动布局
-        </Button>
-        <Button size="sm" variant="outline" disabled={!enabled || (!selected.length && !wireId)} onClick={() => remove()}>删除 / 解除分组</Button>
-        {item?.shape === 'group' && <Button size="sm" variant="outline" disabled={!enabled} onClick={() => remove(true)}>删除全部内容</Button>}
-      </div>
-      <div className="action-row">
+  const properties = (
+    <section className="property-fields" aria-label="对象属性">
+      <p className="property-selection">{item ? `${item.label} · ${item.id}` : wire ? '已选中连线' : '选择节点或连线，编辑它的文字与分组。'}</p>
+      {item && (
         <label>
-          方向
-          <select
-            aria-label="全图方向"
-            value={doc.graph?.direction ?? 'LR'}
+          显示文字
+          <input
+            aria-label="选中对象文字"
+            key={item.id + item.label}
+            defaultValue={item.label}
             disabled={!enabled}
-            onChange={(e) => {
-              if (doc.graph)
-                mutate({ ...doc.graph, direction: e.target.value }, '方向已更新；画布位置待主动布局')
+            onBlur={e => editLabel(item.id, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter')
+                e.currentTarget.blur()
             }}
-          >
-            {['LR', 'RL', 'TB', 'BT'].map(d => <option key={d}>{d}</option>)}
-          </select>
+          />
         </label>
+      )}
+      {wire && (
+        <label>
+          连线文字
+          <input
+            aria-label="选中连线文字"
+            key={wire.id + wire.label}
+            defaultValue={wire.label}
+            disabled={!enabled}
+            onBlur={(e) => {
+              if (doc.graph && wire.label !== e.target.value)
+                mutate({ ...doc.graph, wires: doc.graph.wires.map(w => w.id === wire.id ? { ...w, label: e.target.value } : w) }, '已修改连线标签')
+            }}
+          />
+        </label>
+      )}
+      <label>
+        分组归属
         <select aria-label="移入分组" value="" disabled={!enabled || !selected.length} onChange={e => regroup(e.target.value === '$root' ? '' : e.target.value)}>
           <option value="">移入 / 移出分组…</option>
           <option value="$root">移到最外层</option>
           {doc.graph?.items.filter(i => i.shape === 'group').map(i => <option key={i.id} value={i.id}>{i.label}</option>)}
         </select>
-      </div>
-      {item && (
-        <div className="action-row">
-          <label>
-            文字
-            <input
-              aria-label="选中对象文字"
-              key={item.id + item.label}
-              defaultValue={item.label}
-              disabled={!enabled}
-              onBlur={e => editLabel(item.id, e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter')
-                  e.currentTarget.blur()
-              }}
-            />
-          </label>
-        </div>
-      )}
-      {wire && (
-        <div className="action-row">
-          <label>
-            连线文字
-            <input
-              aria-label="选中连线文字"
-              key={wire.id + wire.label}
-              defaultValue={wire.label}
-              disabled={!enabled}
-              onBlur={(e) => {
-                if (doc.graph && wire.label !== e.target.value)
-                  mutate({ ...doc.graph, wires: doc.graph.wires.map(w => w.id === wire.id ? { ...w, label: e.target.value } : w) }, '已修改连线标签')
-              }}
-            />
-          </label>
-        </div>
-      )}
+      </label>
+      <label>
+        全图方向
+        <select
+          aria-label="全图方向"
+          value={doc.graph?.direction ?? 'LR'}
+          disabled={!enabled}
+          onChange={(e) => {
+            if (doc.graph)
+              mutate({ ...doc.graph, direction: e.target.value }, '方向已更新；画布位置待主动布局')
+          }}
+        >
+          {['LR', 'RL', 'TB', 'BT'].map(d => <option key={d}>{d}</option>)}
+        </select>
+      </label>
+      <p className="property-hint">方向更新代码与 Mermaid 预览；点击自动布局才会重排画布。</p>
+      <Button size="sm" variant="outline" disabled={!enabled || (!selected.length && !wireId)} onClick={() => remove()}>
+        <Trash2 />
+        删除 / 解除分组
+      </Button>
+      {item?.shape === 'group' && <Button size="sm" variant="outline" disabled={!enabled} onClick={() => remove(true)}>删除分组及全部内容</Button>}
     </section>
   )
 
@@ -767,8 +701,8 @@ function Editor() {
       <div className="section-heading">
         <h2>图形工作区</h2>
         <div className="view-tabs">
-          <Button size="sm" variant={view === 'canvas' ? 'secondary' : 'ghost'} onClick={() => setView('canvas')}>编辑画布</Button>
-          <Button size="sm" variant={view === 'preview' ? 'secondary' : 'ghost'} onClick={() => setView('preview')}>Mermaid 预览</Button>
+          <Button size="sm" variant={view === 'canvas' ? 'secondary' : 'ghost'} aria-pressed={view === 'canvas'} onClick={() => setView('canvas')}>编辑画布</Button>
+          <Button size="sm" variant={view === 'preview' ? 'secondary' : 'ghost'} aria-pressed={view === 'preview'} onClick={() => setView('preview')}>Mermaid 预览</Button>
         </div>
       </div>
       <div className="canvas-stage">
@@ -800,14 +734,14 @@ function Editor() {
               }
             }}
             deleteKeyCode={null}
-            nodesDraggable={enabled}
-            nodesConnectable={enabled}
+            nodesDraggable={enabled && tool === 'select'}
+            nodesConnectable={enabled && tool === 'select'}
             elementsSelectable={enabled}
             fitView
             minZoom={0.08}
             maxZoom={4}
-            selectionOnDrag
-            panOnDrag={[1, 2]}
+            selectionOnDrag={tool === 'select'}
+            panOnDrag={tool === 'pan' ? true : [1, 2]}
             multiSelectionKeyCode={['Meta', 'Control', 'Shift']}
             onInit={(instance) => {
               window.setTimeout(() => {
@@ -917,100 +851,169 @@ function Editor() {
     </section>
   )
 
-  const parts = { canvas, code, actions, guide: guidePanel }
+  const togglePanel = (next: typeof panel) => setPanel(old => old === next ? null : next)
+  const shapeButtons = [
+    { shape: 'square', label: '矩形', icon: Square },
+    { shape: 'round', label: '圆角', icon: Square, extra: true },
+    { shape: 'diamond', label: '条件', icon: Diamond },
+    { shape: 'stadium', label: '起止', icon: Circle, extra: true },
+    { shape: 'circle', label: '圆形', icon: Circle, extra: true },
+    { shape: 'cylinder', label: '数据库', icon: Database },
+    { shape: 'group', label: '分组', icon: FolderPlus },
+  ]
+  const addShape = (shape: string) => {
+    setTool('select')
+    setView('canvas')
+    addItem(shape)
+  }
 
   return (
-    <main className={`mermaid-prototype variant-${variant}`}>
-      <header className="prototype-heading">
+    <main className="mermaid-prototype mermaid-prototype-hud">
+      {canvas}
+      <header className="hud-surface hud-title">
+        <a href="/" aria-label="返回工具首页" title="返回工具首页"><ArrowLeft size={16} /></a>
         <div>
           <h1>
-            Mermaid 交互编辑器
-            <span>交互原型</span>
+            Mermaid
+            <span>未命名流程图</span>
           </h1>
-          <p>验证：画布修改、代码输入、手动布局和统一撤销能否组成清楚的工作流。所有修改仅在内存中。</p>
         </div>
-        <a href="https://github.com/pzehrel/web-tools/issues/21" target="_blank" rel="noreferrer">查看待验证问题</a>
+        <span className="hud-prototype-label">原型</span>
+        <Button size="icon-sm" variant={panel === 'file' ? 'secondary' : 'ghost'} aria-label="文档菜单" title="文档菜单" aria-expanded={panel === 'file'} onClick={() => togglePanel('file')}><ChevronDown /></Button>
       </header>
-      <div className="session-toolbar">
-        <Button size="sm" variant="outline" disabled={!historyRef.current.past.length || busy} onClick={() => moveHistory(false)}>
-          撤销
-          {historyRef.current.past.length}
-        </Button>
-        <Button size="sm" variant="outline" disabled={!historyRef.current.future.length || busy} onClick={() => moveHistory(true)}>
-          重做
-          {historyRef.current.future.length}
-        </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => commit({ ...currentRef.current, code: currentRef.current.original, mode: 'checking', normalized: false }, '已恢复导入原稿，可以撤销')}>恢复导入原稿</Button>
-        <label className="import-code">
-          导入 .mmd
-          <input
-            type="file"
-            accept=".mmd,.mermaid,.txt"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
 
-              if (file)
-                void file.text().then(reset)
-
-              e.target.value = ''
-            }}
-          />
-        </label>
-        <Button size="sm" variant="ghost" onClick={() => reset('sequenceDiagram\n  用户->>服务: 请求\n  服务-->>用户: 响应\n')}>时序图示例</Button>
+      <div className="hud-surface hud-view-actions" role="toolbar" aria-label="视图与面板">
+        <div className="hud-view-tabs">
+          <Button size="sm" variant={view === 'canvas' ? 'secondary' : 'ghost'} aria-pressed={view === 'canvas'} onClick={() => setView('canvas')}>编辑画布</Button>
+          <Button size="sm" variant={view === 'preview' ? 'secondary' : 'ghost'} aria-pressed={view === 'preview'} onClick={() => setView('preview')}>Mermaid 预览</Button>
+        </div>
+        <span className="hud-divider" />
+        <Button size="sm" variant={panel === 'code' ? 'secondary' : 'ghost'} aria-label="代码面板" aria-expanded={panel === 'code'} onClick={() => togglePanel('code')}>
+          <Code2 />
+          <span>代码</span>
+        </Button>
+        <Button size="icon-sm" variant={panel === 'properties' ? 'secondary' : 'ghost'} aria-label="属性面板" title="属性" aria-expanded={panel === 'properties'} onClick={() => togglePanel('properties')}><Settings2 /></Button>
+        <Button size="icon-sm" variant={panel === 'guide' ? 'secondary' : 'ghost'} aria-label="体验引导" title="体验引导" aria-expanded={panel === 'guide'} onClick={() => togglePanel('guide')}><HelpCircle /></Button>
       </div>
-      <div className="document-state" aria-label="文档状态">
+
+      <div className="hud-mode" aria-label="文档状态">
+        <span className={`hud-mode-dot mode-${doc.mode}`} />
+        <strong>{modes[doc.mode]}</strong>
         <span>
-          模式
-          <strong>{modes[doc.mode]}</strong>
-        </span>
-        <span>
-          对象
-          <strong>{doc.graph?.items.length ?? '—'}</strong>
-        </span>
-        <span>
-          连线
-          <strong>{doc.graph?.wires.length ?? '—'}</strong>
-        </span>
-        <span>
-          普通注释
-          <strong>{doc.graph?.notes.length ?? '保留在代码'}</strong>
-        </span>
-        <span>
-          手动布局
-          <strong>
-            {Object.keys(doc.layout).length}
-            {' '}
-            个位置
-          </strong>
-        </span>
-        <span>
-          最近 ELK
-          <strong>
-            {Math.round(elapsed)}
-            {' '}
-            ms
-          </strong>
+          {doc.graph?.items.length ?? '—'}
+          {' '}
+          个对象 ·
+          {' '}
+          {doc.graph?.wires.length ?? '—'}
+          {' '}
+          条连线
         </span>
       </div>
-      <p className="notice" role="status">{notice}</p>
-      {variant === 'A' ? <VariantA {...parts} /> : variant === 'B' ? <VariantB {...parts} /> : <VariantC {...parts} />}
-      <details className="prototype-boundaries">
-        <summary>原型范围与诊断状态</summary>
-        <p>React Flow 12.12.0、ELK 0.12.0、Mermaid 12.2.0 实际运行。流程图导入使用锁定版本的内部 FlowDB，不代表稳定公共 AST；未知语法需进一步验证，不承诺完整保真。分组解除后的端点线删除为待讨论实验方案。复制代码可用；没有图片导出或工程保存。</p>
-        <pre>{JSON.stringify({ mode: doc.mode, normalized: doc.normalized, layout: doc.layout, graph: doc.graph, past: historyRef.current.past.length, future: historyRef.current.future.length }, null, 2)}</pre>
-      </details>
-      {import.meta.env.DEV && (
-        <nav className="prototype-switcher" aria-label="原型布局切换">
-          <Button size="sm" variant="ghost" onClick={() => setSearch({ variant: variants[(variants.indexOf(variant) + 2) % 3] }, { replace: true })}>←</Button>
-          <span>
-            {variant}
-            {' '}
-            ·
-            {' '}
-            {variantNames[variant]}
-          </span>
-          <Button size="sm" variant="ghost" onClick={() => setSearch({ variant: variants[(variants.indexOf(variant) + 1) % 3] }, { replace: true })}>→</Button>
-        </nav>
+      {(selected.length > 0 || wireId) && (
+        <div className="hud-surface hud-selection">
+          <span>{wireId ? '已选中连线' : `已选中 ${selected.length} 个对象`}</span>
+          <Button size="sm" variant="ghost" onClick={() => setPanel('properties')}>属性</Button>
+          <Button size="icon-sm" variant="ghost" aria-label="删除选中对象" title="删除选中对象" disabled={!enabled} onClick={() => remove()}><Trash2 /></Button>
+        </div>
+      )}
+
+      <div className="hud-surface hud-history" role="toolbar" aria-label="文档历史">
+        <Button size="icon-sm" variant="ghost" aria-label={`撤销 ${historyRef.current.past.length}`} title="撤销 ⌘Z" disabled={!historyRef.current.past.length || busy} onClick={() => moveHistory(false)}><Undo2 /></Button>
+        <Button size="icon-sm" variant="ghost" aria-label={`重做 ${historyRef.current.future.length}`} title="重做 ⇧⌘Z" disabled={!historyRef.current.future.length || busy} onClick={() => moveHistory(true)}><Redo2 /></Button>
+      </div>
+
+      <nav className="hud-surface hud-tools" aria-label="画布工具">
+        <Button size="icon" variant={tool === 'select' ? 'secondary' : 'ghost'} aria-label="选择工具" aria-pressed={tool === 'select'} title="选择与多选" onClick={() => setTool('select')}><MousePointer2 /></Button>
+        <Button size="icon" variant={tool === 'pan' ? 'secondary' : 'ghost'} aria-label="平移工具" aria-pressed={tool === 'pan'} title="拖动画布" onClick={() => setTool('pan')}><Hand /></Button>
+        <span className="hud-divider" />
+        {shapeButtons.map(({ shape, label, icon: Icon, extra }) => <Button key={shape} className={extra ? 'additional-shape' : ''} size="icon" variant="ghost" aria-label={`添加${label}`} title={`添加${label}`} disabled={!enabled || view !== 'canvas'} onClick={() => addShape(shape)}><Icon /></Button>)}
+        <details className="hud-more-shapes">
+          <summary aria-label="更多节点形状" title="更多节点形状"><Plus size={18} /></summary>
+          <div className="hud-surface shape-popover">
+            {shapeButtons.filter(i => i.extra).map(({ shape, label, icon: Icon }) => (
+              <Button size="sm" key={shape} variant="ghost" disabled={!enabled} onClick={() => addShape(shape)}>
+                <Icon />
+                {label}
+              </Button>
+            ))}
+          </div>
+        </details>
+        <span className="hud-divider" />
+        <Button size="icon" variant="ghost" aria-label="自动布局" title="自动布局（可撤销）" disabled={!enabled} onClick={() => { void autoLayout() }}><LayoutGrid /></Button>
+      </nav>
+      <div className="hud-canvas-hint">
+        {tool === 'pan' ? '拖动平移画布' : '双击改文字 · 拖圆点连线 · Shift 多选'}
+        <span>内存原型 · 刷新不保留</span>
+      </div>
+      {notice && (
+        <div className="hud-surface hud-notice" role="status">
+          <span>{notice}</span>
+          <button type="button" aria-label="关闭操作提示" onClick={() => setNotice('')}><X size={13} /></button>
+        </div>
+      )}
+
+      {panel && (
+        <aside className={`hud-surface hud-panel hud-panel-${panel}`} aria-label={panel === 'code' ? '代码浮层' : panel === 'properties' ? '属性浮层' : panel === 'guide' ? '体验引导浮层' : '文档菜单浮层'}>
+          <header className="hud-panel-header">
+            <strong>{panel === 'code' ? 'Mermaid 代码' : panel === 'properties' ? '属性' : panel === 'guide' ? '体验与说明' : '文档'}</strong>
+            <Button size="icon-sm" variant="ghost" aria-label="关闭浮层" onClick={() => setPanel(null)}><X /></Button>
+          </header>
+          <div className="hud-panel-content">
+            {panel === 'code' && code}
+            {panel === 'properties' && properties}
+            {panel === 'guide' && (
+              <>
+                {guidePanel}
+                <p className="hud-explanation">全屏画布上的工具均为悬浮 HUD，代码与属性按需展开；打开面板不会重排画布。</p>
+                <p className="hud-explanation">本轮验证交互与状态。ELK 仅计算层级位置，画布使用简化曲线，没有避障。完整 Mermaid 保真、实际触屏和原生 Safari 尚未验收。</p>
+                <details className="prototype-boundaries">
+                  <summary>诊断状态与原型限制</summary>
+                  <p>内部 FlowDB 适配仅用于锁定版本的原型。解除有端点连线分组的行为仍待确认；没有图片导出或工程保存。</p>
+                  <p>
+                    最近 ELK：
+                    {Math.round(elapsed)}
+                    {' '}
+                    ms ·
+                    {doc.graph?.notes.length ?? '—'}
+                    {' '}
+                    条普通注释
+                  </p>
+                  <pre>{JSON.stringify({ mode: doc.mode, normalized: doc.normalized, layout: doc.layout, graph: doc.graph, past: historyRef.current.past.length, future: historyRef.current.future.length }, null, 2)}</pre>
+                </details>
+                <a className="hud-issue-link" href="https://github.com/pzehrel/web-tools/issues/21" target="_blank" rel="noreferrer">查看原型决策票</a>
+              </>
+            )}
+            {panel === 'file' && (
+              <section className="hud-file-actions">
+                <p>
+                  未命名流程图
+                  <span>仅在本次内存会话中编辑</span>
+                </p>
+                <label className="import-code">
+                  <Braces size={16} />
+                  导入 Mermaid 文件
+                  <input
+                    type="file"
+                    accept=".mmd,.mermaid,.txt"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file)
+                        void file.text().then(reset)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => commit({ ...currentRef.current, code: currentRef.current.original, mode: 'checking', normalized: false }, '已恢复导入原稿，可以撤销')}>恢复导入原稿</Button>
+                <Button size="sm" variant="ghost" onClick={() => reset()}>重置复杂图示例</Button>
+                <Button size="sm" variant="ghost" onClick={() => reset('sequenceDiagram\n  用户->>服务: 请求\n  服务-->>用户: 响应\n')}>载入时序图示例</Button>
+                <div className="hud-theme-row">
+                  <span>界面主题</span>
+                  <ThemeToggle />
+                </div>
+              </section>
+            )}
+          </div>
+        </aside>
       )}
       {pending && (
         <div className="prototype-backdrop">

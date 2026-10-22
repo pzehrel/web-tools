@@ -1,14 +1,29 @@
 # Mermaid 工作流原型观察记录
 
-日期：2026-10-22（Asia/Shanghai）。决策：[Mermaid 编辑器：用复杂图原型验证画布与代码工作流](https://github.com/pzehrel/web-tools/issues/21)。源码分支：`prototype/mermaid-workflow`。**尚待用户结论，决策票保持开放。**
+日期：2026-10-22（Asia/Shanghai）。决策：[Mermaid 编辑器：用复杂图原型验证画布与代码工作流](https://github.com/pzehrel/web-tools/issues/21)。源码分支：`prototype/mermaid-workflow`。**用户已否定首批结构方案，要求全屏画布与 HUD。修改后的产物仍待用户验收，决策票保持开放。**
 
 ## 产物
 
-在原型工作树运行 `pnpm prototype:mermaid`，打开 `http://localhost:1421/tools/mermaid-prototype?variant=B`；A、B、C 是共用同一份内存文档的结构方案。[运行说明与限制](../../apps/web/src/tools/mermaid-prototype/README.zh-CN.md)。
+在原型工作树运行 `pnpm prototype:mermaid`，打开 `http://localhost:1421/tools/mermaid-prototype`。当前版本采用全屏画布、悬浮 HUD 和按需展开的代码/属性/帮助浮层。旧的 `variant=A/B/C` 链接现在也显示此版本。[运行说明与限制](../../apps/web/src/tools/mermaid-prototype/README.zh-CN.md)。
 
 默认样例有 11 个图对象，包含三个具有嵌套关系的分组容器，以及 12 条连线。它覆盖条件、回路、自连边、平行边、跨组连线、分组之间的连线和普通注释。浏览器实际运行 React Flow 12.12.0、elkjs 0.12.0 与 Mermaid 12.2.0。
 
-## 浏览器观察
+## 全屏 HUD 修改版
+
+用户反馈：“原型不太行，要全屏画布+hud的模式。”之前的 A/B/C 结构方案被否定，不能视为已接受的基线。画布现在占满视口；文档、视图、历史与形状控件悬浮在边缘。代码与属性覆盖在画布上，不改变画布尺寸。仅在本原型挂载期间隐藏共享站点页头；HUD 保留返回、导入与主题操作。
+
+修改版的浏览器操作确认：
+
+- Chromium 1440×900：画布矩形精确为 `(0, 0, 1440, 900)`。展开代码 HUD 后，该矩形和数据库节点的屏幕矩形均未变化；Escape 关闭 HUD。
+- 拖动数据库节点保留源文本；一次撤销恢复节点精确的原样式/几何信息。平移工具改变视图变换，撤销/重做计数不变。通过 HUD 添加矩形、再在属性中改名，均会更新图。
+- 亮/暗主题控件和代码复制入口仍可使用。预览中显示 Mermaid SVG，并可同时展开代码浮层。
+- Playwright WebKit 390×844：画布矩形精确为 `(0, 0, 390, 844)`。代码 HUD 为 `(10, 108, 370, 624)`，文档不溢出，展开时视图变换不变；11 个图对象均保留。
+- 错误代码保留在 HUD 内，保留的预览标注来自上一次有效源码，撤销恢复原源码和可视化编辑模式。
+- WebKit 的原生按钮外观最初遮盖了暗色 HUD 配色；局部 `appearance: none` 已修正。启动时有一条开发警告称 React Flow 样式未加载；加载后的画布面板计算值符合要求的 `z-index: 1`，图形正常渲染。此观察不能证明原生 Safari/设备已经验收。
+
+`pnpm lint`、`pnpm typecheck` 和 `pnpm build` 通过。Lint 有 21 条警告：20 条来自原有代码，1 条针对原型插入 Mermaid SVG。本次修改没有新增原型测试文件。
+
+## 初版浏览器观察
 
 以下是通过脚本操作的人工浏览器检查，不是新增的自动测试文件或正式验收套件。
 
@@ -31,6 +46,18 @@
 
 ## 截图
 
+当前 HUD 修改版：
+
+- [全屏画布：桌面浅色](evidence/hud-desktop-light.png)
+- [代码浮层：桌面浅色](evidence/hud-code-desktop-light.png)
+- [全屏画布：桌面暗色](evidence/hud-desktop-dark.png)
+- [预览与代码：桌面暗色](evidence/hud-preview-desktop-dark.png)
+- [全屏画布：手机宽度 WebKit 暗色](evidence/hud-webkit-mobile-dark.png)
+- [代码浮层：手机宽度 WebKit 暗色](evidence/hud-code-webkit-mobile-dark.png)
+
+已否定的初版结构，作为历史保留：
+
+
 - [A：画布优先](evidence/variant-A-desktop-light.png)
 - [B：代码并排](evidence/variant-B-desktop-light.png)
 - [C：引导工作台](evidence/variant-C-desktop-light.png)
@@ -46,6 +73,6 @@
 - 原生 Safari 独立应用、真实 iOS/触屏、物理输入法组合、完整键盘可访问性/焦点约束、持续大图操作，以及穷举的竞争/安全检查仍未验证。
 - 没有实现工程持久化或图片导出。刷新或加载其他样例会丢弃内存修改；仅切换视图会保留这些修改。
 
-人工评审需要选择工作区结构，判断代码与画布的区分是否清楚，并反馈分组端点连线删除和注释关联方案。发现问题时可能需要重新评估技术路线；原型不授权静默削减已接受范围。
+人工评审需要判断修改后的全屏 HUD 结构、代码与画布的区分是否清楚，并反馈分组端点连线删除和注释关联方案。发现问题时可能需要重新评估技术路线；原型不授权静默削减已接受范围。
 
 [English](prototype-observations.md)
