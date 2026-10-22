@@ -1,0 +1,102 @@
+.mermaid-prototype {
+  max-width: 1600px;
+  margin: auto;
+  padding: 18px 22px 90px;
+  color: var(--foreground);
+
+  button, input, select, textarea { font: inherit; }
+  h1 { font-size: 20px; font-weight: 600; }
+  h1 span { font-size: 11px; padding: 3px 7px; color: var(--info-muted-foreground); background: var(--info-muted); }
+  h2 { font-size: 13px; font-weight: 600; }
+  p { font-size: 12px; line-height: 1.65; }
+  select, input:not([type=file]), textarea { background: var(--background); color: var(--foreground); border: 1px solid var(--input); border-radius: 4px; padding: 5px 7px; }
+  select:focus-visible, input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  button:disabled, select:disabled, input:disabled { opacity: .5; }
+  .prototype-heading { display: flex; justify-content: space-between; align-items: start; gap: 15px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+  .prototype-heading p { margin: 6px 0 0; color: var(--muted-foreground); }
+  .prototype-heading a { font-size: 12px; color: var(--primary); white-space: nowrap; }
+  .session-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; }
+  .document-state { display: flex; flex-wrap: wrap; gap: 12px 24px; background: var(--muted); padding: 10px 12px; font-size: 11px; color: var(--muted-foreground); }
+  .document-state strong { color: var(--foreground); font-weight: 500; margin-left: 5px; }
+  .notice { padding: 8px 0; min-height: 32px; margin: 0; color: var(--info); }
+  .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0 8px; }
+  .action-row, .view-tabs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .editor-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 8px 0 12px; }
+  .editor-actions label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .editor-actions select { max-width: 180px; font-size: 12px; }
+  .canvas-section, .code-section { min-width: 0; }
+  .canvas-stage { height: min(62vh, 680px); min-height: 390px; position: relative; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; background: var(--card); }
+  .canvas-layer { position: absolute; inset: 0; }
+  .hidden { visibility: hidden; pointer-events: none; }
+  .canvas-footnote { margin: 4px 0; color: var(--muted-foreground); font-size: 10px; }
+  .canvas-lock { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; background: var(--card); padding: 25px; text-align: center; }
+  .canvas-lock p { max-width: 500px; overflow-wrap: anywhere; }
+  .react-flow { --xy-background-color: var(--card); --xy-edge-stroke: var(--muted-foreground); --xy-connectionline-stroke: var(--primary); --xy-controls-button-background-color: var(--background); --xy-controls-button-background-color-hover: var(--secondary); --xy-controls-button-color: var(--foreground); --xy-controls-button-border-color: var(--border); --xy-selection-background-color: var(--secondary); --xy-selection-border: 1px solid var(--primary); }
+  .react-flow__controls { box-shadow: none; border: 1px solid var(--border); }
+  .react-flow__node { border: none; border-radius: 0; padding: 0; background: transparent; }
+  .react-flow__node.selected .diagram-item { outline: 2px solid var(--ring); outline-offset: 4px; }
+  .diagram-item { position: relative; width: 100%; height: 100%; color: var(--node-color, var(--foreground)); background: var(--node-fill, var(--secondary)); border: 1px solid var(--node-stroke, var(--primary)); border-radius: 3px; }
+  .node-label { width: 100%; height: 100%; display: block; border: none; background: transparent; color: inherit; font-size: 13px; font-weight: 500; text-align: center; padding: 8px; white-space: pre-wrap; cursor: inherit; }
+  .diagram-item input { width: 100%; height: 100%; position: relative; z-index: 3; }
+  .shape-round { border-radius: 16px; }
+  .shape-stadium { border-radius: 36px; }
+  .shape-circle { border-radius: 50%; }
+  .shape-diamond { border: none; background: transparent; }
+  .diamond-outline { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--node-fill, var(--secondary)); stroke: var(--node-stroke, var(--primary)); pointer-events: none; }
+  .shape-diamond .node-label { position: relative; z-index: 1; padding: 10px 24px; }
+  .shape-cylinder { border-radius: 50% / 14%; border-top-width: 4px; border-bottom-width: 3px; }
+  .shape-group { background: color-mix(in oklch, var(--muted) 38%, transparent); border-color: var(--border); border-style: dashed; }
+  .shape-group .node-label { height: 36px; text-align: left; padding: 9px 12px; font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); }
+  .react-flow__handle { width: 10px; height: 10px; background: var(--primary); border: 2px solid var(--card); }
+  .edge-label { position: absolute; font-size: 11px; color: var(--foreground); background: var(--card); padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
+  .mermaid-stage { height: 100%; overflow: auto; padding: 14px; }
+  .preview-caption { margin: 0 0 12px; color: var(--info); }
+  .svg-output { min-height: 200px; display: flex; align-items: center; justify-content: center; }
+  .svg-output svg { width: 100%; min-width: 500px; height: auto; max-height: none; }
+  textarea { width: 100%; min-height: 320px; resize: vertical; font-family: var(--font-mono), monospace !important; font-size: 12px !important; line-height: 1.65; tab-size: 2; }
+  .code-state { margin: 6px 0; color: var(--muted-foreground); max-height: 130px; overflow: auto; overflow-wrap: anywhere; }
+  .invalid, .prototype-warning { color: var(--destructive); }
+  details { font-size: 11px; color: var(--muted-foreground); padding: 7px 0; }
+  pre { max-height: 300px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.6; }
+  .guide-section { padding: 5px 0; }
+  .scenario-tabs { display: flex; flex-wrap: wrap; gap: 3px; border-bottom: 1px solid var(--border); }
+  .scenario-tabs button { font-size: 11px; background: transparent; color: var(--muted-foreground); padding: 7px; border: none; border-bottom: 2px solid transparent; }
+  .scenario-tabs button[aria-selected=true] { color: var(--primary); border-bottom-color: var(--primary); }
+  .guide-section ol { padding-left: 20px; font-size: 12px; line-height: 1.9; color: var(--muted-foreground); margin: 9px 0; }
+  .current-step { color: var(--foreground); font-weight: 500; }
+  .below-canvas { display: grid; grid-template-columns: .8fr 1.2fr; gap: 24px; margin-top: 12px; }
+  .layout-a textarea { min-height: 210px; }
+  .split-view { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, .9fr); gap: 20px; }
+  .layout-b .code-section { border-left: 1px solid var(--border); padding-left: 20px; }
+  .layout-b textarea { min-height: 440px; }
+  .layout-b .guide-section { border-top: 1px solid var(--border); margin-top: 10px; }
+  .layout-c { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 22px; }
+  .guided-column { border-right: 1px solid var(--border); padding-right: 18px; }
+  .guided-column .editor-actions { flex-direction: column; align-items: start; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .layout-c textarea { min-height: 190px; }
+  .prototype-boundaries { border-top: 1px solid var(--border); margin-top: 18px; padding: 12px 0; }
+  .import-code { position: relative; font-size: 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+  .import-code input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+  .prototype-switcher { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 5px 8px; background: var(--popover); border: 1px solid var(--primary); border-radius: 7px; z-index: 30; font-size: 12px; }
+  .prototype-switcher span { min-width: 120px; text-align: center; }
+  .prototype-backdrop { position: fixed; inset: 0; background: color-mix(in oklch, var(--foreground) 25%, transparent); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 20px; }
+  .prototype-dialog { background: var(--popover); color: var(--popover-foreground); max-width: 460px; width: 100%; padding: 24px; border: 1px solid var(--border); border-radius: 6px; }
+  .prototype-dialog h2 { font-size: 16px; }
+  .prototype-dialog p { margin: 14px 0 20px; }
+  .prototype-dialog .action-row { justify-content: end; }
+
+  @media (width <= 820px) {
+    padding: 12px 10px 80px;
+    .prototype-heading { display: block; }
+    .prototype-heading a { display: inline-block; margin-top: 8px; }
+    h1 { font-size: 17px; }
+    .below-canvas, .split-view, .layout-c { display: flex; flex-direction: column; gap: 14px; }
+    .layout-b .code-section, .guided-column { border: none; padding: 0; }
+    .guided-column .editor-actions { flex-direction: row; margin-top: 5px; padding-top: 8px; }
+    .canvas-stage { height: 54vh; min-height: 370px; }
+    .document-state { gap: 8px 16px; }
+    .session-toolbar { gap: 6px; }
+    .code-section textarea { min-height: 220px; }
+    .prototype-switcher { bottom: 10px; }
+  }
+}
