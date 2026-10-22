@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, PointerEvent as ReactPointerEvent } from 'react'
-import type { Slice } from './nine-slice'
+import type { NineSliceResult, Slice } from './nine-slice'
 import type { NinePatchRecordMeta } from './records'
 import type { Side } from './slice-bounds'
 
@@ -336,8 +336,6 @@ export default function NinePatchTool() {
   const [autoSaveTick, setAutoSaveTick] = useState(0)
   const [recordError, setRecordError] = useState<string | null>(null)
   const requestRef = useRef(0)
-  const detectRequestRef = useRef(0)
-  const detectBusyRef = useRef(false)
   const exportRef = useRef<{ key: string, revision: number } | null>(null)
   const [exportState, setExportState] = useState<{ key: string, revision: number, busy: boolean, info: { ok: boolean, text: string } | null } | null>(null)
   const { records, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useNinePatchRecords()
@@ -370,8 +368,7 @@ export default function NinePatchTool() {
 
   const [cropAxes, setCropAxes] = useState<CropAxes>('both')
 
-  const [detecting, setDetecting] = useState(false)
-  const [detectInfo, setDetectInfo] = useState<{ tone: 'success' | 'warning' | 'error', text: string } | null>(null)
+  const [detectedSlice, setDetectedSlice] = useState<{ imageUrl: string, result: NineSliceResult } | null>(null)
 
   const exportKey = JSON.stringify([image?.url, slice, cropEnabled, cropKeep, cropAxes])
   const exportKeyRef = useRef(exportKey)
@@ -383,25 +380,15 @@ export default function NinePatchTool() {
   const exporting = exportState?.revision === exportRevisionRef.current && exportState.busy
   const exportInfo = exportState?.revision === exportRevisionRef.current ? exportState.info : null
 
-  const invalidateAnalysis = useCallback(() => {
-    detectRequestRef.current++
-    detectBusyRef.current = false
-    setDetecting(false)
-    setDetectInfo(null)
-  }, [])
-
   const invalidateImageWork = useCallback(() => {
-    invalidateAnalysis()
     exportRef.current = null
     setExportState(null)
-  }, [invalidateAnalysis])
+  }, [])
 
   const changeCropEnabled = (value: boolean) => {
-    invalidateAnalysis()
     setCropEnabled(value)
   }
   const changeCropAxes = (value: CropAxes) => {
-    invalidateAnalysis()
     setCropAxes(value)
   }
 
@@ -539,6 +526,7 @@ export default function NinePatchTool() {
 
   const applyImage = useCallback((img: SourceImage) => {
     invalidateImageWork()
+    setDetectedSlice(null)
     setPersistedImageKey(null)
     lastSavedMetaRef.current = null
     setRecordError(null)
@@ -723,6 +711,7 @@ export default function NinePatchTool() {
     setPersistedImageKey(null)
     setAutoSaveTick(0)
     invalidateImageWork()
+    setDetectedSlice(null)
     resetGestures()
     setRecordError(null)
     setRecordName('')
@@ -740,7 +729,6 @@ export default function NinePatchTool() {
 
   useEffect(() => () => {
     requestRef.current++
-    detectRequestRef.current++
     exportRef.current = null
     resetGestures()
     copyRequestRef.current++
@@ -769,15 +757,13 @@ export default function NinePatchTool() {
   const setSliceValue = useCallback((side: Side, value: number) => {
     if (!image)
       return
-    invalidateAnalysis()
     setSlice(prev => updateSlice(side, value, prev, image))
-  }, [image, invalidateAnalysis])
+  }, [image])
 
   const setImageWidthValue = useCallback((side: Side, value: number) => {
-    invalidateAnalysis()
     const v = Math.min(200, Math.max(0, Math.round(value) || 0))
     setImageWidth(prev => ({ ...prev, [side]: v }))
-  }, [invalidateAnalysis])
+  }, [])
 
   const scale = zoom
 
@@ -836,62 +822,57 @@ export default function NinePatchTool() {
   const resetSlice = useCallback(() => {
     if (!image)
       return
-    invalidateAnalysis()
     setSlice(defaultSlice(image.width, image.height))
-  }, [image, invalidateAnalysis])
+  }, [image])
 
-  const autoDetect = useCallback(async () => {
-    if (!image || detectBusyRef.current)
+  useEffect(() => {
+    if (!image)
       return
-    detectBusyRef.current = true
-    const request = ++detectRequestRef.current
-    setDetecting(true)
-    setDetectInfo(null)
-    try {
-      await new Promise(resolve => setTimeout(resolve, 50))
-      const pixels = await readImagePixels(image.blob)
-      if (request !== detectRequestRef.current)
-        return
-      const result = analyzeNineSlice(pixels)
-      const { crop, slice: s } = result
-      const next = normalizeSlice({
-        top: crop.y + s.top,
-        right: image.width - crop.x - crop.width + s.right,
-        bottom: image.height - crop.y - crop.height + s.bottom,
-        left: crop.x + s.left,
-      }, image)
-      setSlice(next)
-      setImageWidth({
-        top: Math.min(200, next.top),
-        right: Math.min(200, next.right),
-        bottom: Math.min(200, next.bottom),
-        left: Math.min(200, next.left),
-      })
-
-      setCropEnabled(true)
-      setCropAxes('both')
-      setCropKeep({
-        w: Math.min(Math.max(1, image.width - next.left - next.right), Math.max(1, result.compact.width - s.left - s.right)),
-        h: Math.min(Math.max(1, image.height - next.top - next.bottom), Math.max(1, result.compact.height - s.top - s.bottom)),
-      })
-      setDetectInfo(result.accepted
-        ? { tone: 'success', text: `已应用识别结果，检查了 ${result.candidatesEvaluated} 个候选${crop.width !== image.width || crop.height !== image.height ? '，已补偿透明留白' : ''}` }
-        : {
-            tone: 'warning',
-            text: '未找到满足误差阈值的最小切片，已应用最接近的候选，请手动微调切线',
-          })
-    }
-    catch (error) {
-      if (request === detectRequestRef.current)
-        setDetectInfo({ tone: 'error', text: error instanceof Error ? error.message : '识别失败' })
-    }
-    finally {
-      if (request === detectRequestRef.current) {
-        detectBusyRef.current = false
-        setDetecting(false)
+    let cancelled = false
+    void (async () => {
+      try {
+        const pixels = await readImagePixels(image.blob)
+        if (cancelled)
+          return
+        const result = analyzeNineSlice(pixels)
+        if (!cancelled)
+          setDetectedSlice(result.accepted && result.compact.width * result.compact.height < image.width * image.height ? { imageUrl: image.url, result } : null)
       }
+      catch {
+        if (!cancelled)
+          setDetectedSlice(null)
+      }
+    })()
+    return () => {
+      cancelled = true
     }
   }, [image])
+
+  const detectedResult = detectedSlice && image && detectedSlice.imageUrl === image.url ? detectedSlice.result : null
+  const autoDetect = useCallback(() => {
+    if (!image || !detectedResult)
+      return
+    const { crop, slice: s } = detectedResult
+    const next = normalizeSlice({
+      top: crop.y + s.top,
+      right: image.width - crop.x - crop.width + s.right,
+      bottom: image.height - crop.y - crop.height + s.bottom,
+      left: crop.x + s.left,
+    }, image)
+    setSlice(next)
+    setImageWidth({
+      top: Math.min(200, next.top),
+      right: Math.min(200, next.right),
+      bottom: Math.min(200, next.bottom),
+      left: Math.min(200, next.left),
+    })
+    setCropEnabled(true)
+    setCropAxes('both')
+    setCropKeep({
+      w: Math.min(Math.max(1, image.width - next.left - next.right), Math.max(1, detectedResult.compact.width - s.left - s.right)),
+      h: Math.min(Math.max(1, image.height - next.top - next.bottom), Math.max(1, detectedResult.compact.height - s.top - s.bottom)),
+    })
+  }, [detectedResult, image])
 
   const centerW = image ? Math.max(0, image.width - slice.left - slice.right) : 0
   const centerH = image ? Math.max(0, image.height - slice.top - slice.bottom) : 0
@@ -905,10 +886,9 @@ export default function NinePatchTool() {
   const cropActive = cropEnabled && image !== null && centerW > 0 && centerH > 0 && (keepW < centerW || keepH < centerH)
 
   const setCropKeepValue = useCallback((axis: 'w' | 'h', value: number) => {
-    invalidateAnalysis()
     const max = axis === 'w' ? centerW : centerH
     setCropKeep(prev => ({ ...prev, [axis]: Math.min(Math.max(1, max), Math.max(1, Math.round(value) || 1)) }))
-  }, [centerW, centerH, invalidateAnalysis])
+  }, [centerW, centerH])
 
   const downloadCropped = useCallback(async () => {
     if (!image || !cropActive || (exportRef.current?.key === exportKeyRef.current && exportRef.current.revision === exportRevisionRef.current))
@@ -1584,7 +1564,6 @@ export default function NinePatchTool() {
                             size="sm"
                             disabled={!image || ((cropAxes === 'y' || keepW === 1) && (cropAxes === 'x' || keepH === 1))}
                             onClick={() => {
-                              invalidateAnalysis()
                               setCropKeep({ w: 1, h: 1 })
                             }}
                           >
@@ -1603,17 +1582,7 @@ export default function NinePatchTool() {
                     )}
                   </div>
                 </section>
-                <div className="flex flex-col gap-2">
-                  <Button type="button" variant="outline" size="sm" className="w-full" aria-busy={detecting} disabled={!image || detecting} onClick={() => void autoDetect()}>
-                    {detecting ? '分析中…' : '分析最小切片'}
-                  </Button>
-                  {detectInfo && (
-                    <p role={detectInfo.tone === 'error' ? 'alert' : 'status'} className={cn('flex items-start gap-1.5 text-xs', detectInfo.tone === 'success' ? 'text-success' : detectInfo.tone === 'error' ? 'text-destructive' : 'text-warning-muted-foreground')}>
-                      {detectInfo.tone !== 'success' && <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />}
-                      {detectInfo.text}
-                    </p>
-                  )}
-                </div>
+                <Button type="button" variant="outline" size="sm" className="w-full" disabled={!detectedResult} onClick={autoDetect}>分析最小切片</Button>
                 <section className="nine-rendering" aria-label="渲染参数">
                   <h2>渲染</h2>
                   <div className="nine-advanced-body">
