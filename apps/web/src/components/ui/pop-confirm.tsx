@@ -115,7 +115,16 @@ function PopConfirm({
           <p id={titleId} className="text-sm font-black">{title}</p>
           {description && <p id={descriptionId} className="mt-1 text-xs text-muted-foreground">{description}</p>}
           <div className="mt-3 flex justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" autoFocus onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              autoFocus
+              onClick={() => {
+                triggerRef.current?.focus()
+                setOpen(false)
+              }}
+            >
               取消
             </Button>
             <Button

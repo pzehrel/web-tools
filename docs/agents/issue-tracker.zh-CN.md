@@ -38,4 +38,4 @@ GitHub issue 与 PR 共享编号空间。引用有歧义时，操作前先确认
 
 ## 既有本地规划记录
 
-现有 `.scratch/` 规格和任务保留为本地历史。本次 setup 不迁移、删除或关闭它们。用户要求迁移时，复用已确认范围和依赖，并记录对应 GitHub URL；本地与远端副本不视为两个任务。
+UI 重设计规格及十二张实施任务已于 2026-10-20 迁移到 [GitHub 父任务](https://github.com/pzehrel/web-tools/issues/1)。保留的规格与决策见[设计资料索引](../ui-redesign/design-decisions.zh-CN.md)。本地文档作为参考，不形成第二套任务跟踪；任务状态和依赖以 GitHub 为准。

@@ -38,4 +38,4 @@ GitHub issues and pull requests share a number space. If a reference is ambiguou
 
 ## Existing local planning records
 
-The existing `.scratch/` specs and tickets remain local history. This setup does not migrate, delete or close them. When migration is requested, reuse their approved scope and dependencies and record the corresponding GitHub URLs; do not treat local and remote copies as separate tasks.
+The UI-redesign specification and twelve implementation tickets were migrated to the [GitHub parent issue](https://github.com/pzehrel/web-tools/issues/1) on 2026-10-20. Retained specifications and decisions are indexed in the [design reference](../ui-redesign/design-decisions.md). Local documents are references, not a second task tracker; task state and dependencies remain in GitHub.

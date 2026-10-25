@@ -1,5 +1,5 @@
 import type { ChangeEvent, DragEvent, ReactNode, SetStateAction } from 'react'
-import type { UrlRecord } from './url-records'
+import type { UrlRecord, UrlTab, UrlWorkspaceSnapshot } from './url-records'
 import type { UrlNode, UrlTree } from './url-tree'
 import { Bookmark, Check, Copy, Download, GitBranch, Link2, LoaderCircle, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { DEMO_URL } from '../demos/url-qrcode'
 import { decodeQr, encodeQr } from './qr-codec'
 import { renderQrParameterPreview } from './qr-preview-image'
-import { generateCode } from './url-code'
+import { generateCode, resolveUrlVariables } from './url-code'
 import { useUrlRecords } from './url-records'
 import { addParam, baseOfTree, canMoveNode, deleteNode, findInsertedId, hasParams, insertParamBelow, looksLikeUrl, mergeBaseEdit, moveNode, paramNodes, parseUrl, serializeUrl, setNodeValue, suffixOfTree, updateNode, variableName } from './url-tree'
 import './url-workspace.scss'
@@ -411,18 +411,21 @@ function ParamTree({
 }
 
 /** 记录卡片里的二维码：按文本异步生成，空态占位 */
-function RecordQr({ text, size = 128 }: { text: string, size?: number }) {
-  const [url, setUrl] = useState('')
+function RecordQr({ text, size = 128 }: { text: string | null, size?: number }) {
+  const [result, setResult] = useState<{ text: string, url: string } | null>(null)
+  const url = text && result?.text === text ? result.url : null
   useEffect(() => {
     let cancelled = false
+    if (!text?.trim())
+      return
     encodeQr(text, 'L')
-      .then((u) => {
+      .then((url) => {
         if (!cancelled)
-          setUrl(u)
+          setResult({ text, url })
       })
       .catch(() => {
         if (!cancelled)
-          setUrl('')
+          setResult(null)
       })
     return () => {
       cancelled = true
@@ -516,19 +519,41 @@ function StaticUrlTree({ tree }: { tree: UrlTree }) {
   )
 }
 
-/** 记录预览：二维码 + 只读参数树（与参数板块同样样式）；非 URL 内容原样展示 */
-function RecordPreviewContent({ text }: { text: string }) {
-  const tree = useMemo(() => parseUrl(text), [text])
+/** 有变量时求实际内容；普通 URL 和文本保持原输入。 */
+function resolveTab(tab: UrlTab) {
+  if (!looksLikeUrl(tab.text))
+    return { names: [], missing: [], text: tab.text }
+  const resolved = resolveUrlVariables(parseUrl(tab.text), tab.variables)
+  return { ...resolved, text: resolved.names.length ? resolved.text : tab.text }
+}
+
+/** 整组预览逐项显示；未补齐变量时只展示模板。 */
+function RecordPreviewContent({ snapshot }: { snapshot: UrlWorkspaceSnapshot }) {
   return (
-    <div className="flex gap-3">
-      <RecordQr text={text} size={112} />
-      <div className="min-w-0 flex-1">
-        {!looksLikeUrl(text)
-          ? <p className="text-sm break-all text-popover-foreground">{text}</p>
-          : (
-              <StaticUrlTree tree={tree} />
-            )}
-      </div>
+    <div className="url-record-preview">
+      {snapshot.tabs.map((tab) => {
+        const resolved = resolveTab(tab)
+        const text = resolved.text ?? tab.text
+        return (
+          <section key={tab.id}>
+            <h3 className="mb-2 text-sm font-semibold">{tab.name}</h3>
+            <div className="flex gap-3">
+              <RecordQr text={resolved.text} size={96} />
+              <div className="min-w-0 flex-1">
+                {resolved.missing.length > 0 && (
+                  <p className="mb-1 text-xs text-warning-muted-foreground">
+                    请补齐变量：
+                    {resolved.missing.join('、')}
+                  </p>
+                )}
+                {looksLikeUrl(text)
+                  ? <StaticUrlTree tree={parseUrl(text)} />
+                  : <p className="text-sm break-all text-popover-foreground">{text || '暂无内容'}</p>}
+              </div>
+            </div>
+          </section>
+        )
+      })}
     </div>
   )
 }
@@ -551,7 +576,7 @@ function useIsMobile() {
  * - 桌面端：悬停时在光标上方弹出只读 tooltip（优先右上、放不下换左上、再放不下居中）
  * - 移动端：点击同样的内容（二维码 / 名称）打开弹窗展示预览
  */
-function RecordPreviewTip({ text, wide, onSelect, children }: { text: string, wide?: boolean, onSelect?: () => void, children: ReactNode }) {
+function RecordPreviewTip({ snapshot, wide, onSelect, children }: { snapshot: UrlWorkspaceSnapshot, wide?: boolean, onSelect?: () => void, children: ReactNode }) {
   const isMobile = useIsMobile()
   const [anchor, setAnchor] = useState<{ x: number, y: number } | null>(null)
   const [pos, setPos] = useState<{ left: number, top: number } | null>(null)
@@ -651,7 +676,7 @@ function RecordPreviewTip({ text, wide, onSelect, children }: { text: string, wi
             wide ? 'w-[min(40rem,calc(100vw-1rem))]' : 'max-w-[min(28rem,calc(100vw-1rem))]',
           )}
         >
-          <RecordPreviewContent text={text} />
+          <RecordPreviewContent snapshot={snapshot} />
         </div>
       )}
       {/* 移动端预览弹窗 */}
@@ -664,7 +689,7 @@ function RecordPreviewTip({ text, wide, onSelect, children }: { text: string, wi
       >
         {dialogOpen && (
           <div className="max-h-[70vh] overflow-auto">
-            <RecordPreviewContent text={text} />
+            <RecordPreviewContent snapshot={snapshot} />
             <div className="mt-4 flex justify-end gap-2">
               {onSelect && (
                 <Button
@@ -695,7 +720,69 @@ function defaultName(input: string): string {
 }
 
 function UrlParserTool() {
-  const [input, setInput] = useState('')
+  // 固定首屏内容，随机 id 与分享内容均在用户操作或挂载后产生。
+  const [snapshot, setSnapshot] = useState<UrlWorkspaceSnapshot>({
+    tabs: [{ id: 'initial', name: '链接 1', text: '', variables: {} }],
+    activeTabId: 'initial',
+  })
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [session, setSession] = useState(0)
+  const qrCache = useRef(new Map<string, { text: string, url: string }>()).current
+  const recordStore = useUrlRecords()
+  const activeTab = snapshot.tabs.find(tab => tab.id === snapshot.activeTabId) ?? snapshot.tabs[0]!
+  const restore = useCallback((next: UrlWorkspaceSnapshot) => {
+    qrCache.clear()
+    setSnapshot(structuredClone(next))
+    setSession(value => value + 1)
+  }, [qrCache])
+
+  // 挂载后读取分享链接，兼容旧二维码工具的 #text=...。
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const hash = window.location.hash.slice(1)
+      const text = hash.startsWith('text=') ? readHashParam('text') : readHashParam('url')
+      if (text)
+        setSnapshot(prev => ({ ...prev, tabs: [{ ...prev.tabs[0]!, text }] }))
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(writeHashParam, 400, 'url', activeTab.text)
+    return () => clearTimeout(timer)
+  }, [activeTab.text])
+
+  return (
+    <UrlWorkspace
+      key={`${session}:${activeTab.id}`}
+      snapshot={snapshot}
+      setSnapshot={setSnapshot}
+      restore={restore}
+      selectedId={selectedId}
+      setSelectedId={setSelectedId}
+      recordStore={recordStore}
+      qrCache={qrCache}
+    />
+  )
+}
+
+function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedId, recordStore, qrCache }: {
+  snapshot: UrlWorkspaceSnapshot
+  setSnapshot: (value: SetStateAction<UrlWorkspaceSnapshot>) => void
+  restore: (snapshot: UrlWorkspaceSnapshot) => void
+  selectedId: string | null
+  setSelectedId: (id: string | null) => void
+  recordStore: ReturnType<typeof useUrlRecords>
+  qrCache: Map<string, { text: string, url: string }>
+}) {
+  const activeTab = snapshot.tabs.find(tab => tab.id === snapshot.activeTabId) ?? snapshot.tabs[0]!
+  const input = activeTab.text
+  const setInput = useCallback((value: SetStateAction<string>) => {
+    setSnapshot(prev => ({
+      ...prev,
+      tabs: prev.tabs.map(tab => tab.id === activeTab.id ? { ...tab, text: typeof value === 'function' ? value(tab.text) : value } : tab),
+    }))
+  }, [activeTab.id, setSnapshot])
   const recognitionRequestRef = useRef(0)
   const contentRevisionRef = useRef(0)
   const mountedRef = useRef(true)
@@ -707,7 +794,7 @@ function UrlParserTool() {
     setRecognizing(false)
     setQrError('')
     setInput(value)
-  }, [])
+  }, [setInput])
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -723,22 +810,22 @@ function UrlParserTool() {
   // 内容是否是 URL / 路径：不是时（如识别出的纯文本二维码）参数树和代码预览保持默认态
   const isUrl = looksLikeUrl(input)
 
-  // 挂载时从 URL hash 读入初始内容（#url=...；兼容旧二维码工具分享的 #text=...）
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const hash = window.location.hash.slice(1)
-      const initial = hash.startsWith('text=') ? readHashParam('text') : readHashParam('url')
-      if (initial)
-        changeInput(initial)
-    }, 0)
-    return () => clearTimeout(timer)
-  }, [changeInput])
+  const [qrEnlarged, setQrEnlarged] = useState(false)
+  const resolved = useMemo(() => resolveTab(activeTab), [activeTab])
+  const qrText = resolved.text
+  const resolvedTree = useMemo(() => qrText === null ? null : parseUrl(qrText), [qrText])
 
-  // 内容变动 → 同步到 URL hash（防抖，replaceState 不产生历史记录）
-  useEffect(() => {
-    const timer = setTimeout(writeHashParam, 400, 'url', input)
-    return () => clearTimeout(timer)
-  }, [input])
+  const changeVariable = useCallback((name: string, value: string) => {
+    recognitionRequestRef.current += 1
+    contentRevisionRef.current += 1
+    setRecognizing(false)
+    setQrError('')
+    setQrEnlarged(false)
+    setSnapshot(prev => ({
+      ...prev,
+      tabs: prev.tabs.map(tab => tab.id === prev.activeTabId ? { ...tab, variables: { ...tab.variables, [name]: value } } : tab),
+    }))
+  }, [setSnapshot])
 
   const handleEdit = useCallback((id: string, patch: Partial<Pick<UrlNode, 'label' | 'value'>>) => {
     changeInput(prev => serializeUrl(updateNode(parseUrl(prev), id, patch)))
@@ -839,21 +926,28 @@ function UrlParserTool() {
 
   const [copied, setCopied] = useState(false)
 
-  // 输入内容的二维码预览（防抖 400ms）
+  // 命中当前 Tab 的内容缓存时立即展示，仅新内容防抖生成。
   const [qrResult, setQrResult] = useState<{ text: string, url: string } | null>(null)
-  const qr = qrResult?.text === input && input.trim() ? qrResult.url : null
+  const cachedQr = qrCache.get(activeTab.id)
+  const currentQr = cachedQr?.text === qrText ? cachedQr : qrResult
+  const qr = qrText?.trim() && currentQr?.text === qrText ? currentQr.url : null
   useEffect(() => {
+    if (qrCache.get(activeTab.id)?.text === qrText)
+      return
     let cancelled = false
     const timer = setTimeout(() => {
-      if (!input.trim()) {
+      if (!qrText?.trim()) {
         if (!cancelled)
           setQrResult(null)
         return
       }
-      encodeQr(input, 'L')
+      encodeQr(qrText, 'L')
         .then((dataUrl) => {
-          if (!cancelled)
-            setQrResult({ text: input, url: dataUrl })
+          if (!cancelled) {
+            const result = { text: qrText, url: dataUrl }
+            qrCache.set(activeTab.id, result)
+            setQrResult(result)
+          }
         })
         .catch(() => {
           if (!cancelled) {
@@ -866,7 +960,7 @@ function UrlParserTool() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [input])
+  }, [activeTab.id, qrCache, qrText])
 
   // —— 二维码图片识别（原二维码工具能力）：点击选择 / 拖拽 / 粘贴图片 ——
   const [dragging, setDragging] = useState(false)
@@ -938,14 +1032,14 @@ function UrlParserTool() {
   const [renderingQrPreview, setRenderingQrPreview] = useState(false)
   const exportBusyRef = useRef(false)
   const downloadQrPreview = useCallback(async () => {
-    if (!qr || !isUrl || exportBusyRef.current)
+    if (!qr || !isUrl || !resolvedTree || exportBusyRef.current)
       return
     exportBusyRef.current = true
     const revision = contentRevisionRef.current
     setRenderingQrPreview(true)
     setQrError('')
     try {
-      const blob = await renderQrParameterPreview(qr, tree)
+      const blob = await renderQrParameterPreview(qr, resolvedTree)
       if (revision !== contentRevisionRef.current)
         return
       const url = URL.createObjectURL(blob)
@@ -964,7 +1058,7 @@ function UrlParserTool() {
       if (mountedRef.current)
         setRenderingQrPreview(false)
     }
-  }, [isUrl, qr, tree])
+  }, [isUrl, qr, resolvedTree])
 
   const copy = useCallback(() => {
     void navigator.clipboard.writeText(input).then(() => {
@@ -986,49 +1080,110 @@ function UrlParserTool() {
   const codeGen = useMemo(() => generateCode(tree), [tree])
   // 是否声明了 $$变量：有变量才展示代码预览（右侧）
   const hasVars = useMemo(() => codeGen.tokens.some(t => t.kind === 'var'), [codeGen])
+  const variableDeclaration = useMemo(() => {
+    if (!codeGen.code.endsWith('(variables)'))
+      return ''
+    const values = Object.fromEntries(resolved.names.map(name => [name, Object.hasOwn(activeTab.variables, name) ? activeTab.variables[name] : '']))
+    return `const variables = JSON.parse(${JSON.stringify(JSON.stringify(values))});`
+  }, [activeTab.variables, codeGen.code, resolved.names])
   const [copiedCode, setCopiedCode] = useState(false)
   const copyCode = useCallback(() => {
-    void navigator.clipboard.writeText(codeGen.code).then(() => {
+    const revision = contentRevisionRef.current
+    const code = variableDeclaration ? `${variableDeclaration}\n${codeGen.code}` : codeGen.code
+    void navigator.clipboard.writeText(code).then(() => {
+      if (!mountedRef.current || revision !== contentRevisionRef.current)
+        return
       setCopiedCode(true)
       setTimeout(setCopiedCode, 1200, false)
     })
-  }, [codeGen.code])
+  }, [codeGen.code, variableDeclaration])
 
   // 记录：主动保存；记录是稳定快照，点击切换内容，不再静默回写
-  const { items: records, add: addRecord, update: updateRecord, remove: removeRecord, clear: clearRecords } = useUrlRecords()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const { items: records, add: addRecord, update: updateRecord, remove: removeRecord, clear: clearRecords, writeStatus } = recordStore
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState('')
+  const canUpdate = selectedId !== null && records.some(record => record.id === selectedId)
 
   /** 保存为新记录：无论当前是否选中，都新增一条并选中进入重命名 */
   const handleSave = useCallback(() => {
-    const name = defaultName(input)
-    const id = addRecord(input, name)
+    const name = snapshot.tabs.length === 1 ? defaultName(input) : `${activeTab.name} 等 ${snapshot.tabs.length} 个链接`
+    const id = addRecord(snapshot, name)
     if (id) {
       // 保存后选中并直接进入重命名（预填默认名），方便立刻起一个名字
       setSelectedId(id)
       setNameDraft(name)
       setRenamingId(id)
     }
-  }, [input, addRecord])
+  }, [snapshot, activeTab.name, input, addRecord, setSelectedId])
 
   /** 更新：把当前内容回写到选中的记录（名称保持不变） */
   const handleUpdate = useCallback(() => {
-    if (selectedId)
-      updateRecord(selectedId, { text: input })
-  }, [input, selectedId, updateRecord])
+    if (canUpdate && selectedId)
+      updateRecord(selectedId, { snapshot })
+  }, [canUpdate, snapshot, selectedId, updateRecord])
+
+  const invalidate = useCallback(() => {
+    recognitionRequestRef.current += 1
+    contentRevisionRef.current += 1
+    mountedRef.current = false
+  }, [])
 
   const toggleSelect = useCallback((item: UrlRecord) => {
-    // 再次点击取消选中；切换到另一条时不回写输入框当前内容
-    if (selectedId === item.id) {
-      setSelectedId(null)
-      return
-    }
+    invalidate()
     setSelectedId(item.id)
-    setRenamingId(null)
-    changeInput(item.text)
+    restore(item.snapshot)
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [selectedId, changeInput])
+  }, [invalidate, restore, setSelectedId])
+
+  const [renamingTab, setRenamingTab] = useState(false)
+  const [tabName, setTabName] = useState(activeTab.name)
+  const renameTabTriggerRef = useRef<HTMLButtonElement>(null)
+  const renameTabDialogRef = useRef<HTMLDialogElement>(null)
+  useLayoutEffect(() => {
+    const dialog = renameTabDialogRef.current
+    if (renamingTab)
+      dialog?.showModal()
+    else
+      dialog?.close()
+  }, [renamingTab])
+  const closeTabRename = () => {
+    renameTabDialogRef.current?.close()
+    setRenamingTab(false)
+    renameTabTriggerRef.current?.focus()
+  }
+  const commitTabName = () => {
+    const name = tabName.trim() || activeTab.name
+    setSnapshot(prev => ({ ...prev, tabs: prev.tabs.map(tab => tab.id === activeTab.id ? { ...tab, name } : tab) }))
+    closeTabRename()
+  }
+  const switchTab = (id: string) => {
+    if (id === activeTab.id)
+      return
+    invalidate()
+    setSnapshot(prev => ({ ...prev, activeTabId: id }))
+    requestAnimationFrame(() => document.getElementById(`url-tab-${id}`)?.focus())
+  }
+  const addTab = () => {
+    const id = crypto.randomUUID()
+    let number = snapshot.tabs.length + 1
+    while (snapshot.tabs.some(tab => tab.name === `链接 ${number}`))
+      number += 1
+    invalidate()
+    setSnapshot(prev => ({ ...prev, activeTabId: id, tabs: [...prev.tabs, { id, name: `链接 ${number}`, text: '', variables: {} }] }))
+    requestAnimationFrame(() => document.getElementById('url-workspace-input')?.focus())
+  }
+  const deleteTab = () => {
+    if (snapshot.tabs.length < 2)
+      return
+    invalidate()
+    const index = snapshot.tabs.findIndex(tab => tab.id === activeTab.id)
+    const tabs = snapshot.tabs.filter(tab => tab.id !== activeTab.id)
+    const id = tabs[Math.min(index, tabs.length - 1)]!.id
+    qrCache.delete(activeTab.id)
+    setSnapshot({ tabs, activeTabId: id })
+    requestAnimationFrame(() => document.getElementById(`url-tab-${id}`)?.focus())
+  }
+  const canSave = snapshot.tabs.some(tab => tab.text.trim())
 
   const commitRename = useCallback(() => {
     if (renamingId)
@@ -1039,7 +1194,6 @@ function UrlParserTool() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   // 二维码放大弹层：点击缩略图打开，Esc / 点击遮罩关闭
-  const [qrEnlarged, setQrEnlarged] = useState(false)
   useEffect(() => {
     if (!qrEnlarged)
       return
@@ -1064,7 +1218,92 @@ function UrlParserTool() {
         description="解析任意协议的 URL 与路径，递归展开嵌套参数，并与二维码双向转换；支持编辑、拖拽、变量代码预览和历史记录。"
         path="/tools/url-qrcode"
       />
-      <section className="url-workspace-source">
+      <div className="url-workspace-tabs">
+        <div role="tablist" aria-label="二维码链接" className="url-tabs-list">
+          {snapshot.tabs.map((tab, index) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`url-tab-${tab.id}`}
+              aria-controls="url-active-content"
+              aria-selected={tab.id === activeTab.id}
+              tabIndex={tab.id === activeTab.id ? 0 : -1}
+              onClick={() => switchTab(tab.id)}
+              onDoubleClick={() => {
+                setTabName(tab.name)
+                setRenamingTab(true)
+              }}
+              onKeyDown={(event) => {
+                let next = index
+                if (event.key === 'ArrowRight')
+                  next = (index + 1) % snapshot.tabs.length
+                else if (event.key === 'ArrowLeft')
+                  next = (index + snapshot.tabs.length - 1) % snapshot.tabs.length
+                else if (event.key === 'Home')
+                  next = 0
+                else if (event.key === 'End')
+                  next = snapshot.tabs.length - 1
+                else
+                  return
+                event.preventDefault()
+                const id = snapshot.tabs[next]!.id
+                switchTab(id)
+              }}
+            >
+              <QrCode size={13} />
+              <span>{tab.name}</span>
+            </button>
+          ))}
+        </div>
+        <div className="url-tabs-actions">
+          <Button variant="ghost" size="icon-sm" title="新增链接" aria-label="新增链接" onClick={addTab}><Plus className="size-3.5" /></Button>
+          <Button
+            ref={renameTabTriggerRef}
+            variant="ghost"
+            size="icon-sm"
+            title="重命名当前链接"
+            aria-label="重命名当前链接"
+            onClick={() => {
+              setTabName(activeTab.name)
+              setRenamingTab(true)
+            }}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+          {snapshot.tabs.length > 1
+            ? <PopConfirm trigger={<Trash2 className="size-3.5" />} triggerAriaLabel="删除当前链接" triggerClassName={buttonVariants({ variant: 'ghost', size: 'icon-sm' })} title="删除当前链接？" description="该链接的内容和变量值会被删除，且无法恢复。" onConfirm={deleteTab} />
+            : <Button variant="ghost" size="icon-sm" disabled title="至少保留一个链接" aria-label="删除当前链接"><Trash2 className="size-3.5" /></Button>}
+        </div>
+      </div>
+      <dialog
+        ref={renameTabDialogRef}
+        aria-labelledby="url-tab-rename-title"
+        className="url-tab-rename-dialog"
+        onCancel={(event) => {
+          event.preventDefault()
+          closeTabRename()
+        }}
+        onClose={() => setRenamingTab(false)}
+        onClick={event => event.target === event.currentTarget && closeTabRename()}
+      >
+        <form
+          className="url-tab-rename"
+          onSubmit={(event) => {
+            event.preventDefault()
+            commitTabName()
+          }}
+        >
+          <h2 id="url-tab-rename-title">编辑链接名称</h2>
+          <label htmlFor="url-tab-name">链接名称</label>
+          <input id="url-tab-name" autoFocus value={tabName} onChange={event => setTabName(event.target.value)} />
+          <div className="url-tab-rename-actions">
+            <Button type="button" variant="outline" size="sm" onClick={closeTabRename}>取消</Button>
+            <Button type="submit" size="sm">确认</Button>
+          </div>
+        </form>
+      </dialog>
+      <section id="url-active-content" role="tabpanel" aria-labelledby={`url-tab-${activeTab.id}`} className="url-workspace-source">
         <label htmlFor="url-workspace-input" className="url-source-label">
           <Link2 size={14} />
           链接内容
@@ -1077,6 +1316,30 @@ function UrlParserTool() {
           placeholder="粘贴 URL 或路径，例如 https://a.com/p?x=1；可声明参数变量，语法见参数区"
           className="h-36 min-h-28 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-sm leading-6 outline-none placeholder:font-sans placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
+        {resolved.names.length > 0 && (
+          <section className="url-variable-inputs" aria-label="变量输入">
+            <div className="url-variable-heading">
+              <h2>变量输入</h2>
+              <span role="status">{resolved.missing.length ? `还需填写 ${resolved.missing.length} 项` : '变量已补齐'}</span>
+            </div>
+            <div className="url-variable-fields">
+              {resolved.names.map(name => (
+                <label key={name}>
+                  <span className="font-mono">{`$$${name}`}</span>
+                  <input
+                    value={Object.hasOwn(activeTab.variables, name) ? activeTab.variables[name] : ''}
+                    onChange={event => changeVariable(name, event.target.value)}
+                    placeholder={`输入 ${name} 的值`}
+                    aria-required="true"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </label>
+              ))}
+            </div>
+            <p>{resolved.missing.length ? '请补齐所有变量后生成二维码；代码可随时复制。' : '二维码已使用当前变量值，链接内容保留变量写法。'}</p>
+          </section>
+        )}
         {qrError && (
           <p className="rounded-md border border-border bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
             {qrError}
@@ -1087,32 +1350,37 @@ function UrlParserTool() {
             {copied ? <Check data-feedback="success" /> : <Copy />}
           </Button>
           {/* 选中记录时提供「更新」回写该记录；「保存」始终新增一条记录 */}
-          {selectedId && (
+          {canUpdate && (
             <Button
               variant="default"
               size="sm"
-              disabled={!input.trim()}
+              disabled={!canSave || writeStatus === 'saving'}
               title="把当前内容回写到选中的记录"
               onClick={handleUpdate}
             >
               <Save />
-              更新
+              更新整组
             </Button>
           )}
           <Button
             variant="outline"
             size="sm"
-            disabled={!input.trim()}
+            disabled={!canSave || writeStatus === 'saving'}
             title="保存为新记录"
             onClick={handleSave}
           >
             <Bookmark />
-            保存
+            保存为新记录
           </Button>
           <Button variant="outline" size="sm" onClick={() => changeInput(DEMO_URL)}>
             <Sparkles />
             试试示例
           </Button>
+          {writeStatus !== 'idle' && (
+            <span className="url-record-write-status" data-status={writeStatus} role={writeStatus === 'error' ? 'alert' : 'status'}>
+              {writeStatus === 'saving' ? '正在保存，请稍候' : writeStatus === 'saved' ? '记录已保存' : '记录保存失败，请重试'}
+            </span>
+          )}
           <span className="url-source-note">{isUrl ? 'URL / 路径' : input.trim() ? '文本' : '等待输入'}</span>
         </div>
       </section>
@@ -1163,7 +1431,7 @@ function UrlParserTool() {
                   <div className="flex flex-col items-center gap-3 p-2 text-center text-muted-foreground">
                     <QrCode className="size-8" />
                     <div>
-                      <p className="text-sm font-medium text-foreground">输入链接生成二维码</p>
+                      <p className="text-sm font-medium text-foreground">{resolved.missing.length ? '请补齐变量后生成二维码' : input.trim() ? '正在生成二维码…' : '输入链接生成二维码'}</p>
                       <p className="mt-1 text-xs">点击、拖拽或粘贴图片识别</p>
                     </div>
                   </div>
@@ -1211,11 +1479,6 @@ function UrlParserTool() {
               声明变量，拖放可移动或嵌套节点
             </p>
           </div>
-          {hasVars && (
-            <Button variant="ghost" size="icon-sm" disabled={!isUrl} title="复制代码" aria-label="复制代码" onClick={copyCode}>
-              {copiedCode ? <Check data-feedback="success" /> : <Copy />}
-            </Button>
-          )}
         </div>
         <div>
           {!isUrl
@@ -1295,6 +1558,22 @@ function UrlParserTool() {
                   </div>
                   {/* 代码预览：变量生成模板字符串插值，按嵌套层级着色（与参数树一致）；仅在存在变量时展示在参数树下方 */}
                   {hasVars && (
+                    <div className="url-code-heading">
+                      <h3>变量代码</h3>
+                      <Button variant="ghost" size="sm" title="复制代码" aria-label="复制代码" onClick={copyCode}>
+                        {copiedCode ? <Check data-feedback="success" /> : <Copy />}
+                        {copiedCode ? '已复制' : '复制代码'}
+                      </Button>
+                    </div>
+                  )}
+                  {hasVars && codeGen.code.endsWith('(variables)') && (
+                    <p className="px-1 text-xs text-muted-foreground">
+                      通过 variables 对象传入变量，例如
+                      {' '}
+                      <code className="font-mono">{variableDeclaration}</code>
+                    </p>
+                  )}
+                  {hasVars && (
                     <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-sm leading-6 break-all whitespace-pre-wrap">
                       {/* eslint-disable react/no-array-index-key -- token 无稳定 id，顺序固定 */}
                       {codeGen.tokens.map((t, i) => (
@@ -1326,7 +1605,7 @@ function UrlParserTool() {
                 </h2>
                 {records.length > 0 && (
                   <PopConfirm
-                    trigger={<Trash2 />}
+                    trigger={<Trash2 className="size-3.5" />}
                     triggerAriaLabel="清空全部记录"
                     triggerClassName={buttonVariants({ variant: 'ghost', size: 'sm' })}
                     title="清空全部记录？"
@@ -1343,7 +1622,7 @@ function UrlParserTool() {
                 {records.length === 0
                   ? (
                       <p className="py-3 text-xs leading-5 text-muted-foreground">
-                        还没有保存的记录，点击「保存」把当前内容存下来
+                        还没有保存的记录，点击「保存为新记录」保存整组链接与变量值
                       </p>
                     )
                   : (
@@ -1375,15 +1654,20 @@ function UrlParserTool() {
                                     />
                                   )
                                 : (
-                                    <RecordPreviewTip text={item.text} wide onSelect={() => toggleSelect(item)}>
+                                    <RecordPreviewTip snapshot={item.snapshot} wide onSelect={() => toggleSelect(item)}>
                                       <button
                                         type="button"
-                                        title={selectedId === item.id ? '点击取消选中' : '点击切换到该记录的内容'}
-                                        aria-label={`切换到记录 ${item.name || item.text}`}
+                                        title="恢复整组链接"
+                                        aria-label={`恢复记录 ${item.name || '未命名记录'}，${item.snapshot.tabs.length} 个链接`}
                                         onClick={() => toggleSelect(item)}
                                         className="flex min-w-0 cursor-pointer items-center gap-1 text-left"
                                       >
-                                        <span className="line-clamp-2 min-w-0 text-sm break-all">{item.name || item.text}</span>
+                                        <span className="line-clamp-2 min-w-0 text-sm break-all">{item.name || '未命名记录'}</span>
+                                        <span className="shrink-0 text-xs text-muted-foreground">
+                                          {item.snapshot.tabs.length}
+                                          {' '}
+                                          个链接
+                                        </span>
                                         {selectedId === item.id && (
                                           <span className="shrink-0 font-mono text-xs text-primary">编辑中</span>
                                         )}
@@ -1409,7 +1693,7 @@ function UrlParserTool() {
                                 size="icon-sm"
                                 className="size-6 text-muted-foreground"
                                 aria-label="复制"
-                                onClick={() => copyHistory(item.id, item.text)}
+                                onClick={() => copyHistory(item.id, item.snapshot.tabs.map(tab => resolveTab(tab).text ?? tab.text).join('\n'))}
                               >
                                 {copiedId === item.id ? <Check data-feedback="success" className="size-3.5" /> : <Copy className="size-3.5" />}
                               </Button>
@@ -1472,7 +1756,7 @@ function UrlParserTool() {
                 {isUrl
                   ? (
                       <div className="min-w-[28rem] sm:min-w-0">
-                        <StaticUrlTree tree={tree} />
+                        {resolvedTree && <StaticUrlTree tree={resolvedTree} />}
                       </div>
                     )
                   : <p className="text-sm break-all text-muted-foreground">当前内容不是 URL，无法展示参数树。</p>}

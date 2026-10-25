@@ -18,8 +18,7 @@ body:has([aria-modal='true']) .site-header { z-index: 0; }
 
 .site-brand-group,
 .site-header-actions,
-.site-actions,
-.theme-toggle { display: flex; align-items: center; gap: 6px; }
+.site-actions { display: flex; align-items: center; gap: 6px; }
 .site-brand-group { min-width: 0; gap: 10px; }
 .site-brand { font-family: var(--font-mono); font-size: 14px; font-weight: 600; white-space: nowrap; }
 .site-brand-group h1 { border-left: 1px solid var(--border); padding-left: 12px; font-size: 13px; font-weight: 500; white-space: nowrap; }
@@ -79,7 +78,7 @@ body:has([aria-modal='true']) .site-header { z-index: 0; }
   .site-brand.is-tool { display: none; }
   .site-brand-group { gap: 5px; }
   .site-brand-group h1 { padding-left: 6px; font-size: 12px; }
-  .site-header-actions, .site-actions, .theme-toggle { gap: 2px; }
+  .site-header-actions, .site-actions { gap: 2px; }
   .site-tool-menu {
     position: static;
     summary { width: 30px; padding: 7px; span { display: none; } }

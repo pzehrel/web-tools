@@ -1,4 +1,3 @@
-import type { LucideIcon } from 'lucide-react'
 import type { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, PointerEvent as ReactPointerEvent } from 'react'
 import type { NineSliceResult, Slice } from './nine-slice'
 import type { NinePatchRecordMeta } from './records'
@@ -20,15 +19,20 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { CanvasErrorNotice } from '@/components/canvas-error-notice'
+import { CanvasFloatingHud } from '@/components/canvas-floating-hud'
+import { CanvasOptionGroup } from '@/components/canvas-option-group'
+import { CanvasPanelTabs } from '@/components/canvas-panel-tabs'
+import { CanvasViewActions } from '@/components/canvas-view-actions'
 import { Seo } from '@/components/seo'
-import { STAGE_BOUNDARY_CLASS, StageViewControls, useStageViewSettings } from '@/components/stage-view-controls'
+import { STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
+import { useCanvasLayoutObserver } from '@/lib/react/use-canvas-layout-observer'
 import { measureUnobstructedStageFit, useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { saveContentRecord } from '@/lib/storage/content-record'
 import { cn } from '@/lib/utils'
 import { createDemoImage } from '../demos/nine-patch'
-import { NineFloatingHud } from './floating-hud'
 import { analyzeNineSlice, readImagePixels } from './nine-slice'
 import { createNinePatchItem, useNinePatchRecords } from './records'
 import { maxSliceValue, normalizeSlice, updateSlice } from './slice-bounds'
@@ -227,46 +231,6 @@ function selectCodeOnShortcut(e: ReactKeyboardEvent<HTMLPreElement>): void {
 }
 
 const NUM_INPUT_CLASS = 'w-full rounded-md border border-border bg-background px-1.5 py-1 text-center font-mono text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
-
-function OptionGroup<T extends string | number>({
-  value,
-  options,
-  onChange,
-  label,
-  className,
-}: {
-  value: T
-  options: { value: T, label: ReactNode, icon?: LucideIcon }[]
-  onChange: (value: T) => void
-  label: string
-  className?: string
-}) {
-  return (
-    <div className={cn('flex overflow-hidden rounded-md border border-border', className)} role="radiogroup" aria-label={label}>
-      {options.map((opt) => {
-        const Icon = opt.icon
-        return (
-          <button
-            key={String(opt.value)}
-            type="button"
-            role="radio"
-            aria-checked={value === opt.value}
-            onClick={() => onChange(opt.value)}
-            className={cn(
-              'flex flex-1 items-center justify-center gap-1 px-1 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
-              value === opt.value
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-background hover:bg-secondary',
-            )}
-          >
-            {Icon && <Icon className="size-3.5" />}
-            {opt.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
 
 function BrutalCheckbox({
   checked,
@@ -483,35 +447,20 @@ export default function NinePatchTool() {
     resetEditorView()
   }, [resetEditorView])
 
-  useEffect(() => {
-    const area = sourceFitRef.current
-    if (!area)
-      return
-    let frame = 0
-    const update = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
-        const target = measureEditorView()
-        if (target)
-          setEditorSafeLayout({ key: imageKey, ...target })
-      })
-    }
-    const resizeObserver = new ResizeObserver(update)
-    const mutationObserver = new MutationObserver(update)
-    resizeObserver.observe(area)
-    if (emptyStateRef.current)
-      resizeObserver.observe(emptyStateRef.current)
-    const root = area.closest('.nine-patch-workspace')
-    if (root) {
-      mutationObserver.observe(root, { attributes: true, attributeFilter: ['data-mobile-view'] })
-      root.querySelectorAll<HTMLElement>('.nine-preview, .nine-code-hud').forEach(hud => resizeObserver.observe(hud))
-    }
-    return () => {
-      resizeObserver.disconnect()
-      mutationObserver.disconnect()
-      cancelAnimationFrame(frame)
-    }
+  const updateEditorSafeLayout = useCallback(() => {
+    const target = measureEditorView()
+    if (target)
+      setEditorSafeLayout({ key: imageKey, ...target })
   }, [imageKey, measureEditorView])
+
+  useCanvasLayoutObserver({
+    areaRef: sourceFitRef,
+    emptyStateRef,
+    workspaceSelector: '.nine-patch-workspace',
+    hudSelector: '.nine-preview, .nine-code-hud',
+    workspaceAttributes: ['data-mobile-view'],
+    onChange: updateEditorSafeLayout,
+  })
 
   const resetGestures = useCallback(() => {
     for (const ref of [lineDragRef, resizeDragRef]) {
@@ -1075,6 +1024,7 @@ export default function NinePatchTool() {
 
   const copied = copyFeedback?.ok === true && copyFeedback.text === exportText
   const copyError = copyFeedback?.ok === false && copyFeedback.text === exportText
+  const canvasError = importError ?? recordError ?? (exportInfo && !exportInfo.ok ? exportInfo.text : null) ?? (copyError ? '复制失败，请重试或选中代码手动复制' : null)
 
   useEffect(() => {
     copyRequestRef.current++
@@ -1282,44 +1232,38 @@ export default function NinePatchTool() {
                   </div>
                 )}
           </div>
-          <StageZoomIndicator zoom={zoom} visible={editorStageZoom.zoomIndicatorVisible} />
-
         </div>
+        <StageZoomIndicator placement="workspace" zoom={zoom} visible={editorStageZoom.zoomIndicatorVisible} />
         <div className="nine-toolbar" aria-label="素材与画布工具">
           <div className="nine-imports">
             <Button type="button" variant="outline" title={image ? '更换图片' : '选择图片'} aria-label={image ? '更换图片' : '选择图片'} onClick={() => fileInputRef.current?.click()}>
               <ImagePlus />
               <span>{image ? '更换' : '图片'}</span>
             </Button>
+            <Button type="button" variant="ghost" size="icon-sm" className="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/80" title="清除图片" aria-label="清除图片" disabled={!image} onClick={clearImage}><Trash2 /></Button>
           </div>
           <span className="nine-source-info" title={image?.name}>{image ? `${image.name} · ${image.width} × ${image.height}` : '尚未导入图片'}</span>
-          <div className="nine-view-controls">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground"
-              title="重置源图视图"
-              aria-label="重置源图视图"
-              disabled={!image}
-              onClick={resetEditorView}
-            >
-              <RotateCcw />
-            </Button>
-            <StageViewControls hasContent={Boolean(image)} settings={editorStageView} />
-          </div>
-          <Button type="button" variant="ghost" size="icon-sm" className="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/80" title="清除图片" aria-label="清除图片" disabled={!image} onClick={clearImage}><Trash2 /></Button>
+          <CanvasViewActions className="nine-view-controls" hasContent={Boolean(image)} settings={editorStageView} onReset={resetEditorView} resetLabel="重置源图视图" resetClassName="bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground" />
         </div>
-        {importError && (
-          <p role="alert" data-tone="error" className="nine-import-error">
-            <TriangleAlert className="size-4 shrink-0" />
-            {importError}
-          </p>
-        )}
       </section>
-      <NineFloatingHud
+      {canvasError && (
+        <CanvasErrorNotice
+          message={canvasError}
+          onDismiss={() => {
+            setImportError(null)
+            setRecordError(null)
+            setExportState(previous => previous?.info && !previous.info.ok ? { ...previous, info: null } : previous)
+            setCopyFeedback(null)
+          }}
+        />
+      )}
+      <CanvasFloatingHud
         className="nine-preview"
         title="拉伸预览"
+        workspaceSelector=".nine-patch-workspace"
+        toolbarSelector=".nine-toolbar"
+        otherHudSelector=".nine-code-hud"
+        topPriority
         controls={(
           <>
             <div className="nine-preview-dimensions">
@@ -1457,15 +1401,11 @@ export default function NinePatchTool() {
           </div>
           <p className="nine-preview-hint">画面手柄调拉伸 · 外框手柄调 HUD</p>
         </div>
-      </NineFloatingHud>
+      </CanvasFloatingHud>
       <aside className="nine-panel" aria-label="点九图设置">
-        <nav className="nine-panel-tabs" aria-label="设置区域">
-          {([{ id: 'params', label: '参数' }, { id: 'records', label: '记录' }] as const).map(tab => (
-            <button key={tab.id} type="button" aria-pressed={panelTab === tab.id} onClick={() => setPanelTab(tab.id)}>{tab.label}</button>
-          ))}
-        </nav>
+        <CanvasPanelTabs tabs={([['params', '参数'], ['records', '历史']] as const)} value={panelTab} onChange={setPanelTab} idPrefix="nine" label="设置区域" className="nine-panel-tabs" />
         <div className="nine-panel-body">
-          <div hidden={panelTab !== 'params'}>
+          <div role="tabpanel" id="nine-panel-params" aria-labelledby="nine-tab-params" hidden={panelTab !== 'params'}>
             <section className="nine-settings" aria-label="切片参数">
               <div className="flex flex-col gap-4">
 
@@ -1525,7 +1465,7 @@ export default function NinePatchTool() {
                     </div>
                     {cropEnabled && (
                       <div className="flex flex-col gap-2">
-                        <OptionGroup
+                        <CanvasOptionGroup
                           label="裁剪轴"
                           value={cropAxes}
                           onChange={changeCropAxes}
@@ -1649,7 +1589,7 @@ export default function NinePatchTool() {
 
                     <div>
                       <p className="mb-1.5 text-xs font-medium text-muted-foreground">横向重复</p>
-                      <OptionGroup
+                      <CanvasOptionGroup
                         label="横向重复方式"
                         value={repeatH}
                         onChange={setRepeatH}
@@ -1658,7 +1598,7 @@ export default function NinePatchTool() {
                     </div>
                     <div>
                       <p className="mb-1.5 text-xs font-medium text-muted-foreground">纵向重复</p>
-                      <OptionGroup
+                      <CanvasOptionGroup
                         label="纵向重复方式"
                         value={repeatV}
                         onChange={setRepeatV}
@@ -1670,7 +1610,7 @@ export default function NinePatchTool() {
               </div>
             </section>
           </div>
-          <div hidden={panelTab !== 'records'}>
+          <div role="tabpanel" id="nine-panel-records" aria-labelledby="nine-tab-records" hidden={panelTab !== 'records'}>
             <section className="nine-records" aria-label="编辑记录">
               <p className="text-xs text-muted-foreground">导入后自动保存图片；调整参数后自动更新记录。相同图片不会新增记录。</p>
               {records.length === 0 && <p className="nine-empty-records">暂无记录</p>}
@@ -1683,7 +1623,7 @@ export default function NinePatchTool() {
                           {record.recordName}
                         </button>
                         <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{record.size >= 1024 ? `${Math.round(record.size / 1024)} KB` : `${record.size} B`}</span>
-                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除记录 ${record.recordName}`} onClick={() => void deleteRecord(record.id)}>
+                        <Button type="button" variant="ghost" size="icon-sm" className="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/80" aria-label={`删除记录 ${record.recordName}`} onClick={() => void deleteRecord(record.id)}>
                           <Trash2 />
                         </Button>
                       </div>
@@ -1695,8 +1635,7 @@ export default function NinePatchTool() {
           </div>
         </div>
         <footer className="nine-panel-footer">
-          {recordError && <p role="alert" className="text-destructive">{recordError}</p>}
-          {exportInfo && <p role={exportInfo.ok ? 'status' : 'alert'} className={exportInfo.ok ? 'text-success' : 'text-destructive'}>{exportInfo.text}</p>}
+          {exportInfo?.ok && <p role="status" className="text-success">{exportInfo.text}</p>}
           <Button type="button" variant="outline" size="sm" className="nine-crop-download" aria-busy={exporting} disabled={!cropActive || exporting} onClick={() => void downloadCropped()}>
             <Download />
             {exporting ? '导出中…' : '裁剪 PNG'}
@@ -1704,10 +1643,10 @@ export default function NinePatchTool() {
           </Button>
         </footer>
       </aside>
-      <NineFloatingHud className="nine-code-hud" title="CSS 输出">
+      <CanvasFloatingHud className="nine-code-hud" title="CSS 输出" workspaceSelector=".nine-patch-workspace" toolbarSelector=".nine-toolbar" otherHudSelector=".nine-preview" topPriority={false}>
         <div className="nine-code">
           <div className="flex items-center gap-2">
-            <OptionGroup
+            <CanvasOptionGroup
               label="代码写法"
               className="h-8 flex-1"
               value={codeStyle}
@@ -1721,7 +1660,6 @@ export default function NinePatchTool() {
               {copied ? <Check data-feedback="success" /> : <Copy />}
             </Button>
           </div>
-          {copyError && <p role="alert" className="text-destructive">复制失败，请重试或选中代码手动复制</p>}
           <pre
             tabIndex={0}
             aria-label="CSS 代码"
@@ -1752,7 +1690,7 @@ export default function NinePatchTool() {
           {' '}
           换成项目中的实际图片路径。
         </p>
-      </NineFloatingHud>
+      </CanvasFloatingHud>
       <nav className="nine-mobile-tabs" aria-label="工作区域">
         {([{ id: 'editor', label: '编辑' }, { id: 'preview', label: '预览' }, { id: 'params', label: '参数与输出' }, { id: 'code', label: 'CSS' }] as const).map(tab => (
           <button type="button" key={tab.id} aria-pressed={mobileView === tab.id} onClick={() => setMobileView(tab.id)}>{tab.label}</button>

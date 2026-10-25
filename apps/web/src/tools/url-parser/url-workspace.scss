@@ -20,12 +20,69 @@
     background: var(--background);
   }
 
+  .url-workspace-tabs {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    padding: 5px 6px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--background);
+  }
+  .url-tabs-list {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 4px;
+    overflow-x: auto;
+    > button {
+      display: flex; align-items: center; flex-shrink: 0; gap: 6px;
+      max-width: 200px; min-height: 30px; padding: 4px 9px;
+      border-radius: 4px; color: var(--muted-foreground); font-size: 12px;
+      > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      &:hover { background: var(--muted); color: var(--foreground); }
+      &[aria-selected='true'] { background: var(--secondary); color: var(--secondary-foreground); }
+      &:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+    }
+  }
+  .url-tabs-actions { display: flex; flex-shrink: 0; gap: 1px; > button, > .relative > button { width: 28px; height: 28px; } }
+  .url-tab-rename-dialog {
+    width: min(24rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); margin: auto; padding: 20px;
+    overflow-y: auto; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--popover); color: var(--popover-foreground);
+    opacity: 0;
+    transition: opacity 160ms ease, display 160ms allow-discrete, overlay 160ms allow-discrete;
+    &[open] { opacity: 1; }
+    &::backdrop {
+      background: color-mix(in oklch, var(--foreground) 40%, transparent); opacity: 0;
+      transition: opacity 160ms ease, display 160ms allow-discrete, overlay 160ms allow-discrete;
+    }
+    &[open]::backdrop { opacity: 1; }
+    @starting-style {
+      &[open], &[open]::backdrop { opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      &, &::backdrop { transition: none; }
+    }
+  }
+  .url-tab-rename {
+    display: grid; gap: 10px; font-size: 12px;
+    h2 { margin-bottom: 4px; font-size: 14px; font-weight: 600; }
+    input { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--input); border-radius: 4px; background: var(--background); color: var(--foreground); }
+    input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  }
+  .url-tab-rename-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+
   .url-workspace-source {
     display: grid;
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 2;
     align-self: stretch;
-    grid-template-rows: 28px minmax(188px, 1fr) auto;
+    grid-template-rows: 28px minmax(188px, 1fr);
+    grid-auto-rows: auto;
     gap: 8px;
     padding: 8px 10px 10px;
     > p { margin: 0; }
@@ -52,10 +109,33 @@
     > button[data-variant='default'] { color: var(--primary-foreground); background: var(--primary); }
   }
   .url-source-note { margin-left: auto; padding-right: 6px; color: var(--muted-foreground); font-family: var(--font-mono); font-size: 11px; }
+  .url-record-write-status {
+    color: var(--muted-foreground); font-size: 11px;
+    &[data-status='saved'] { color: var(--success-muted-foreground); }
+    &[data-status='error'] { color: var(--destructive); }
+  }
+  .url-variable-inputs {
+    padding: 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--card);
+    p { margin: 7px 0 0; color: var(--muted-foreground); font-size: 11px; line-height: 1.6; }
+  }
+  .url-variable-heading {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;
+    h2 { font-size: 12px; font-weight: 600; }
+    > span { color: var(--muted-foreground); font-size: 11px; }
+  }
+  .url-variable-fields {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 8px;
+    label { display: grid; gap: 4px; min-width: 0; font-size: 12px; }
+    label > span { overflow-wrap: anywhere; }
+    input { width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--input); border-radius: 4px; background: var(--background); color: var(--foreground); font-size: 12px; }
+    input:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  }
+  .url-code-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-inline: 4px; font-size: 12px; font-weight: 600; }
+  .url-record-preview { display: grid; gap: 12px; > section + section { padding-top: 10px; border-top: 1px solid var(--border); } }
 
   .url-workspace-tree {
     grid-column: 1 / -1;
-    grid-row: 2;
+    grid-row: 3;
     overflow: hidden;
     > div:first-child { align-items: center; padding: 9px 10px; border-bottom: 1px solid var(--url-line); p { margin-top: 5px; font-size: 11px; } }
     > div:last-child { overflow-x: auto; padding: 6px; }
@@ -96,7 +176,7 @@
   }
 
   .url-workspace-qr {
-    grid-column: 2; grid-row: 1; align-self: stretch; padding: 8px 10px 10px;
+    grid-column: 2; grid-row: 2; align-self: stretch; padding: 8px 10px 10px;
     > section { display: grid; height: 100%; grid-template-rows: 28px minmax(188px, 1fr) 30px; gap: 8px; }
     [aria-label='上传二维码图片识别'] { justify-self: center; width: 188px; height: 100%; min-height: 188px; padding: 8px; aspect-ratio: auto; border: 0; border-radius: 6px; background: var(--muted); }
   }
@@ -108,7 +188,7 @@
   }
   .url-qr-download { height: 30px; border-radius: 5px; font-size: 12px; }
   .url-workspace-records {
-    grid-column: 1 / -1; grid-row: 3; padding: 10px;
+    grid-column: 1 / -1; grid-row: 4; padding: 10px;
     section > div:first-child { min-height: 24px; padding-bottom: 6px; }
     h2 { font-size: 13px; }
     p { font-size: 11px; line-height: 1.7; }
@@ -122,6 +202,7 @@
     > section, > div, > aside { width: 100%; }
     .url-workspace-source { grid-template-rows: 28px minmax(140px, 1fr) auto; textarea { min-height: 140px; font-size: 13px; } }
     .url-source-label { font-size: 11px; }
+    .url-variable-fields input, .url-tab-rename input { font-size: 16px; }
     .url-source-actions { gap: 2px; }
     .url-source-note { font-size: 10px; }
     .url-workspace-tree > div:first-child { padding: 10px 12px; }

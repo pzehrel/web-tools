@@ -29,13 +29,8 @@ export class PreviewErrorBoundary extends Component<Props, State> {
   }
 
   render() {
-    if (this.state.failed) {
-      return (
-        <p className="flex size-full items-center justify-center p-4 text-center text-sm text-destructive" role="alert">
-          动画预览失败，请更换渲染库或重新导入项目。
-        </p>
-      )
-    }
+    if (this.state.failed)
+      return null
     return this.props.children
   }
 }

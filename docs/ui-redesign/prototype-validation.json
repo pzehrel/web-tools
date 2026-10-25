@@ -516,7 +516,8 @@
       "logical content dimensions and gestures remain independent"
     ],
     "geometry_proof": {
-      "script": ".scratch/web-ui-redesign/check-hud-geometry.mjs",
+      "script": "check-hud-geometry.mjs",
+      "script_retained": false,
       "passed": true,
       "cases": 135,
       "checks": [

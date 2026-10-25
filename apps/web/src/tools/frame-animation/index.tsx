@@ -1,4 +1,3 @@
-import type { LucideIcon } from 'lucide-react'
 import type { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import type { FrameAnimationRecordMeta } from './records'
 import { unzipSync } from 'fflate'
@@ -9,7 +8,7 @@ import {
   ChevronRight,
   Copy,
   Crop,
-  FileImage,
+  Download,
   FolderOpen,
   ImagePlus,
   Images,
@@ -23,12 +22,18 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { CanvasErrorNotice } from '@/components/canvas-error-notice'
+import { CanvasFloatingHud } from '@/components/canvas-floating-hud'
+import { CanvasOptionGroup } from '@/components/canvas-option-group'
+import { CanvasPanelTabs } from '@/components/canvas-panel-tabs'
+import { CanvasViewActions } from '@/components/canvas-view-actions'
 import { Seo } from '@/components/seo'
-import { STAGE_BOUNDARY_CLASS, StageViewControls, useStageViewSettings } from '@/components/stage-view-controls'
+import { STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
-import { measureUnobstructedStageFit, useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
+import { useCanvasLayoutObserver } from '@/lib/react/use-canvas-layout-observer'
+import { measureAnchoredStageFit, useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { saveContentRecord } from '@/lib/storage/content-record'
 import { cn } from '@/lib/utils'
 import { createDemoFrames } from '../demos/frame-animation'
@@ -491,47 +496,6 @@ const EXPORT_BUILDERS: Record<ExportFormat, (p: ExportParams) => string> = {
 /** 数字小输入框的统一样式 */
 const NUM_INPUT_CLASS = 'w-14 shrink-0 rounded-md border border-border bg-background px-1.5 py-1 text-center font-mono text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50'
 
-/** 单选按钮组：描边分段控件，选中项用主色填充 */
-function OptionGroup<T extends string | number>({
-  value,
-  options,
-  onChange,
-  label,
-  className,
-}: {
-  value: T
-  options: { value: T, label: ReactNode, icon?: LucideIcon }[]
-  onChange: (value: T) => void
-  label: string
-  className?: string
-}) {
-  return (
-    <div className={cn('flex overflow-hidden rounded-md border border-border', className)} role="radiogroup" aria-label={label}>
-      {options.map((opt) => {
-        const Icon = opt.icon
-        return (
-          <button
-            key={String(opt.value)}
-            type="button"
-            role="radio"
-            aria-checked={value === opt.value}
-            onClick={() => onChange(opt.value)}
-            className={cn(
-              'flex flex-1 items-center justify-center gap-1 px-1 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
-              value === opt.value
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-background hover:bg-secondary',
-            )}
-          >
-            {Icon && <Icon className="size-3.5" />}
-            {opt.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 /**
  * 双头滑块的共享样式：轨道透明且不响应指针（自定义轨道视觉），
  * 只有滑块可拖；两个 input 重叠放置，各管一个端点。
@@ -577,9 +541,75 @@ function FrameCheckbox({
   )
 }
 
+function SpritePreviewCanvas({ url, width, height, pixelated, showBounds, background, children }: {
+  url: string | null
+  width: number
+  height: number
+  pixelated: boolean
+  showBounds: boolean
+  background: string
+  children: ReactNode
+}) {
+  const stageRef = useRef<HTMLDivElement>(null)
+  const [zoom, setZoom] = useState(1)
+  const pan = useStagePan(stageRef, () => !url)
+  const fitScale = useStageFitScale(stageRef, width, height, Boolean(url))
+  const stageZoom = useStageZoom(stageRef, zoom, setZoom, Boolean(url))
+  const scale = fitScale * zoom
+
+  return (
+    <div
+      ref={stageRef}
+      data-testid="frame-sprite-stage"
+      aria-label="精灵图预览画布"
+      {...pan.panHandlers}
+      className={cn('relative h-48 max-w-full touch-none overflow-hidden rounded-md border border-border select-none', url && (pan.panning ? 'cursor-grabbing' : 'cursor-grab'))}
+      style={{ background }}
+    >
+      {url
+        ? (
+            <>
+              <div
+                className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                style={{ transform: `translate(${pan.offset.x}px, ${pan.offset.y}px)` }}
+              >
+                <img
+                  src={url}
+                  alt="精灵图预览"
+                  width={width}
+                  height={height}
+                  draggable={false}
+                  className={cn('block max-w-none shrink-0', showBounds && cn(STAGE_BOUNDARY_CLASS, 'outline-1 -outline-offset-1'))}
+                  style={{ width: width * scale, height: height * scale, imageRendering: pixelated ? 'pixelated' : 'auto' }}
+                />
+              </div>
+              <StageZoomIndicator zoom={zoom} visible={stageZoom.zoomIndicatorVisible} />
+              {(zoom !== 1 || pan.offset.x !== 0 || pan.offset.y !== 0) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  title="重置精灵图视图（居中并恢复 100%）"
+                  aria-label="重置精灵图视图"
+                  className="absolute top-2 right-2 bg-background/90"
+                  onClick={() => {
+                    pan.resetPan()
+                    setZoom(1)
+                  }}
+                >
+                  <RotateCcw />
+                </Button>
+              )}
+            </>
+          )
+        : <div className="flex size-full items-center justify-center text-xs text-muted-foreground">{children}</div>}
+    </div>
+  )
+}
+
 export default function FrameAnimation() {
-  const [workspace, setWorkspace] = useState<'canvas' | 'frames' | 'settings'>('canvas')
-  const [panel, setPanel] = useState<'playback' | 'sprite' | 'code' | 'records'>('playback')
+  const [workspace, setWorkspace] = useState<'canvas' | 'frames' | 'settings' | 'preview' | 'code'>('canvas')
+  const [panel, setPanel] = useState<'playback' | 'records'>('playback')
   const [sequenceOpen, setSequenceOpen] = useState(true)
   const sequenceRef = useRef<HTMLDivElement>(null)
   const [frames, setFrames] = useState<FrameItem[]>([])
@@ -609,6 +639,9 @@ export default function FrameAnimation() {
   const [pixelated, setPixelated] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
   const fitAreaRef = useRef<HTMLDivElement>(null)
+  const anchorRef = useRef<HTMLDivElement>(null)
+  const emptyStateRef = useRef<HTMLDivElement>(null)
+  const [safeLayout, setSafeLayout] = useState<{ key: string | null, scale: number, offset: { x: number, y: number } } | null>(null)
   const stagePan = useStagePan(stageRef, () => false)
   /** 入选的帧（按 id）：勾选 = 参与预览 / 播放 / 导出；不提供删除，防误操作 */
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
@@ -699,22 +732,57 @@ export default function FrameAnimation() {
   const safeIndex = activeCount === 0 ? 0 : Math.min(current, activeCount - 1)
   const frame = activeFrames[safeIndex] ?? null
   /** 舞台视图缩放：加载帧后自动完整适配（留边），手动缩放后跟随用户 */
-  const stageFit = useStageFitScale(fitAreaRef, frame?.width ?? 0, frame?.height ?? 0, Boolean(frame), 24)
-  const [zoom, setZoom, resetStageZoom] = useAutoFitZoom(stageFit, frameCount > 0 ? 'content' : null)
+  const frameWidth = frame?.width ?? 0
+  const frameHeight = frame?.height ?? 0
+  const hasFrame = frame !== null
+  const frameKey = frame ? `${frameWidth}×${frameHeight}` : null
+  const activeLayout = safeLayout?.key === frameKey ? safeLayout : null
+  const stageFit = useStageFitScale(fitAreaRef, frameWidth, frameHeight, hasFrame, 24)
+  const [zoom, setZoom, resetStageZoom] = useAutoFitZoom(activeLayout?.scale ?? stageFit, frameCount > 0 ? 'content' : null)
   const stageZoom = useStageZoom(stageRef, zoom, setZoom, frameCount > 0)
 
-  const resetFrameStageView = () => {
+  const measureFrameStageView = useCallback(() => {
+    const stage = stageRef.current
+    const anchor = anchorRef.current
     const area = fitAreaRef.current
-    if (!area || !frame)
+    const emptyState = emptyStateRef.current
+    if (!stage || !anchor || !area || (!hasFrame && !emptyState))
+      return null
+    const overlays = stage.closest('.frame-workspace')?.querySelectorAll<HTMLElement>('.frames-toolbar, .frames-panel, .frames-playback-float, .frames-sequence-float, .frames-sprite-hud, .frames-code-hud, .frames-workspace-nav') ?? []
+    const target = measureAnchoredStageFit(stage, anchor, overlays, frameWidth || emptyState?.offsetWidth || 0, frameHeight || emptyState?.offsetHeight || 0, hasFrame ? 24 : 8, 56)
+    const rect = area.getBoundingClientRect()
+    return { scale: target.scale, offset: { x: target.center.x - (rect.left + rect.right) / 2, y: target.center.y - (rect.top + rect.bottom) / 2 } }
+  }, [frameHeight, frameWidth, hasFrame])
+
+  const resetFrameStageView = () => {
+    const target = measureFrameStageView()
+    if (!target || !frame)
       return
-    const overlays = area.closest('.frame-workspace')?.querySelectorAll<HTMLElement>('.frames-panel, .frames-playback-float, .frames-sequence-float') ?? []
-    const target = measureUnobstructedStageFit(area, overlays, frame.width, frame.height, 24)
-    stagePan.setOffset(target.offset)
-    if (target.offset.x === 0 && target.offset.y === 0)
-      resetStageZoom()
-    else
-      resetStageZoom(target.scale)
+    setSafeLayout({ key: frameKey, ...target })
+    stagePan.resetPan()
+    resetStageZoom(target.scale)
   }
+
+  useLayoutEffect(() => {
+    const target = measureFrameStageView()
+    if (target)
+      setSafeLayout({ key: frameKey, ...target })
+  }, [frameKey, measureFrameStageView])
+
+  const updateFrameSafeLayout = useCallback(() => {
+    const target = measureFrameStageView()
+    if (target)
+      setSafeLayout({ key: frameKey, ...target })
+  }, [frameKey, measureFrameStageView])
+
+  useCanvasLayoutObserver({
+    areaRef: stageRef,
+    emptyStateRef,
+    workspaceSelector: '.frame-workspace',
+    hudSelector: '.frames-toolbar, .frames-panel, .frames-playback-float, .frames-sequence-float, .frames-sprite-hud, .frames-code-hud, .frames-workspace-nav',
+    workspaceAttributes: ['class'],
+    onChange: updateFrameSafeLayout,
+  })
   /** 播放范围（收敛后）：在入选帧里截取；帧数变化时自动夹回有效区间 */
   const maxIdx = Math.max(0, activeCount - 1)
   const rangeStart = rangeRaw ? Math.min(rangeRaw[0], maxIdx) : 0
@@ -981,6 +1049,7 @@ export default function FrameAnimation() {
   const clearAll = useCallback(() => {
     materialEpochRef.current += 1
     currentRecordIdRef.current = null
+    setRecordName('')
     setAutoSaveTick(0)
     importCountRef.current = 0
     setImporting(false)
@@ -1045,13 +1114,12 @@ export default function FrameAnimation() {
       const result = await saveContentRecord('frame-animation', archive.blob, meta, currentRecordIdRef.current, automatic, createFrameAnimationItem, saveRecordItem)
       if (epoch === materialEpochRef.current) {
         currentRecordIdRef.current = result.id
-        setRecordName('')
         setRecordFeedback({ text: result.saved ? '项目已保存' : '相同素材已有项目' })
       }
     }
     catch {
       if (epoch === materialEpochRef.current)
-        setRecordFeedback({ text: '保存失败，素材和项目名称已保留，请重试', error: true })
+        setRecordFeedback({ text: '保存失败，素材和参数已保留，请重试', error: true })
     }
     finally {
       savingRef.current = false
@@ -1079,8 +1147,9 @@ export default function FrameAnimation() {
     setRecordFeedback(null)
     try {
       await removeRecordItem(id)
-      if (currentRecordIdRef.current === id)
+      if (currentRecordIdRef.current === id) {
         currentRecordIdRef.current = null
+      }
       setRecordFeedback({ text: '项目已删除' })
     }
     catch {
@@ -1516,9 +1585,21 @@ export default function FrameAnimation() {
   const exportText = exportFrames.length > 0
     ? EXPORT_BUILDERS[exportFormat](exportParams)
     : ''
+  const canvasError = importFeedback?.tone === 'error'
+    ? importFeedback.text
+    : recordFeedback?.error
+      ? recordFeedback.text
+      : cropResult?.tone === 'error' && !cropDialogOpen
+        ? cropResult.text
+        : exportError
+          ? '导出失败，请重试'
+          : copyError
+            ? '复制失败，请重试或手动选择代码复制'
+            : null
   return (
     <div className={`frame-workspace workspace-${workspace} ${sequenceOpen ? '' : 'sequence-collapsed'}`}>
       <Seo title="帧动画预览" description="导入多张图片逐帧预览动画效果，可调帧率、播放方向、循环次数、缩放与背景。" path="/tools/frame-animation" />
+      <div ref={anchorRef} className="canvas-default-anchor" aria-hidden="true" />
       <div className="frames-canvas" aria-label="帧动画画布">
         <div ref={fitAreaRef} className="frames-fit-area" aria-hidden="true" />
         <div className="frames-stage-viewport">
@@ -1548,11 +1629,11 @@ export default function FrameAnimation() {
                     className={cn(
                       'm-auto shrink-0',
                       // 帧边界：勾出单张精灵图格子的范围
-                      stageView.showBounds && STAGE_BOUNDARY_CLASS,
+                      stageView.showBounds && cn(STAGE_BOUNDARY_CLASS, 'outline-1 -outline-offset-1'),
                     )}
                     style={{
                       width: frame.width * zoom,
-                      transform: `translate(${stagePan.offset.x}px, ${stagePan.offset.y}px)`,
+                      transform: `translate(${(activeLayout?.offset.x ?? 0) + stagePan.offset.x}px, ${(activeLayout?.offset.y ?? 0) + stagePan.offset.y}px)`,
                       imageRendering: pixelated ? 'pixelated' : 'auto',
                     }}
                   />
@@ -1561,13 +1642,13 @@ export default function FrameAnimation() {
                   frameCount > 0
                   // 有上传但全部未勾选
                     ? (
-                        <div className="canvas-empty-state m-auto flex flex-col items-center gap-2 text-center text-muted-foreground/60">
+                        <div ref={emptyStateRef} className="canvas-empty-state m-auto flex flex-col items-center gap-2 text-center text-muted-foreground/60" style={{ transform: `translate(${activeLayout?.offset.x ?? 0}px, ${activeLayout?.offset.y ?? 0}px) scale(${Math.min(1, activeLayout?.scale ?? 1)})` }}>
                           <Images className="size-8" />
                           <p className="text-sm">没有入选的帧：在下方帧序列里勾选后参与预览</p>
                         </div>
                       )
                     : (
-                        <div className="canvas-empty-state m-auto flex flex-col items-center gap-3 text-center">
+                        <div ref={emptyStateRef} className="canvas-empty-state m-auto flex flex-col items-center gap-3 text-center" style={{ transform: `translate(${activeLayout?.offset.x ?? 0}px, ${activeLayout?.offset.y ?? 0}px) scale(${Math.min(1, activeLayout?.scale ?? 1)})` }}>
                           <Images className="size-8 text-muted-foreground" />
                           <div>
                             <p className="font-medium">拖拽图片 / ZIP 到此处，或</p>
@@ -1593,8 +1674,8 @@ export default function FrameAnimation() {
                       )
                 )}
           </div>
-          <StageZoomIndicator zoom={zoom} visible={stageZoom.zoomIndicatorVisible} />
         </div>
+        <StageZoomIndicator placement="workspace" zoom={zoom} visible={stageZoom.zoomIndicatorVisible} />
         <div className="frames-toolbar" aria-label="素材与画布工具">
           <div className="frames-import-actions">
             <Button type="button" variant="outline" title="添加图片或 ZIP" aria-label="添加图片或 ZIP" onClick={() => fileInputRef.current?.click()}>
@@ -1605,39 +1686,34 @@ export default function FrameAnimation() {
               <FolderOpen />
               <span>目录</span>
             </Button>
-            <Button type="button" variant="outline" title="载入示例" aria-label="载入示例" onClick={() => void loadDemo()}>
-              <Sparkles />
-              <span>示例</span>
-            </Button>
-            <Button type="button" variant="ghost" size="icon-sm" title="清除全部帧" aria-label="清除全部帧" disabled={frameCount === 0 && !importing && !importFeedback} onClick={clearAll}>
+            <Button type="button" variant="ghost" size="icon-sm" className="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/80" title="清除全部帧" aria-label="清除全部帧" disabled={frameCount === 0 && !importing && !importFeedback} onClick={clearAll}>
               <Trash2 />
             </Button>
           </div>
           <span className="frames-material-info" role="status">
             {importing ? '正在导入…' : frameCount > 0 ? `${frameCount} 帧 · 入选 ${activeCount}` : '尚未导入素材'}
           </span>
-          <div className="frames-view-controls">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              title="重置视图（居中并完整适配）"
-              aria-label="重置视图"
-              disabled={!frame}
-              onClick={resetFrameStageView}
-            >
-              <RotateCcw />
-            </Button>
-            <StageViewControls hasContent={Boolean(frame)} settings={stageView} />
-          </div>
+          <CanvasViewActions className="frames-view-controls" hasContent={Boolean(frame)} settings={stageView} onReset={resetFrameStageView} resetLabel="重置视图" resetTitle="重置视图（居中并完整适配）" resetVariant="outline" />
         </div>
 
       </div>
       <input ref={fileInputRef} type="file" accept="image/*,.zip" multiple hidden onChange={onFileChange} aria-label="导入图片或 ZIP" />
       <input ref={dirInputRef} type="file" multiple hidden onChange={onFileChange} {...{ webkitdirectory: '' } as Record<string, string>} aria-label="导入图片目录" />
-      {importFeedback && <div className="frames-import-error" role="alert" data-tone={importFeedback.tone}>{importFeedback.text}</div>}
+      {importFeedback?.tone === 'warning' && <div className="frames-import-error" role="status" data-tone="warning">{importFeedback.text}</div>}
+      {canvasError && (
+        <CanvasErrorNotice
+          message={canvasError}
+          onDismiss={() => {
+            setImportFeedback(previous => previous?.tone === 'error' ? null : previous)
+            setRecordFeedback(previous => previous?.error ? null : previous)
+            setCropResult(previous => previous?.tone === 'error' ? null : previous)
+            setExportError(false)
+            setCopyError(false)
+          }}
+        />
+      )}
       <nav className="frames-workspace-nav" aria-label="帧动画工作区">
-        {([['canvas', '画布'], ['frames', '素材'], ['settings', '设置']] as const).map(([value, label]) => (
+        {([['canvas', '画布'], ['frames', '素材'], ['preview', '预览'], ['code', '代码'], ['settings', '设置']] as const).map(([value, label]) => (
           <button type="button" key={value} aria-pressed={workspace === value} onClick={() => setWorkspace(value)}>{label}</button>
         ))}
       </nav>
@@ -1708,7 +1784,7 @@ export default function FrameAnimation() {
             </div>
           </div>
           <div className="min-w-0">
-            {cropResult && (
+            {cropResult && cropResult.tone !== 'error' && (
               <p role="status" data-tone={cropResult.tone} className="mb-3 rounded-md border px-3 py-2 text-sm font-medium">
                 {cropResult.text}
               </p>
@@ -1817,32 +1893,10 @@ export default function FrameAnimation() {
         </section>
       </div>
       <aside className="frames-panel" aria-label="帧动画设置">
-        <div
-          className="frames-panel-tabs"
-          role="tablist"
-          aria-label="设置面板"
-          onKeyDown={(event) => {
-            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key))
-              return
-            event.preventDefault()
-            event.stopPropagation()
-            const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
-            const currentTab = tabs.indexOf(document.activeElement as HTMLButtonElement)
-            const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (currentTab + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
-            tabs[next]?.focus()
-            tabs[next]?.click()
-          }}
-        >
-          {([['playback', '播放'], ['sprite', '精灵图'], ['code', '代码'], ['records', '项目']] as const).map(([value, label]) => (
-            <button key={value} type="button" role="tab" tabIndex={panel === value ? 0 : -1} id={`frame-tab-${value}`} aria-selected={panel === value} aria-controls={`frame-panel-${value}`} onClick={() => setPanel(value)}>{label}</button>
-          ))}
-        </div>
+        <CanvasPanelTabs tabs={([['playback', '播放'], ['records', '历史']] as const)} value={panel} onChange={setPanel} idPrefix="frame" label="设置面板" className="frames-panel-tabs" />
         <div className="frames-panel-scroll">
           <div role="tabpanel" id="frame-panel-playback" aria-labelledby="frame-tab-playback" hidden={panel !== 'playback'}>
             <section className="min-w-0">
-              <div className="pb-3">
-                <h2 className="font-mono text-sm font-semibold tracking-tight">播放参数</h2>
-              </div>
               <div className="flex flex-col gap-4">
                 {/* 帧率 + 一轮时长（双向换算） */}
                 <div className="flex flex-col gap-1.5">
@@ -1959,7 +2013,7 @@ export default function FrameAnimation() {
                 {/* 方向 / 循环 / 缩放：左标签单行 */}
                 <div>
                   <p className="mb-1.5 text-xs font-medium text-muted-foreground">方向</p>
-                  <OptionGroup<Direction>
+                  <CanvasOptionGroup<Direction>
                     label="播放方向"
                     value={direction}
                     onChange={setDirection}
@@ -1973,7 +2027,7 @@ export default function FrameAnimation() {
                 <div>
                   <p className="mb-1.5 text-xs font-medium text-muted-foreground">循环</p>
                   <div className="flex items-center gap-2">
-                    <OptionGroup<string>
+                    <CanvasOptionGroup<string>
                       label="循环方式"
                       className="flex-1"
                       value={loopInfinite ? 'infinite' : 'count'}
@@ -2013,188 +2067,16 @@ export default function FrameAnimation() {
               </div>
             </section>
           </div>
-          <div role="tabpanel" id="frame-panel-sprite" aria-labelledby="frame-tab-sprite" hidden={panel !== 'sprite'}>
-            <section className="min-w-0">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
-                <h2 className="font-mono text-sm font-semibold tracking-tight">精灵图导出</h2>
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  disabled={spriting || exportFrames.length === 0}
-                  onClick={() => void downloadSprite()}
-                >
-                  {spriting ? <LoaderCircle className="animate-spin" /> : <FileImage />}
-                  下载精灵图
-                </Button>
-              </div>
-              <div className="mb-4 max-w-xs">
-                <div>
-                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">排列</p>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-                    <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                      <input
-                        type="number"
-                        min={1}
-                        max={Math.max(1, exportFrames.length)}
-                        value={spriteDims.cols}
-                        aria-label="精灵图列数"
-                        title="修改列数，行数自动计算"
-                        onChange={e => setSpriteDimension({ axis: 'cols', value: Math.max(1, Number(e.target.value) || 1) })}
-                        className={cn(NUM_INPUT_CLASS, 'min-w-0 w-auto flex-1 shrink')}
-                      />
-                      列
-                    </label>
-                    <span className="text-xs text-muted-foreground">×</span>
-                    <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                      <input
-                        type="number"
-                        min={1}
-                        max={Math.max(1, exportFrames.length)}
-                        value={spriteDims.rows}
-                        aria-label="精灵图行数"
-                        title="修改行数，列数自动计算"
-                        onChange={e => setSpriteDimension({ axis: 'rows', value: Math.max(1, Number(e.target.value) || 1) })}
-                        className={cn(NUM_INPUT_CLASS, 'min-w-0 w-auto flex-1 shrink')}
-                      />
-                      行
-                    </label>
-                  </div>
-                </div>
-              </div>
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <span className="text-xs text-muted-foreground">
-                  精灵图预览（
-                  {exportFrames.length}
-                  {' 帧'}
-                  {exportFrames.length > 0 && ` · 单元格 ${cellW} × ${cellH}`}
-                  {uniformFrameSize && ` · 单张 ${uniformFrameSize.w} × ${uniformFrameSize.h}`}
-                  {' · '}
-                  {spriteDims.cols}
-                  {' 列 × '}
-                  {spriteDims.rows}
-                  {' 行'}
-                  {' · '}
-                  {cellW * spriteDims.cols}
-                  {' × '}
-                  {cellH * spriteDims.rows}
-                  ）
-                </span>
-                <div
-                  className="h-48 max-w-full overflow-auto rounded-md border border-border"
-                  style={{ background: stageView.background }}
-                >
-                  {sprite && sprite.key === spriteKey && spriteKey !== ''
-                    ? (
-                        <div className="flex min-h-full w-full items-center justify-center p-2">
-                          <img
-                            src={sprite.url}
-                            alt="精灵图预览"
-                            draggable={false}
-                            className={cn('block h-auto max-h-44 max-w-full object-contain', stageView.showBounds && STAGE_BOUNDARY_CLASS)}
-                            style={{ imageRendering: pixelated ? 'pixelated' : 'auto' }}
-                          />
-                        </div>
-                      )
-                    : (
-                        <div className="flex min-h-full items-center justify-center text-xs text-muted-foreground">
-                          {exportFrames.length === 0
-                            ? '暂无帧'
-                            : spriteError === spriteKey
-                              ? (
-                                  <div role="alert" className="flex flex-col items-center gap-2">
-                                    <span>精灵图预览失败，请重试</span>
-                                    <Button size="sm" variant="outline" onClick={() => setSpriteRetry(value => value + 1)}>重新生成</Button>
-                                  </div>
-                                )
-                              : '生成中…'}
-                        </div>
-                      )}
-                </div>
-              </div>
-
-            </section>
-          </div>
-          <div role="tabpanel" id="frame-panel-code" aria-labelledby="frame-tab-code" hidden={panel !== 'code'}>
-            <section className="flex min-w-0 flex-col">
-              <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
-                <h2 className="font-mono text-sm font-semibold tracking-tight">样式代码</h2>
-                <Button type="button" variant="outline" size="icon-sm" disabled={!exportText} title="复制" aria-label="复制" onClick={() => copyCss(exportText)}>
-                  {copiedCss ? <Check data-feedback="success" /> : <Copy />}
-                </Button>
-              </div>
-              {copyError && <p role="alert" className="mb-2 text-xs text-destructive">复制失败，请重试或手动选择代码复制</p>}
-              <div className="flex min-h-0 flex-1 flex-col gap-3">
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                  <OptionGroup<ExportFormat>
-                    label="导出格式"
-                    className="w-fit"
-                    value={exportFormat}
-                    onChange={setExportFormat}
-                    options={[
-                      { value: 'scss', label: 'SCSS' },
-                      { value: 'less', label: 'Less' },
-                      { value: 'css', label: 'CSS' },
-                    ]}
-                  />
-                  <FrameCheckbox
-                    checked={exportVars}
-                    onChange={setExportVars}
-                    label="变量"
-                    title="帧数 / 时长提取为变量，便于集中调整"
-                  />
-                  <FrameCheckbox
-                    checked={exportContainer}
-                    onChange={setExportContainer}
-                    label="容器"
-                    title="宽高由容器控制（100% + aspect-ratio），帧切换走百分比定位；关闭则写死单帧 px 尺寸"
-                  />
-                </div>
-                <pre
-                  tabIndex={0}
-                  aria-label="导出样式代码"
-                  onKeyDown={selectCodeOnShortcut}
-                  className="min-h-48 max-h-96 min-w-0 flex-1 overflow-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  {exportText
-                    ? exportText.split(/(url\("[^"]*"\))/g).map(part => (
-                        part.startsWith('url(')
-                          ? (
-                              <mark
-                                key={part}
-                                title="下载精灵图后，把这里换成项目里的实际路径"
-                                className="rounded-sm bg-chart-3/40 px-0.5 font-medium text-foreground"
-                              >
-                                {part}
-                              </mark>
-                            )
-                          : part
-                      ))
-                    : '// 导入帧后生成样式代码'}
-                </pre>
-              </div>
-            </section>
-          </div>
           <div role="tabpanel" id="frame-panel-records" aria-labelledby="frame-tab-records" hidden={panel !== 'records'}>
             <section className="min-w-0 frames-record-section">
-              <div className="pb-1">
-                <h2 className="font-mono text-sm font-semibold tracking-tight">记录</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">导入后自动保存素材；调整参数后点保存更新项目。相同素材不会新增记录。</p>
-              </div>
+              <p className="mb-3 text-xs text-muted-foreground">导入后自动保存素材；调整参数后点保存更新项目。相同素材不会新增记录。</p>
               <div>
-                <div className="flex max-w-xl items-center gap-2">
-                  <input
-                    value={recordName}
-                    onChange={event => setRecordName(event.target.value)}
-                    placeholder={frames[0]?.name.replace(/\.[^.]+$/, '') || '项目名称'}
-                    aria-label="项目名称"
-                    className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-                  />
+                <div className="flex max-w-xl justify-end">
                   <Button type="button" variant="outline" size="icon-sm" title="保存当前项目" aria-label="保存当前项目" disabled={frames.length === 0 || saving || importing || cropping} onClick={() => void saveRecord()}>
                     {saving ? <LoaderCircle className="animate-spin" /> : <Save />}
                   </Button>
                 </div>
-                {recordFeedback && <p role={recordFeedback.error ? 'alert' : 'status'} className={cn('mt-2 text-xs', recordFeedback.error ? 'text-destructive' : 'text-muted-foreground')}>{recordFeedback.text}</p>}
+                {recordFeedback && !recordFeedback.error && <p role="status" className="mt-2 text-xs text-muted-foreground">{recordFeedback.text}</p>}
                 {recordsLoading && <p role="status" className="mt-2 text-xs text-muted-foreground">加载项目列表…</p>}
                 {!recordsLoading && records.length === 0 && <p className="mt-2 text-xs text-muted-foreground">暂无保存的项目</p>}
                 {records.length > 0 && (
@@ -2209,7 +2091,7 @@ export default function FrameAnimation() {
                           {' '}
                           帧
                         </span>
-                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除项目 ${record.recordName}`} disabled={deletingId !== null} onClick={() => void deleteRecord(record.id)}>
+                        <Button type="button" variant="ghost" size="icon-sm" className="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/80" aria-label={`删除项目 ${record.recordName}`} disabled={deletingId !== null} onClick={() => void deleteRecord(record.id)}>
                           <Trash2 />
                         </Button>
                       </div>
@@ -2220,25 +2102,169 @@ export default function FrameAnimation() {
             </section>
           </div>
         </div>
-        {exportError && <p role="alert" className="px-3 py-2 text-xs text-destructive">导出失败，请重试</p>}
         <div className="frames-panel-footer">
-          <span>
-            {exportFrames.length}
-            {' '}
-            帧 ·
-            {' '}
-            {spriteDims.cols}
-            ×
-            {spriteDims.rows}
-            {' '}
-            格
-          </span>
-          <Button size="sm" disabled={spriting || exportFrames.length === 0} onClick={() => void downloadSprite()}>
-            {spriting ? <LoaderCircle className="animate-spin" /> : <FileImage />}
-            下载 PNG
+          <Button type="button" className="w-full" disabled={spriting || exportFrames.length === 0} onClick={() => void downloadSprite()}>
+            {spriting ? <LoaderCircle className="animate-spin" /> : <Download />}
+            下载精灵图
           </Button>
         </div>
       </aside>
+      <CanvasFloatingHud
+        className="frames-sprite-hud"
+        title="精灵图预览"
+        workspaceSelector=".frame-workspace"
+        toolbarSelector=".frames-toolbar"
+        otherHudSelector=".frames-code-hud"
+        topPriority
+        boundsBottomSelector=".frames-playback-float"
+        mobileTopInset={68}
+      >
+        <div className="frames-output-hud-body">
+          <section className="min-w-0">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">
+                {exportFrames.length}
+                {' 帧'}
+                {exportFrames.length > 0 && ` · 单元格 ${cellW} × ${cellH}`}
+                {uniformFrameSize && ` · 单张 ${uniformFrameSize.w} × ${uniformFrameSize.h}`}
+                {' · '}
+                {spriteDims.cols}
+                {' 列 × '}
+                {spriteDims.rows}
+                {' 行'}
+                {' · '}
+                {cellW * spriteDims.cols}
+                {' × '}
+                {cellH * spriteDims.rows}
+              </span>
+              <SpritePreviewCanvas
+                key={spriteKey}
+                url={sprite?.key === spriteKey && spriteKey !== '' ? sprite.url : null}
+                width={cellW * spriteDims.cols}
+                height={cellH * spriteDims.rows}
+                pixelated={pixelated}
+                showBounds={stageView.showBounds}
+                background={stageView.background}
+              >
+                {exportFrames.length === 0
+                  ? '暂无帧'
+                  : spriteError === spriteKey
+                    ? (
+                        <div role="alert" className="flex flex-col items-center gap-2">
+                          <span>精灵图预览失败，请重试</span>
+                          <Button size="sm" variant="outline" onClick={() => setSpriteRetry(value => value + 1)}>重新生成</Button>
+                        </div>
+                      )
+                    : '生成中…'}
+              </SpritePreviewCanvas>
+            </div>
+
+            <div className="mt-3 max-w-xs">
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">排列</p>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                  <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <input
+                      type="number"
+                      min={1}
+                      max={Math.max(1, exportFrames.length)}
+                      value={spriteDims.cols}
+                      aria-label="精灵图列数"
+                      title="修改列数，行数自动计算"
+                      onChange={e => setSpriteDimension({ axis: 'cols', value: Math.max(1, Number(e.target.value) || 1) })}
+                      className={cn(NUM_INPUT_CLASS, 'min-w-0 w-auto flex-1 shrink')}
+                    />
+                    列
+                  </label>
+                  <span className="text-xs text-muted-foreground">×</span>
+                  <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <input
+                      type="number"
+                      min={1}
+                      max={Math.max(1, exportFrames.length)}
+                      value={spriteDims.rows}
+                      aria-label="精灵图行数"
+                      title="修改行数，列数自动计算"
+                      onChange={e => setSpriteDimension({ axis: 'rows', value: Math.max(1, Number(e.target.value) || 1) })}
+                      className={cn(NUM_INPUT_CLASS, 'min-w-0 w-auto flex-1 shrink')}
+                    />
+                    行
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </CanvasFloatingHud>
+      <CanvasFloatingHud
+        className="frames-code-hud"
+        title="代码"
+        workspaceSelector=".frame-workspace"
+        toolbarSelector=".frames-toolbar"
+        otherHudSelector=".frames-sprite-hud"
+        topPriority={false}
+        boundsBottomSelector=".frames-playback-float"
+        mobileTopInset={68}
+        controls={(
+          <Button type="button" variant="ghost" size="icon-sm" disabled={!exportText} title="复制代码" aria-label="复制代码" onClick={() => copyCss(exportText)}>
+            {copiedCss ? <Check data-feedback="success" /> : <Copy />}
+          </Button>
+        )}
+      >
+        <div className="frames-output-hud-body">
+          <section className="flex min-w-0 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <CanvasOptionGroup<ExportFormat>
+                  label="导出格式"
+                  className="w-fit"
+                  value={exportFormat}
+                  onChange={setExportFormat}
+                  options={[
+                    { value: 'scss', label: 'SCSS' },
+                    { value: 'less', label: 'Less' },
+                    { value: 'css', label: 'CSS' },
+                  ]}
+                />
+                <FrameCheckbox
+                  checked={exportVars}
+                  onChange={setExportVars}
+                  label="变量"
+                  title="帧数 / 时长提取为变量，便于集中调整"
+                />
+                <FrameCheckbox
+                  checked={exportContainer}
+                  onChange={setExportContainer}
+                  label="容器"
+                  title="宽高由容器控制（100% + aspect-ratio），帧切换走百分比定位；关闭则写死单帧 px 尺寸"
+                />
+              </div>
+              <pre
+                tabIndex={0}
+                aria-label="导出样式代码"
+                onKeyDown={selectCodeOnShortcut}
+                className="min-h-48 max-h-96 min-w-0 flex-1 overflow-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {exportText
+                  ? exportText.split(/(url\("[^"]*"\))/g).map(part => (
+                      part.startsWith('url(')
+                        ? (
+                            <mark
+                              key={part}
+                              title="下载精灵图后，把这里换成项目里的实际路径"
+                              className="rounded-sm bg-chart-3/40 px-0.5 font-medium text-foreground"
+                            >
+                              {part}
+                            </mark>
+                          )
+                        : part
+                    ))
+                  : '// 导入帧后生成样式代码'}
+              </pre>
+            </div>
+          </section>
+        </div>
+      </CanvasFloatingHud>
       {cropPreview && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-4"
@@ -2269,6 +2295,7 @@ export default function FrameAnimation() {
             }}
           >
             <h2 className="font-mono text-lg font-semibold tracking-tight">裁剪公共透明边</h2>
+            {cropResult?.tone === 'error' && <p role="alert" className="mt-2 text-sm text-destructive">{cropResult.text}</p>}
             {cropPreview.mixedSize && (
               <p data-tone="warning" className="mt-2 flex items-start gap-1.5 rounded-md border px-2 py-1.5 text-xs">
                 <TriangleAlert className="mt-px size-3.5 shrink-0" />

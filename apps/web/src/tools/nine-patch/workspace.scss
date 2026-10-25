@@ -5,6 +5,7 @@
   --nine-workspace-left: calc(var(--nine-panel-width) + 24px);
   --nine-preview-width: clamp(280px, 22vw, 340px);
   --nine-preview-height: clamp(220px, 32dvh, 300px);
+  --nine-hud-gap: 12px;
   button, input { font-size: 11px; }
   button { min-height: 28px; border-radius: 4px; box-shadow: none; transform: none; }
   button:hover { transform: none; box-shadow: none; }
@@ -15,22 +16,20 @@
   .nine-editor, .nine-source-stage { position: absolute; inset: 0; }
   .nine-source-fit { position: absolute; inset: 60px 12px 20px var(--nine-workspace-left); pointer-events: none; visibility: hidden; }
   .nine-editor-surface { padding: 60px 12px 20px var(--nine-workspace-left); border: 0; }
-  .nine-toolbar { position: absolute; z-index: 35; top: 12px; right: 12px; left: var(--nine-workspace-left); display: flex; align-items: center; gap: 8px; height: 40px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; background: color-mix(in srgb, var(--background) 60%, transparent); }
+  .nine-toolbar { position: absolute; z-index: 35; top: 12px; right: 12px; left: var(--nine-workspace-left); gap: 8px; }
   .nine-imports { display: flex; flex-shrink: 0; gap: 4px; }
   .nine-source-info { min-width: 0; flex: 1; overflow: hidden; color: var(--muted-foreground); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
   .nine-view-controls { position: relative; display: flex; flex-shrink: 0; align-items: center; gap: 4px; padding-left: 7px; border-left: 1px solid var(--border); }
   .nine-view-controls > .absolute.top-2.left-2 { position: static; gap: 4px; }
   .nine-view-controls > button, .nine-view-controls > .absolute > button { width: 28px; padding-inline: 5px; }
   .nine-view-controls > [data-stage-background-panel] { top: calc(100% + 12px); right: 0; left: auto; }
-  .nine-import-error { position: absolute; z-index: 36; top: 60px; right: 12px; left: var(--nine-workspace-left); display: flex; align-items: flex-start; gap: 5px; max-height: 25dvh; overflow: auto; overflow-wrap: anywhere; padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--popover); }
-  .nine-panel, .nine-preview, .nine-code-hud { position: absolute; z-index: 30; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--popover); }
-  .nine-panel, .nine-toolbar, .nine-preview, .nine-code-hud { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-  .nine-panel { top: 12px; bottom: 12px; left: 12px; display: flex; width: var(--nine-panel-width); max-width: calc(100% - 24px); min-height: 0; flex-direction: column; background: color-mix(in srgb, var(--popover) 60%, transparent); }
+  .nine-panel, .nine-preview, .nine-code-hud { position: absolute; z-index: 30; overflow: hidden; }
+  .nine-panel { top: 12px; bottom: 12px; left: 12px; display: flex; width: var(--nine-panel-width); max-width: calc(100% - 24px); min-height: 0; flex-direction: column; }
   .nine-panel-tabs, .nine-mobile-tabs {
     display: flex; gap: 3px; padding: 5px; background: var(--popover);
     button { min-width: 0; flex: 1; padding: 3px 6px; color: var(--muted-foreground); }
-    button[aria-pressed='true'] { color: var(--foreground); background: var(--secondary); }
   }
+  .nine-panel-tabs button[aria-selected='true'], .nine-mobile-tabs button[aria-pressed='true'] { color: var(--foreground); background: var(--secondary); }
   .nine-panel-tabs { flex-shrink: 0; border-bottom: 1px solid var(--border); background: transparent; }
   .nine-panel-body {
     min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; padding: 10px;
@@ -60,30 +59,13 @@
   .nine-crop-download > span { margin-left: auto; color: var(--muted-foreground); font-family: var(--font-mono); font-size: 10px; }
   .nine-preview, .nine-code-hud {
     display: flex; width: var(--nine-preview-width); max-width: calc(100% - var(--nine-workspace-left) - 12px); flex-direction: column;
-    background: color-mix(in srgb, var(--popover) 60%, transparent);
-    > header { display: flex; min-height: 40px; flex-shrink: 0; align-items: center; gap: 6px; padding: 5px 14px 5px 8px; border-bottom: 1px solid var(--border); font-size: 11px; touch-action: none; cursor: grab; }
-    h2 { margin-right: auto; font-weight: 600; white-space: nowrap; }
     > div { min-height: 0; flex: 1; }
-    > header > button { width: 28px; flex-shrink: 0; padding-inline: 5px; }
   }
-  .nine-preview { right: 12px; bottom: 12px; height: var(--nine-preview-height); }
-  .nine-code-hud { top: 60px; right: 12px; height: clamp(240px, 36dvh, 340px); }
-  .nine-hud-drag { display: inline-flex; align-items: center; gap: 4px; padding: 0; font: inherit; color: inherit; cursor: grab; touch-action: none; }
-  .nine-hud-drag:active { cursor: grabbing; }
-  .nine-hud-drag:focus-visible, .nine-hud-resize:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-  button.nine-hud-resize { position: absolute; z-index: 40; display: block; min-height: 0; height: auto; padding: 0; border: 0; border-radius: 0; background: none; touch-action: none; }
-  .nine-hud-resize[data-hud-resize='n'], .nine-hud-resize[data-hud-resize='s'] { right: 12px; left: 12px; height: 6px; cursor: ns-resize; }
-  .nine-hud-resize[data-hud-resize='n'] { top: 0; }
-  .nine-hud-resize[data-hud-resize='s'] { bottom: 0; }
-  .nine-hud-resize[data-hud-resize='e'], .nine-hud-resize[data-hud-resize='w'] { top: 12px; bottom: 12px; width: 6px; cursor: ew-resize; }
-  .nine-hud-resize[data-hud-resize='e'] { right: 0; }
-  .nine-hud-resize[data-hud-resize='w'] { left: 0; }
-  .nine-hud-resize[data-hud-resize='ne'], .nine-hud-resize[data-hud-resize='se'], .nine-hud-resize[data-hud-resize='sw'], .nine-hud-resize[data-hud-resize='nw'] { width: 12px; height: 12px; }
-  .nine-hud-resize[data-hud-resize='ne'] { top: 0; right: 0; cursor: nesw-resize; }
-  .nine-hud-resize[data-hud-resize='se'] { right: 0; bottom: 0; cursor: nwse-resize; }
-  .nine-hud-resize[data-hud-resize='sw'] { bottom: 0; left: 0; cursor: nesw-resize; }
-  .nine-hud-resize[data-hud-resize='nw'] { top: 0; left: 0; cursor: nwse-resize; }
-  .nine-hud-resize[data-hud-resize='se']::after { position: absolute; right: 3px; bottom: 3px; width: 6px; height: 6px; border-right: 2px solid var(--muted-foreground); border-bottom: 2px solid var(--muted-foreground); content: ''; }
+  .nine-preview { top: 60px; right: 12px; height: min(var(--nine-preview-height), calc((100% - 72px - var(--nine-hud-gap)) / 2)); }
+  .nine-code-hud { right: 12px; bottom: 12px; height: min(clamp(240px, 36dvh, 340px), calc((100% - 72px - var(--nine-hud-gap)) / 2)); }
+  button.canvas-hud-resize { min-height: 0; height: 6px; padding: 0; }
+  button.canvas-hud-resize[data-hud-resize='e'], button.canvas-hud-resize[data-hud-resize='w'] { height: auto; }
+  button.canvas-hud-resize[data-hud-resize='ne'], button.canvas-hud-resize[data-hud-resize='se'], button.canvas-hud-resize[data-hud-resize='sw'], button.canvas-hud-resize[data-hud-resize='nw'] { height: 12px; }
   .nine-preview-dimensions { display: flex; align-items: center; gap: 4px; color: var(--muted-foreground); }
   .nine-preview-dimensions input { width: 52px; border: 1px solid var(--border); background: var(--background); color: var(--foreground); font-family: var(--font-mono); text-align: center; }
   .nine-preview-stage {
@@ -103,14 +85,16 @@
     .nine-editor-surface { padding: 60px 30px 70px; }
     .nine-source-info { font-size: 10px; }
     .nine-toolbar { gap: 5px; }
+    &:not([data-mobile-view='editor']) .canvas-workspace-zoom { visibility: hidden; }
     .nine-view-controls { padding-left: 5px; }
-    .nine-import-error { top: 60px; left: 12px; max-width: calc(100% - 24px); }
     .nine-panel, .nine-preview, .nine-code-hud { inset: 12px 12px 60px; width: auto; max-width: none; min-height: 0; height: auto; visibility: hidden; pointer-events: none; }
+    .nine-preview > header, .nine-code-hud > header { justify-content: flex-end; }
+    .nine-preview > header h2, .nine-code-hud > header h2 { display: none; }
     &[data-mobile-view='params'] .nine-panel, &[data-mobile-view='preview'] .nine-preview, &[data-mobile-view='code'] .nine-code-hud { visibility: visible; pointer-events: auto; }
     &[data-mobile-view='preview'] .nine-toolbar, &[data-mobile-view='params'] .nine-toolbar, &[data-mobile-view='code'] .nine-toolbar { visibility: hidden; pointer-events: none; }
     .nine-preview-dimensions input { width: 46px; }
     .nine-mobile-tabs {
-      position: absolute; z-index: 45; right: 12px; bottom: 12px; left: 12px; display: flex; border: 1px solid var(--border); border-radius: 7px;
+      position: absolute; z-index: 45; right: 12px; bottom: 12px; left: 12px; display: flex;
       button { min-height: 28px; }
     }
   }

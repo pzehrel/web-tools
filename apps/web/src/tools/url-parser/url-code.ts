@@ -43,27 +43,32 @@ function treeHasVar(tree: UrlTree): boolean {
   )
 }
 
-/** 静态文本：先按所在层级预编码，再转义模板字面量 */
-function pushStatic(tokens: CodeToken[], depth: number, encodes: number, text: string) {
+interface UrlFragment {
+  text: string
+  kind: 'static' | 'var'
+  depth: number
+  encodes: number
+}
+
+/** 静态文本：先记录原文和编码层数，供代码预览与运行时求值共同使用。 */
+function pushStatic(tokens: UrlFragment[], depth: number, encodes: number, text: string) {
   if (text)
-    tokens.push({ text: escapeTpl(encodeN(text, encodes)), kind: 'static', depth })
+    tokens.push({ text, kind: 'static', depth, encodes })
 }
 
 /**
  * 变量插值：encodeURIComponent 只包变量本身，层数 = 穿过的嵌套编码边界数
  * （与序列化时 `$$name` 原样插入、不参与自身层级编码一致）
  */
-function emitVar(name: string, depth: number, encodes: number, tokens: CodeToken[]) {
-  tokens.push({ text: `\${${'encodeURIComponent('.repeat(encodes)}`, kind: 'interp', depth })
-  tokens.push({ text: name, kind: 'var', depth })
-  tokens.push({ text: `${')'.repeat(encodes)}}`, kind: 'interp', depth })
+function emitVar(name: string, depth: number, encodes: number, tokens: UrlFragment[]) {
+  tokens.push({ text: name, kind: 'var', depth, encodes })
 }
 
 /**
  * 参数值 / 路径段：静态内容内联已编码文本；含变量的子树直接展开
  * （静态部分预编码 encodes+1 次，变量多叠一层 encodeURIComponent）
  */
-function emitEncodedValue(node: UrlNode, depth: number, encodes: number, tokens: CodeToken[]) {
+function emitEncodedValue(node: UrlNode, depth: number, encodes: number, tokens: UrlFragment[]) {
   if (node.children) {
     if (treeHasVar(node.children))
       buildTokens(node.children, depth + 1, encodes + 1, tokens)
@@ -83,7 +88,7 @@ function emitEncodedValue(node: UrlNode, depth: number, encodes: number, tokens:
  * encodes = 当前子树内容被外层嵌套边界编码的次数（结构分隔符按此预编码，
  * 参数名 / 静态值自身再 +1；hash 边界不增加）
  */
-function buildTokens(tree: UrlTree, depth: number, encodes: number, tokens: CodeToken[]) {
+function buildTokens(tree: UrlTree, depth: number, encodes: number, tokens: UrlFragment[]) {
   let head = ''
   const segs: UrlNode[] = []
   const params: UrlNode[] = []
@@ -143,10 +148,107 @@ function buildTokens(tree: UrlTree, depth: number, encodes: number, tokens: Code
   }
 }
 
-/** 生成代码预览：code 为完整模板字符串；tokens 用于按层级着色渲染 */
+const RESERVED_NAMES = new Set([
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'implements',
+  'import',
+  'in',
+  'instanceof',
+  'interface',
+  'let',
+  'new',
+  'null',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'return',
+  'static',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+])
+
+/** 普通变量保留原模板；保留字或内建函数冲突时，通过 variables 对象传值。 */
 export function generateCode(tree: UrlTree): { code: string, tokens: CodeToken[] } {
-  const tokens: CodeToken[] = [{ text: '`', kind: 'static', depth: 0 }]
-  buildTokens(tree, 0, 0, tokens)
+  const fragments: UrlFragment[] = []
+  buildTokens(tree, 0, 0, fragments)
+  const names = [...new Set(fragments.filter(fragment => fragment.kind === 'var').map(fragment => fragment.text))]
+  const needsMapping = names.some(name => RESERVED_NAMES.has(name) || name === 'encodeURIComponent')
+  const aliases = new Map(names.map((name, index) => [name, needsMapping ? `_urlVar${index}` : name]))
+  const tokens: CodeToken[] = []
+  if (needsMapping) {
+    const properties = names.map(name => `${JSON.stringify(name)}: ${aliases.get(name)}`).join(', ')
+    tokens.push({ text: `(({ ${properties} }) => `, kind: 'interp', depth: 0 })
+  }
   tokens.push({ text: '`', kind: 'static', depth: 0 })
+  for (const { text, kind, depth, encodes } of fragments) {
+    if (kind === 'static') {
+      tokens.push({ text: escapeTpl(encodeN(text, encodes)), kind, depth })
+      continue
+    }
+    tokens.push({ text: `\${${'encodeURIComponent('.repeat(encodes)}`, kind: 'interp', depth })
+    tokens.push({ text: aliases.get(text)!, kind: 'var', depth })
+    tokens.push({ text: `${')'.repeat(encodes)}}`, kind: 'interp', depth })
+  }
+  tokens.push({ text: '`', kind: 'static', depth: 0 })
+  if (needsMapping)
+    tokens.push({ text: ')(variables)', kind: 'interp', depth: 0 })
   return { tokens, code: tokens.map(t => t.text).join('') }
+}
+
+/** 变量值只作为运行时字符串插入，不重新解析为 URL 或模板。 */
+export function resolveUrlVariables(tree: UrlTree, values: Record<string, string>): { names: string[], missing: string[], text: string | null } {
+  const fragments: UrlFragment[] = []
+  buildTokens(tree, 0, 0, fragments)
+  const names = [...new Set(fragments.filter(fragment => fragment.kind === 'var').map(fragment => fragment.text))]
+  const encodedNames = new Set(fragments.filter(fragment => fragment.kind === 'var' && fragment.encodes > 0).map(fragment => fragment.text))
+  const missing = names.filter((name) => {
+    if (!Object.hasOwn(values, name) || typeof values[name] !== 'string' || !values[name].trim())
+      return true
+    if (!encodedNames.has(name))
+      return false
+    try {
+      encodeURIComponent(values[name])
+      return false
+    }
+    catch {
+      // 孤立 UTF-16 代理项不能编码，按缺少可用变量值处理。
+      return true
+    }
+  })
+  if (missing.length)
+    return { names, missing, text: null }
+  if (!names.length)
+    return { names, missing, text: serializeUrl(tree) }
+  const text = fragments.map(fragment => encodeN(fragment.kind === 'var' ? values[fragment.text] : fragment.text, fragment.encodes)).join('')
+  return { names, missing, text }
 }

@@ -1,5 +1,7 @@
 # Current full-function F prototype
 
+> **Historical prototype record:** This page describes the removed design prototype, not current product usage. Prototype routes and filenames are historical identifiers only; see the [design decisions](design-decisions.md) for the approved direction and the [acceptance record](../ui-redesign-acceptance.md) for production validation.
+
 [简体中文](prototype-current.zh-CN.md) · [Preservation baseline](README.md) · [Machine-readable mapping](prototype-current.json)
 
 The six redesigned tools now provide UI and operation entries for all **119 tool feature groups** in the baseline, plus the shared navigation, theme and canvas controls. This is a design prototype, not production implementation or exhaustive regression acceptance. Original parsing, rendering, optimization and export engines are reused. No existing capability is removed by this layout proposal.
@@ -8,18 +10,18 @@ The old [coverage table](coverage.json) is frozen at the audit before this expan
 
 ## How to review
 
-The [production implementation specification](../../.scratch/web-ui-redesign-implementation/spec.md) is now published for the home, shared interface and four public tools. Hidden-tool entries below remain retention/reference material; their redesign is deferred.
+The [production implementation specification](implementation-spec.md) is now published for the home, shared interface and four public tools. Hidden-tool entries below remain retention/reference material; their redesign is deferred.
 
-Run `pnpm dev` and open the linked routes. Desktop canvas tools open directly onto a full canvas with floating controls. On a phone, use each tool's canvas/material/preview/parameter tabs to reach the same controls. Open advanced disclosures for less frequent parameters. The home keeps four visible tools; CSS shine and font toolkit have no entries on the home or in the tool-page switcher; their existing direct routes remain.
+At review time, desktop canvas tools opened directly onto a full canvas with floating controls. Phones exposed the same controls through canvas/material/preview/parameter tabs, with advanced disclosures for less frequent parameters. The home showed four tools; CSS shine and font toolkit had no entries on the home or in the tool-page switcher, while retaining their direct routes. Prototype routes in the table below no longer open a runnable prototype.
 
-| Tool            | Prototype                                                     | Main organization                                                                                          |
-| --------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| URL / QR        | [Open](http://127.0.0.1:1420/tools/url-qrcode?variant=F)      | Input toolbar, recursive editable tree, QR, records; no flat parsed-results summary                        |
-| Frame animation | [Open](http://127.0.0.1:1420/tools/frame-animation?variant=F) | Narrow left parameters, right canvas, unified toolbar, bottom materials with short playback directly above |
-| Nine-patch      | [Open](http://127.0.0.1:1420/tools/nine-patch?variant=F)      | Source canvas, independent floating eight-direction resizable preview, Parameters / CSS / Records          |
-| Lottie          | [Open](http://127.0.0.1:1420/tools/lottie-preview?variant=F)  | Main canvas, independent atlas, floating playback, three task tabs and persistent comparison/export        |
-| CSS shine       | [Open](http://127.0.0.1:1420/tools/css-shine?variant=F)       | Preview and code with compact controls                                                                     |
-| Font toolkit    | [Open](http://127.0.0.1:1420/tools/font-toolkit?variant=F)    | Imported-file toolbar, four task tabs, main content with compact parameters                                |
+| Tool            | Prototype                          | Main organization                                                                                          |
+| --------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| URL / QR        | `/tools/url-qrcode?variant=F`      | Input toolbar, recursive editable tree, QR, records; no flat parsed-results summary                        |
+| Frame animation | `/tools/frame-animation?variant=F` | Narrow left parameters, right canvas, unified toolbar, bottom materials with short playback directly above |
+| Nine-patch      | `/tools/nine-patch?variant=F`      | Source canvas, independent floating eight-direction resizable preview, Parameters / CSS / Records          |
+| Lottie          | `/tools/lottie-preview?variant=F`  | Main canvas, independent atlas, floating playback, three task tabs and persistent comparison/export        |
+| CSS shine       | `/tools/css-shine?variant=F`       | Preview and code with compact controls                                                                     |
+| Font toolkit    | `/tools/font-toolkit?variant=F`    | Imported-file toolbar, four task tabs, main content with compact parameters                                |
 
 All icon-only actions use the same borderless treatment across the home and six tool prototypes, including shared theme controls, canvas buttons, HUD controls, record actions and tree actions. Theme controls also remove their outer outline and internal separators. Hover fills, selected fills, disabled states and keyboard focus indicators remain. This applies to icon-sized Button controls and explicitly labeled native icon actions; form fields, color swatches, text actions and panel boundaries keep their existing borders. Toolbar imports that collapse to icons on narrow screens follow the same rule.
 
@@ -73,7 +75,7 @@ Download interaction replaces the historical U17 menu by explicit user request: 
 | [U24](features/url.md) | Input: hash restore and debounced share update                                     | `interface-wired` |
 | [U25](features/url.md) | Empty input, tree and QR states; active example button                             | `interface-wired` |
 
-[UI source](../../apps/web/src/ui-redesign-url.prototype.tsx)
+UI source (`ui-redesign-url.prototype.tsx`)
 
 ### Frame animation
 
@@ -100,7 +102,7 @@ Download interaction replaces the historical U17 menu by explicit user request: 
 | [F19](features/motion.md) | Import toolbar: clear materials                                 | `interface-wired` |
 | [F20](features/motion.md) | Canvas, strip, crop and output: errors, empty and busy states   | `interface-wired` |
 
-[UI source](../../apps/web/src/ui-redesign-frames-full.prototype.tsx)
+UI source (`ui-redesign-frames-full.prototype.tsx`)
 
 The desktop frame workspace uses a 240px left panel with Playback / Sprite / Code / Project tabs and persistent PNG export. Import, example, clear, reset, bounds and background controls share one toolbar above the right canvas. The sequence spans the full bottom width, including beneath the left panel, with the short playback strip directly above it. The left panel ends above the sequence and scrolls internally when needed. The sequence keeps selection, drag reorder, crop and sort; thumbnails show source dimensions and bytes directly. Canvas fitting reserves space below the preview for the sequence's measured height and playback controls, and playback stays centered in the right workspace. Its short progress slider follows playback and supports pointer or keyboard seeking across selected frames; seeking pauses playback without changing the configured playback/export range. Empty or single-frame sequences disable seeking. Phones retain Canvas / Materials / Settings views with the same controls; playback also sits above the sequence in Materials view. At the user's request, thumbnails no longer follow or highlight the playing frame; current-frame feedback stays in the progress control, and thumbnail clicks still pause and seek. This explicitly supersedes F06's historical automatic-highlight requirement. All other F01–F20 capabilities remain required.
 
@@ -138,7 +140,7 @@ The desktop frame workspace uses a 240px left panel with Playback / Sprite / Cod
 | [N28](features/nine.md) | Record tab: names, bytes and restored image/settings                           | `interface-wired` |
 | [N29](features/nine.md) | Record tab: delete and refresh                                                 | `interface-wired` |
 
-[UI source](../../apps/web/src/ui-redesign-nine-full.prototype.tsx)
+UI source (`ui-redesign-nine-full.prototype.tsx`)
 
 The revised nine-patch workspace uses a 240px left panel with Slice, Center Crop and Rendering groups. Border widths, outset, fill and both repeat axes stay expanded; CSS and Records remain separate tabs. Copy CSS, Save and cropped PNG download stay in the panel footer. A single top toolbar contains image actions, source metadata, source-view reset and shared background/bounds controls. The stretch preview is an overlay HUD, initially at the lower right. Drag its title bar to move it, or its outer edges/corners to resize the HUD; inputs and buttons do not start a drag. HUD geometry stays within the available canvas, re-clamps after viewport changes and has a separate layout-reset button. Keyboard arrows move the focused title grip or resize the focused lower-right outer handle by 8px (Shift: 32px). The source canvas no longer reserves a fixed slot for the HUD. Logical stretch dimensions remain independent: numeric inputs (96–720 × 64–480), eight-direction content resizing, corner keyboard controls, internal pan/zoom and view reset are retained. Phones retain Editor / Preview / Parameters and Output views, with HUD movement/resizing constrained to the preview area. HUD position and size are view state and are not saved in editing records. Existing processing and storage logic are unchanged. This revision has compiler and source checks only; browser interaction and visual verification were not rerun because automatic browser access was blocked by policy.
 
@@ -167,7 +169,7 @@ The revised nine-patch workspace uses a 240px left panel with Slice, Center Crop
 | [L19](features/motion.md) | Panel-footer message disclosure and mobile jump entry; busy and optimization states retained          | `interface-wired` |
 | [L20](features/motion.md) | Mobile canvas/atlas/parameters navigation; gestures retained                                          | `interface-wired` |
 
-[UI source](../../apps/web/src/ui-redesign-lottie-full.prototype.tsx)
+UI source (`ui-redesign-lottie-full.prototype.tsx`)
 
 ### CSS shine
 
@@ -183,7 +185,7 @@ The revised nine-patch workspace uses a 240px left panel with Slice, Center Crop
 | [C08](features/hidden.md) | Code toolbar: copy and success/failure feedback       | `interface-wired` |
 | [C09](features/hidden.md) | Preview and generated CSS: reduced-motion behavior    | `interface-wired` |
 
-[UI source](../../apps/web/src/ui-redesign-shine-full.prototype.tsx)
+UI source (`ui-redesign-shine-full.prototype.tsx`)
 
 ### Font toolkit
 
@@ -206,7 +208,7 @@ The revised nine-patch workspace uses a 240px left panel with Slice, Center Crop
 | [T15](features/hidden.md) | Result panel: size, glyph count, download and font-face code | `interface-wired` |
 | [T16](features/hidden.md) | Upload/export: busy, disabled and error states               | `interface-wired` |
 
-[UI source](../../apps/web/src/ui-redesign-font-full.prototype.tsx)
+UI source (`ui-redesign-font-full.prototype.tsx`)
 
 ### Shared behavior
 
@@ -222,7 +224,7 @@ The revised nine-patch workspace uses a 240px left panel with Slice, Center Crop
 | [G08](features/shared.md) | Dev-only Seo; production SSG unchanged, new-layout acceptance deferred                | `product-acceptance-deferred` |
 | [G09](features/shared.md) | Manifest and standalone metadata retained; Safari standalone check deferred           | `product-acceptance-deferred` |
 
-[UI source](../../apps/web/src/ui-redesign-workspace.prototype.tsx)
+UI source (`ui-redesign-workspace.prototype.tsx`)
 
 ## Checks performed
 
@@ -235,9 +237,9 @@ The revised nine-patch workspace uses a 240px left panel with Slice, Center Crop
 - Font: TTF import, four tabs, Unicode search/detail/custom subset, actual TTF and WOFF2 subset downloads, full conversion, health and text preview. WOFF2 used the real WASM path. Other input/output combinations remain to be exercised systematically.
 - This pass does not certify real-device touch/pinch, every image/font format, multiple large atlases, animated-resource/complex-animation visual fidelity, Safari standalone, or migration of existing product records. Existing engines retain their corresponding entry paths; these checks remain required before formal acceptance.
 
-Screenshots and export samples are in [the design scratch directory](../../.scratch/web-ui-redesign). Temporary browser scripts are under the ignored `.playwright-cli/` directory. See [validation results](prototype-validation.json) for the final repository checks and source-preservation comparison.
+Temporary screenshots, export samples and prototype sources are no longer retained. Prototype filenames above identify historical artifacts, not current repository paths. See the dated [validation results](prototype-validation.json) for recorded checks and the [design decisions](design-decisions.md) for the retained references. These documents alone cannot reproduce the historical runs.
 
-The [visual-direction ticket](../../.scratch/web-ui-redesign/issues/03-visual-direction.md) remains open for user review; this delivery does not approve the visual proposal or start product deployment.
+Visual review was completed on 2026-10-20; the accepted scope is summarized in the [design decisions](design-decisions.md). Earlier entries on this page retain their dated review status. Design approval did not itself authorize deployment; production verification is recorded separately in the [acceptance guide](../ui-redesign-acceptance.md).
 
 ## Lottie task-panel review
 

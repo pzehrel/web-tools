@@ -1,6 +1,6 @@
 # URL / QR review and remaining gaps
 
-> User decision on 2026-10-19: this layout revision was rejected because the preceding version looked better. The pre-review layout is restored: full-width input above the parameter tree and the QR/records column. The revision table below is historical; the feature-gap audit remains valid. The rejected component and SCSS are archived under `.scratch/web-ui-redesign/url-rejected-review.*`.
+> User decision on 2026-10-19: this layout revision was rejected because the preceding version looked better. The pre-review layout is restored: full-width input above the parameter tree and the QR/records column. The revision table below is historical; the feature-gap audit remains valid. The rejected prototype source is no longer retained; this report preserves the decision and audit limits.
 
 Reviewed on 2026-10-19 against the current product source, the [25 preservation groups](features/url.md) and the [current prototype mapping](prototype-current.md). This is a source audit and prototype revision, not browser acceptance.
 
@@ -32,7 +32,7 @@ Legacy migration is a deliberate prototype boundary, not permission to drop the 
 ## Evidence and limits
 
 - The main state/effect/handler block is identical to the current product page and the saved pre-review prototype. Thirteen existing interaction components are unchanged, including inline editing, subtree drag/drop, record previews and the two download operations.
-- All 67 original product-source hashes match the frozen snapshot. The UI changes are in the [prototype component](../../.scratch/web-ui-redesign/url-rejected-review.tsx) and its [SCSS](../../.scratch/web-ui-redesign/url-rejected-review.scss).
+- All 67 original product-source hashes match the frozen snapshot. This was a source-preservation check at the review date; the temporary prototype component and SCSS are no longer retained.
 - All 37 existing parser/tree tests passed. Lint, type checking, production build and a separate in-memory build of the complete prototype passed. Targeted URL lint has zero errors and three inherited React warnings.
 - Browser observation remains unavailable following the earlier browser security-policy denial. No alternative access was attempted. This revision has no new screenshots or live light/dark, pointer, keyboard, image-decode, export, storage or hash acceptance evidence. Source preservation and compilation do not replace those checks.
 

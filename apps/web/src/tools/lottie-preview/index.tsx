@@ -7,28 +7,30 @@ import {
   Download,
   FileArchive,
   FolderOpen,
-  Gauge,
   ImageIcon,
   LoaderCircle,
   Pause,
   Play,
   RotateCcw,
   Save,
-  Settings2,
-  SlidersHorizontal,
   Sparkles,
   Trash2,
   TriangleAlert,
-  X,
 } from 'lucide-react'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { CanvasErrorNotice } from '@/components/canvas-error-notice'
+import { CanvasFloatingHud } from '@/components/canvas-floating-hud'
+import { CanvasOptionGroup } from '@/components/canvas-option-group'
+import { CanvasPanelTabs } from '@/components/canvas-panel-tabs'
+import { CanvasViewActions } from '@/components/canvas-view-actions'
 import { Seo } from '@/components/seo'
-import { STAGE_BOUNDARY_CLASS, StageViewControls, useStageViewSettings } from '@/components/stage-view-controls'
+import { STAGE_BOUNDARY_CLASS, useStageViewSettings } from '@/components/stage-view-controls'
 
 import { StageZoomIndicator } from '@/components/stage-zoom-indicator'
 import { Button } from '@/components/ui/button'
-import { clampZoom, measureUnobstructedStageFit, useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
+import { useCanvasLayoutObserver } from '@/lib/react/use-canvas-layout-observer'
+import { clampZoom, measureAnchoredStageFit, useAutoFitZoom, useStageFitScale, useStagePan, useStageZoom } from '@/lib/stage'
 import { saveContentRecord } from '@/lib/storage/content-record'
 import { cn } from '@/lib/utils'
 import { createDemoProject } from '../demos/lottie-preview'
@@ -89,7 +91,7 @@ type LottieLibrary = 'lottie-react' | 'lottie-web'
 const PANEL_TABS = [
   ['atlas', '图集优化'],
   ['playback', '播放设置'],
-  ['records', '项目记录'],
+  ['records', '历史'],
 ] as const
 
 type PanelTab = typeof PANEL_TABS[number][0]
@@ -212,8 +214,7 @@ function Stat({ label, lastRow = false, title = label, value }: { label: string,
 }
 
 export default function LottiePreviewTool() {
-  const [mobileView, setMobileView] = useState<'canvas' | 'atlas' | 'params'>('canvas')
-  const [atlasOpen, setAtlasOpen] = useState(false)
+  const [mobileView, setMobileView] = useState<'canvas' | 'atlas' | 'resources' | 'params'>('canvas')
   const [panelTab, setPanelTab] = useState<PanelTab>('atlas')
   const [stageDimensions, setStageDimensions] = useState('')
   const zipInputRef = useRef<HTMLInputElement>(null)
@@ -222,7 +223,7 @@ export default function LottiePreviewTool() {
   const projectRef = useRef<LoadedLottieProject | null>(null)
   const resultRef = useRef<OptimizedLottieResult | null>(null)
   const [project, setProject] = useState<LoadedLottieProject | null>(null)
-  const [mainSafeLayout, setMainSafeLayout] = useState<{ project: LoadedLottieProject, fit: 'meet' | 'slice', zoom: number, offset: { x: number, y: number } } | null>(null)
+  const [mainSafeLayout, setMainSafeLayout] = useState<{ project: LoadedLottieProject | null, fit: 'meet' | 'slice', zoom: number, offset: { x: number, y: number }, bounds: { width: number, height: number } } | null>(null)
   const { records, save: saveRecordItem, get: getRecordItem, remove: removeRecordItem } = useLottieRecords()
   const [recordName, setRecordName] = useState('')
   const currentRecordIdRef = useRef<string | null>(null)
@@ -230,7 +231,6 @@ export default function LottiePreviewTool() {
   const [optimized, setOptimized] = useState<OptimizedLottieResult | null>(null)
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
   const [optimizationEnabled, setOptimizationEnabled] = useState(true)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [library, setLibrary] = useState<LottieLibrary>('lottie-web')
   const [renderer, setRenderer] = useState<'canvas' | 'svg'>('canvas')
   const [playing, setPlaying] = useState(false)
@@ -247,9 +247,11 @@ export default function LottiePreviewTool() {
   const [error, setError] = useState<string | null>(null)
   const [atlasZoom, setAtlasZoom] = useState(1)
   const messagesRef = useRef<HTMLDetailsElement>(null)
-  const messageCount = Number(Boolean(error)) + (project?.warnings.length ?? 0)
+  const messageCount = project?.warnings.length ?? 0
   const stageView = useStageViewSettings()
   const stageRef = useRef<HTMLDivElement>(null)
+  const anchorRef = useRef<HTMLDivElement>(null)
+  const emptyStateRef = useRef<HTMLDivElement>(null)
   const atlasStageRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const stage = stageRef.current
@@ -293,19 +295,33 @@ export default function LottiePreviewTool() {
 
   const measureMainStageView = useCallback(() => {
     const stage = stageRef.current
-    if (!stage || !project)
+    const anchor = anchorRef.current
+    const emptyState = emptyStateRef.current
+    if (!stage || !anchor || (!project && !emptyState))
       return null
-    const overlays = stage.closest('.lottie-workspace')?.querySelectorAll<HTMLElement>('.full-lottie-atlas') ?? []
-    const contentWidth = fit === 'slice' ? stage.clientWidth : project.animation.w
-    const contentHeight = fit === 'slice' ? stage.clientHeight : project.animation.h
-    const target = measureUnobstructedStageFit(stage, overlays, contentWidth, contentHeight, 24)
-    const meet = Math.min(stage.clientWidth / project.animation.w, stage.clientHeight / project.animation.h)
-    return { zoom: target.scale / (fit === 'slice' ? 1 : meet), offset: target.offset }
+    const workspace = stage.closest('.lottie-workspace')
+    const overlays = workspace?.querySelectorAll<HTMLElement>('.full-lottie-title, .full-lottie-params, .full-lottie-mobile-nav, .full-lottie-playback, .full-lottie-atlas, .full-lottie-resources-hud') ?? []
+    const contentWidth = project ? (fit === 'slice' ? stage.clientWidth : project.animation.w) : emptyState?.offsetWidth ?? 0
+    const contentHeight = project ? (fit === 'slice' ? stage.clientHeight : project.animation.h) : emptyState?.offsetHeight ?? 0
+    const target = measureAnchoredStageFit(stage, anchor, overlays, contentWidth, contentHeight, project ? 24 : 8)
+    const stageRect = stage.getBoundingClientRect()
+    const meet = project ? Math.min(stage.clientWidth / project.animation.w, stage.clientHeight / project.animation.h) : 1
+    let bounds = { width: 0, height: 0 }
+    if (project) {
+      bounds = fit === 'slice'
+        ? { width: stage.clientWidth, height: stage.clientHeight }
+        : { width: project.animation.w * meet, height: project.animation.h * meet }
+    }
+    return {
+      zoom: target.scale / (project && fit !== 'slice' ? meet : 1),
+      offset: { x: target.center.x - (stageRect.left + stageRect.right) / 2, y: target.center.y - (stageRect.top + stageRect.bottom) / 2 },
+      bounds,
+    }
   }, [fit, project])
 
   const updateMainSafeLayout = useCallback(() => {
     const target = measureMainStageView()
-    if (target && project)
+    if (target)
       setMainSafeLayout({ project, fit, ...target })
     return target
   }, [fit, measureMainStageView, project])
@@ -320,11 +336,11 @@ export default function LottiePreviewTool() {
 
   const initializedProjectRef = useRef<LoadedLottieProject | null>(null)
   useLayoutEffect(() => {
+    const target = updateMainSafeLayout()
     if (!project) {
       initializedProjectRef.current = null
       return
     }
-    const target = updateMainSafeLayout()
     if (target && initializedProjectRef.current !== project) {
       initializedProjectRef.current = project
       resetStagePan()
@@ -332,17 +348,14 @@ export default function LottiePreviewTool() {
     }
   }, [project, resetStagePan, resetStageZoom, updateMainSafeLayout])
 
-  useEffect(() => {
-    const stage = stageRef.current
-    if (!stage || !project)
-      return
-    const observer = new ResizeObserver(() => updateMainSafeLayout())
-    observer.observe(stage)
-    const atlas = stage.closest('.lottie-workspace')?.querySelector<HTMLElement>('.full-lottie-atlas')
-    if (atlas)
-      observer.observe(atlas)
-    return () => observer.disconnect()
-  }, [project, updateMainSafeLayout])
+  useCanvasLayoutObserver({
+    areaRef: stageRef,
+    emptyStateRef,
+    workspaceSelector: '.lottie-workspace',
+    hudSelector: '.full-lottie-title, .full-lottie-params, .full-lottie-mobile-nav, .full-lottie-playback, .full-lottie-atlas, .full-lottie-resources-hud',
+    workspaceAttributes: ['data-mobile-view', 'data-has-messages'],
+    onChange: updateMainSafeLayout,
+  })
 
   const stageOffsetX = (activeMainLayout?.offset.x ?? 0) + stagePan.offset.x
   const stageOffsetY = (activeMainLayout?.offset.y ?? 0) + stagePan.offset.y
@@ -361,7 +374,6 @@ export default function LottiePreviewTool() {
   const resetProjectSettings = useCallback(() => {
     setOptions(DEFAULT_OPTIONS)
     setOptimizationEnabled(true)
-    setAdvancedOpen(false)
     setRecordName('')
     setLibrary('lottie-web')
     setRenderer('canvas')
@@ -504,10 +516,8 @@ export default function LottiePreviewTool() {
         fit,
       }
       const result = await saveContentRecord('lottie-preview', archive, meta, currentRecordIdRef.current, automatic, createLottieItem, saveRecordItem)
-      if (operation === operationRef.current) {
+      if (operation === operationRef.current)
         currentRecordIdRef.current = result.id
-        setRecordName('')
-      }
     }
     catch (reason) {
       if (operation === operationRef.current)
@@ -655,70 +665,65 @@ export default function LottiePreviewTool() {
   }
 
   const resourceResult = (
-    <section className="full-lottie-resources">
-      <div className="flex min-h-8 items-center gap-2 pb-2">
-        <Gauge className="size-4 text-muted-foreground" />
-        <h2 className="font-mono text-sm font-semibold tracking-tight">资源结果</h2>
-      </div>
-      <p className={cn('pb-3 text-xs', project?.warnings.length ? 'text-warning-muted-foreground' : optimized && !optimizing ? 'text-success' : 'text-info')}>
-        {!project ? '导入素材后显示图集与资源统计。' : project.warnings.length > 0 ? '资源路径校验未通过，展开上方消息查看。' : project.images.size === 0 ? 'data.json 没有引用可预览的图片素材。' : optimizableImageCount === 0 && excludedImageDescription ? excludedImageDescription : !optimizationEnabled ? '图集优化已关闭，画布显示原始素材。' : optimizing ? '正在重新排布图集，画布先显示原始素材…' : optimized ? '画布当前显示的就是此导出结果。' : '等待图集优化结果'}
-      </p>
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-muted/30">
-          <ComparisonStat
-            label="体积"
-            title="资源体积"
-            before={resourceSizeComparison.before}
-            after={resourceSizeComparison.after}
-            unit={resourceSizeComparison.unit}
-            negative={Boolean(optimized && project && resourceMetrics?.optimizedResourceBytes != null && resourceMetrics.optimizedResourceBytes > project.sourceBytes)}
-          />
-          <ComparisonStat
-            label="纹理"
-            title="纹理数量"
-            before={resourceMetrics ? `${resourceMetrics.sourceImageCount}` : '—'}
-            after={optimized && resourceMetrics ? `${resourceMetrics.activeTextureCount}` : '—'}
-            negative={Boolean(optimized && resourceMetrics && resourceMetrics.activeTextureCount > resourceMetrics.sourceImageCount)}
-          />
-          <ComparisonStat
-            label="像素"
-            title="纹理像素"
-            before={texturePixelComparison.before}
-            after={texturePixelComparison.after}
-            unit={texturePixelComparison.unit}
-            negative={Boolean(optimized && resourceMetrics && resourceMetrics.activeTextureBytes / 4 > resourceMetrics.sourcePixels)}
-          />
-          <ComparisonStat
-            label="内存"
-            title="RGBA 内存"
-            before={textureMemoryComparison.before}
-            after={textureMemoryComparison.after}
-            unit={textureMemoryComparison.unit}
-            negative={Boolean(optimized && resourceMetrics && resourceMetrics.activeTextureBytes > resourceMetrics.sourceDecodedBytes)}
-          />
-          <Stat label="图集" title="图集数" value={optimized ? `${optimized.atlases.length}` : '—'} lastRow />
-          <Stat label="占用" title="占用率" value={optimized ? `${(optimized.occupancy * 100).toFixed(1)}%` : '—'} lastRow />
+    <div className="full-lottie-resources">
+      <div className="full-lottie-resources-body">
+        <p className={cn('pb-3 text-xs', project?.warnings.length ? 'text-warning-muted-foreground' : optimized && !optimizing ? 'text-success' : 'text-info')}>
+          {!project ? '导入素材后显示图集与资源统计。' : project.warnings.length > 0 ? '资源路径校验未通过，在参数面板查看素材消息。' : project.images.size === 0 ? 'data.json 没有引用可预览的图片素材。' : optimizableImageCount === 0 && excludedImageDescription ? excludedImageDescription : !optimizationEnabled ? '图集优化已关闭，画布显示原始素材。' : optimizing ? '正在重新排布图集，画布先显示原始素材…' : optimized ? '画布当前显示的就是此导出结果。' : '等待图集优化结果'}
+        </p>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-muted/30">
+            <ComparisonStat
+              label="体积"
+              title="资源体积"
+              before={resourceSizeComparison.before}
+              after={resourceSizeComparison.after}
+              unit={resourceSizeComparison.unit}
+              negative={Boolean(optimized && project && resourceMetrics?.optimizedResourceBytes != null && resourceMetrics.optimizedResourceBytes > project.sourceBytes)}
+            />
+            <ComparisonStat
+              label="纹理"
+              title="纹理数量"
+              before={resourceMetrics ? `${resourceMetrics.sourceImageCount}` : '—'}
+              after={optimized && resourceMetrics ? `${resourceMetrics.activeTextureCount}` : '—'}
+              negative={Boolean(optimized && resourceMetrics && resourceMetrics.activeTextureCount > resourceMetrics.sourceImageCount)}
+            />
+            <ComparisonStat
+              label="像素"
+              title="纹理像素"
+              before={texturePixelComparison.before}
+              after={texturePixelComparison.after}
+              unit={texturePixelComparison.unit}
+              negative={Boolean(optimized && resourceMetrics && resourceMetrics.activeTextureBytes / 4 > resourceMetrics.sourcePixels)}
+            />
+            <ComparisonStat
+              label="内存"
+              title="RGBA 内存"
+              before={textureMemoryComparison.before}
+              after={textureMemoryComparison.after}
+              unit={textureMemoryComparison.unit}
+              negative={Boolean(optimized && resourceMetrics && resourceMetrics.activeTextureBytes > resourceMetrics.sourceDecodedBytes)}
+            />
+            <Stat label="图集" title="图集数" value={optimized ? `${optimized.atlases.length}` : '—'} lastRow />
+            <Stat label="占用" title="占用率" value={optimized ? `${(optimized.occupancy * 100).toFixed(1)}%` : '—'} lastRow />
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            优化前 → 图集后；红色为增加。内存按 RGBA 4 B/px 估算，未计 Canvas 等开销。
+          </p>
+          <p className="flex min-h-4 items-center gap-1 text-xs text-muted-foreground">
+            <ImageIcon className="size-3.5" />
+            <span className="truncate">
+              {optimized ? `${optimized.sourceImageCount} 个引用 → ${optimized.packedImageCount} 份像素数据` : '生成图集后显示素材合并统计'}
+            </span>
+          </p>
         </div>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          优化前 → 图集后；红色为增加。内存按 RGBA 4 B/px 估算，未计 Canvas 等开销。
-        </p>
-        <p className="flex min-h-4 items-center gap-1 text-xs text-muted-foreground">
-          <ImageIcon className="size-3.5" />
-          <span className="truncate">
-            {optimized ? `${optimized.sourceImageCount} 个引用 → ${optimized.packedImageCount} 份像素数据` : '生成图集后显示素材合并统计'}
-          </span>
-        </p>
-        <Button type="button" className="w-full" onClick={() => void exportProject()} disabled={!optimized || busy || optimizing}>
-          <Download />
-          导出 ZIP
-        </Button>
       </div>
-    </section>
+    </div>
   )
 
   return (
-    <main aria-busy={busy} className="lottie-workspace" data-mobile-view={mobileView} data-atlas-open={atlasOpen} data-has-messages={messageCount > 0}>
+    <main aria-busy={busy} className="lottie-workspace" data-mobile-view={mobileView} data-has-messages={messageCount > 0}>
       <Seo title="Lottie 预览" description="导入 Lottie 动画，预览播放并优化纹理图集。" path="/tools/lottie-preview" />
+      <div ref={anchorRef} className="canvas-default-anchor" aria-hidden="true" />
       <input ref={zipInputRef} type="file" accept=".zip,application/zip" className="hidden" onChange={onFileChange} />
       <input ref={directoryInputRef} type="file" multiple className="hidden" onChange={onFileChange} {...{ directory: '', webkitdirectory: '' }} />
       <div className="full-lottie-canvas" style={{ background: stageView.background }}>
@@ -795,7 +800,11 @@ export default function LottiePreviewTool() {
                   </div>
                 )
               : (
-                  <div className="canvas-empty-state m-auto flex w-full flex-col items-center gap-3 text-center">
+                  <div
+                    ref={emptyStateRef}
+                    className="canvas-empty-state m-auto flex w-full flex-col items-center gap-3 text-center"
+                    style={{ transform: `translate(${activeMainLayout?.offset.x ?? 0}px, ${activeMainLayout?.offset.y ?? 0}px) scale(${Math.min(1, activeMainLayout?.zoom ?? 1)})` }}
+                  >
                     <div className="flex items-center justify-center text-muted-foreground">
                       <FileArchive className="size-8" />
                     </div>
@@ -823,10 +832,10 @@ export default function LottiePreviewTool() {
             <div
               aria-hidden="true"
               data-testid="lottie-stage-boundary"
-              className={cn('pointer-events-none absolute top-1/2 left-1/2', STAGE_BOUNDARY_CLASS)}
+              className={cn('pointer-events-none absolute top-1/2 left-1/2', STAGE_BOUNDARY_CLASS, 'outline-1 -outline-offset-1')}
               style={{
-                width: `${zoom * 100}%`,
-                height: `${zoom * 100}%`,
+                width: `${(activeMainLayout?.bounds.width ?? 0) * zoom}px`,
+                height: `${(activeMainLayout?.bounds.height ?? 0) * zoom}px`,
                 transform: `translate(calc(-50% + ${stageOffsetX}px), calc(-50% + ${stageOffsetY}px))`,
               }}
             />
@@ -836,11 +845,11 @@ export default function LottiePreviewTool() {
               <LoaderCircle className="size-7 animate-spin" />
             </div>
           )}
-          <StageZoomIndicator zoom={zoom} visible={stageZoom.zoomIndicatorVisible} />
-
         </div>
 
+        <StageZoomIndicator placement="workspace" zoom={zoom} visible={stageZoom.zoomIndicatorVisible} />
       </div>
+      {error && <CanvasErrorNotice message={error} onDismiss={() => setError(null)} />}
       <div className="full-lottie-title" aria-label="画布工具栏">
         <div className="full-lottie-imports" aria-label="项目导入">
           <Button type="button" variant="outline" aria-label="导入 ZIP" title="导入 ZIP" onClick={() => zipInputRef.current?.click()} disabled={busy}>
@@ -851,20 +860,16 @@ export default function LottiePreviewTool() {
             <FolderOpen />
             <span>目录</span>
           </Button>
-          <Button type="button" variant="outline" aria-label="示例" title="载入示例" onClick={() => void loadDemo()} disabled={busy}>
-            <Sparkles />
-            <span>示例</span>
-          </Button>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="清除项目" title="清除项目" onClick={clearProject} disabled={!project && !busy}><Trash2 /></Button>
+          <Button type="button" variant="ghost" size="icon-sm" className="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/80" aria-label="清除项目" title="清除项目" onClick={clearProject} disabled={!project && !busy}><Trash2 /></Button>
         </div>
         <span className="full-lottie-project-info" title={project ? `${project.name} · ${project.animation.w}×${project.animation.h} · ${project.animation.fr} FPS` : undefined}>{project ? `${project.name} · ${project.animation.w}×${project.animation.h} · ${project.animation.fr} FPS` : '导入 Lottie ZIP 或目录'}</span>
         {messageCount > 0 && (
           <button
             type="button"
             className="full-lottie-message-entry"
-            data-tone={error ? 'error' : 'warning'}
+            data-tone="warning"
             aria-label="查看素材消息"
-            title={error ?? `${messageCount} 条素材消息`}
+            title={`${messageCount} 条素材消息`}
             onClick={() => {
               setMobileView('params')
               if (messagesRef.current)
@@ -872,8 +877,8 @@ export default function LottiePreviewTool() {
               requestAnimationFrame(() => messagesRef.current?.querySelector('summary')?.focus())
             }}
           >
-            <span role={error ? 'alert' : 'status'}>
-              {error ? '失败' : '消息'}
+            <span role="status">
+              消息
               {' '}
               ·
               {' '}
@@ -881,77 +886,23 @@ export default function LottiePreviewTool() {
             </span>
           </button>
         )}
-        <div className="full-lottie-view-controls" aria-label="画布视图">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            title="适配并居中"
-            aria-label="重置视图"
-            disabled={!activeAnimation}
-            onClick={resetMainStageView}
-          >
-            <RotateCcw />
-          </Button>
-          <StageViewControls hasContent={Boolean(activeAnimation)} settings={stageView} />
-          <Button
-            type="button"
-            variant={atlasOpen ? 'secondary' : 'ghost'}
-            className="full-lottie-atlas-trigger"
-            aria-label="图集预览"
-            aria-expanded={atlasOpen}
-            aria-controls="lottie-atlas-preview"
-            onClick={() => setAtlasOpen(value => !value)}
-          >
-            <ImageIcon />
-            <span>图集预览</span>
-          </Button>
-        </div>
+        <CanvasViewActions className="full-lottie-view-controls" hasContent={Boolean(activeAnimation)} settings={stageView} onReset={resetMainStageView} resetLabel="重置视图" resetTitle="适配并居中" />
       </div>
       <nav className="full-lottie-mobile-nav" aria-label="工作区视图">
-        {([['canvas', '画布'], ['atlas', '图集'], ['params', '参数与项目']] as const).map(([value, label]) => (
+        {([['canvas', '画布'], ['atlas', '图集'], ['resources', '资源'], ['params', '参数与项目']] as const).map(([value, label]) => (
           <button key={value} type="button" aria-pressed={mobileView === value} onClick={() => setMobileView(value)}>{label}</button>
         ))}
       </nav>
       <aside className="full-lottie-params" aria-label="Lottie 参数与项目">
         <div className="full-lottie-params-heading">
-          <div role="tablist" aria-label="参数任务" className="full-lottie-panel-tabs">
-            {PANEL_TABS.map(([value, label], index) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                id={`lottie-tab-${value}`}
-                aria-selected={panelTab === value}
-                aria-controls={`lottie-panel-${value}`}
-                tabIndex={panelTab === value ? 0 : -1}
-                onClick={() => setPanelTab(value)}
-                onKeyDown={(event) => {
-                  const movement = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
-                  if (!movement && event.key !== 'Home' && event.key !== 'End')
-                    return
-                  event.preventDefault()
-                  event.stopPropagation()
-                  const next = event.key === 'Home' ? 0 : event.key === 'End' ? PANEL_TABS.length - 1 : (index + movement + PANEL_TABS.length) % PANEL_TABS.length
-                  setPanelTab(PANEL_TABS[next][0])
-                  document.getElementById(`lottie-tab-${PANEL_TABS[next][0]}`)?.focus()
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <CanvasPanelTabs tabs={PANEL_TABS} value={panelTab} onChange={setPanelTab} idPrefix="lottie" label="参数任务" className="full-lottie-panel-tabs" />
         </div>
         <div className="full-lottie-params-body">
           <section role="tabpanel" id="lottie-panel-atlas" aria-labelledby="lottie-tab-atlas" hidden={panelTab !== 'atlas'}>
-            <div className="flex min-h-8 items-center justify-between gap-2">
-              <div className="flex min-h-8 items-center gap-2">
-                <Settings2 className="size-4 text-muted-foreground" />
-                <h2 className="font-mono text-sm font-semibold tracking-tight">图集设置</h2>
-              </div>
+            <div className="flex items-center justify-between gap-2 pb-3">
+              <p className="text-xs text-muted-foreground">{project && excludedImageDescription ? excludedImageDescription : '开启后画布与导出均使用图集素材'}</p>
               <Checkbox checked={optimizationEnabled && optimizableImageCount > 0} onChange={setOptimizationEnabled} label="纹理图集优化" disabled={!project || optimizableImageCount === 0} />
             </div>
-            <p className="pb-3 text-xs text-muted-foreground">{project && excludedImageDescription ? excludedImageDescription : '开启后画布与导出均使用图集素材'}</p>
             <div>
               <fieldset disabled={!optimizationEnabled || !project || optimizableImageCount === 0} className={cn((!optimizationEnabled || !project || optimizableImageCount === 0) && 'opacity-45')}>
                 <label className="mb-3 block text-xs font-medium text-muted-foreground">
@@ -976,62 +927,53 @@ export default function LottiePreviewTool() {
                   <SettingRow label="允许旋转" description="打包时可将素材旋转 90°，通常更省空间"><Checkbox checked={options.allowRotation} onChange={value => updateOption('allowRotation', value)} label="允许旋转" /></SettingRow>
                   <SettingRow label="裁掉透明边" description="保留原始 Lottie 尺寸与定位"><Checkbox checked={options.allowTrim} onChange={value => updateOption('allowTrim', value)} label="裁掉透明边" /></SettingRow>
                   <SettingRow label="合并相同图片" description="像素完全一致的素材只存一份"><Checkbox checked={options.detectIdentical} onChange={value => updateOption('detectIdentical', value)} label="合并相同图片" /></SettingRow>
+                  <SettingRow label="2 的幂尺寸" description="输出 128 / 256 / 512…"><Checkbox checked={options.powerOfTwo} onChange={value => updateOption('powerOfTwo', value)} label="2 的幂尺寸" /></SettingRow>
+                  <SettingRow label="正方形图集" description="宽高保持相同"><Checkbox checked={options.square} onChange={value => updateOption('square', value)} label="正方形图集" /></SettingRow>
+                  <label className="block py-3 text-xs font-medium text-muted-foreground">
+                    Alpha 阈值（0–255）
+                    <input type="number" min={0} max={255} value={options.alphaThreshold} onChange={event => updateOption('alphaThreshold', Math.min(255, Math.max(0, Number(event.target.value))))} className={cn(INPUT_CLASS, 'mt-1')} />
+                  </label>
                 </div>
-                <button type="button" onClick={() => setAdvancedOpen(value => !value)} className="mt-3 text-xs font-semibold text-primary underline underline-offset-4">{advancedOpen ? '收起高级选项' : '展开高级选项'}</button>
-                {advancedOpen && (
-                  <div className="mt-2 rounded-md border border-border bg-muted/30 px-3">
-                    <SettingRow label="2 的幂尺寸" description="输出 128 / 256 / 512…"><Checkbox checked={options.powerOfTwo} onChange={value => updateOption('powerOfTwo', value)} label="2 的幂尺寸" /></SettingRow>
-                    <SettingRow label="正方形图集" description="宽高保持相同"><Checkbox checked={options.square} onChange={value => updateOption('square', value)} label="正方形图集" /></SettingRow>
-                    <label className="block py-3 text-xs font-medium text-muted-foreground">
-                      Alpha 阈值（0–255）
-                      <input type="number" min={0} max={255} value={options.alphaThreshold} onChange={event => updateOption('alphaThreshold', Math.min(255, Math.max(0, Number(event.target.value))))} className={cn(INPUT_CLASS, 'mt-1')} />
-                    </label>
-                  </div>
-                )}
               </fieldset>
             </div>
           </section>
           <section role="tabpanel" id="lottie-panel-playback" aria-labelledby="lottie-tab-playback" hidden={panelTab !== 'playback'}>
-            <div className="flex min-h-8 items-center gap-2 pb-3">
-              <SlidersHorizontal className="size-4 text-muted-foreground" />
-              <h2 className="font-mono text-sm font-semibold tracking-tight">Lottie 设置</h2>
-            </div>
             <div className="space-y-4">
               <div>
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">渲染库</p>
-                <div className="grid grid-cols-2 rounded-md border border-border bg-background" role="tablist" aria-label="Lottie 渲染库">
-                  {([
-                    ['lottie-web', 'lottie-web'],
-                    ['lottie-react', 'lottie-react 2'],
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      role="tab"
-                      aria-selected={library === value}
-                      onClick={() => setLibrary(value)}
-                      className={cn('rounded-sm px-2 py-1.5 transition-colors text-xs font-medium', library === value && 'bg-primary text-primary-foreground')}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <CanvasOptionGroup<LottieLibrary>
+                  label="Lottie 渲染库"
+                  value={library}
+                  onChange={setLibrary}
+                  options={[
+                    { value: 'lottie-web', label: 'lottie-web' },
+                    { value: 'lottie-react', label: 'lottie-react 2' },
+                  ]}
+                />
               </div>
               <div>
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">渲染器</p>
-                <div className="grid grid-cols-2 rounded-md border border-border bg-background">
-                  {(['canvas', 'svg'] as const).map(value => (
-                    <button key={value} type="button" aria-pressed={renderer === value} onClick={() => setRenderer(value)} className={cn('rounded-sm px-2 py-1.5 transition-colors text-xs font-medium', renderer === value && 'bg-primary text-primary-foreground')}>{value}</button>
-                  ))}
-                </div>
+                <CanvasOptionGroup<'canvas' | 'svg'>
+                  label="渲染器"
+                  value={renderer}
+                  onChange={setRenderer}
+                  options={[
+                    { value: 'canvas', label: 'canvas' },
+                    { value: 'svg', label: 'svg' },
+                  ]}
+                />
               </div>
               <div>
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">画布适配</p>
-                <div className="grid grid-cols-2 rounded-md border border-border bg-background">
-                  {(['meet', 'slice'] as const).map(value => (
-                    <button key={value} type="button" aria-pressed={fit === value} onClick={() => setFit(value)} className={cn('rounded-sm px-2 py-1.5 transition-colors text-xs font-medium', fit === value && 'bg-primary text-primary-foreground')}>{value === 'meet' ? '完整显示' : '铺满裁切'}</button>
-                  ))}
-                </div>
+                <CanvasOptionGroup<'meet' | 'slice'>
+                  label="画布适配"
+                  value={fit}
+                  onChange={setFit}
+                  options={[
+                    { value: 'meet', label: '完整显示' },
+                    { value: 'slice', label: '铺满裁切' },
+                  ]}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-xs font-medium text-muted-foreground">
@@ -1058,19 +1000,9 @@ export default function LottiePreviewTool() {
             </div>
           </section>
           <section className="min-w-0" role="tabpanel" id="lottie-panel-records" aria-labelledby="lottie-tab-records" hidden={panelTab !== 'records'}>
-            <div className="pb-1">
-              <h2 className="font-mono text-sm font-semibold tracking-tight">记录</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">导入后自动保存素材包；调整参数后点保存更新项目。相同素材不会新增记录。</p>
-            </div>
+            <p className="mb-3 text-xs text-muted-foreground">导入后自动保存素材包；调整参数后点保存更新项目。相同素材不会新增记录。</p>
             <div>
-              <div className="flex items-center gap-2">
-                <input
-                  value={recordName}
-                  onChange={event => setRecordName(event.target.value)}
-                  placeholder={project?.name ?? '项目名称'}
-                  aria-label="项目名称"
-                  className={INPUT_CLASS}
-                />
+              <div className="flex justify-end">
                 <Button type="button" size="icon-sm" title="保存当前项目" aria-label="保存当前项目" disabled={!project || busy} onClick={() => void saveRecord()}>
                   {busy ? <LoaderCircle className="animate-spin" /> : <Save />}
                 </Button>
@@ -1083,7 +1015,7 @@ export default function LottiePreviewTool() {
                         {record.recordName}
                       </button>
                       <span className="shrink-0 text-xs text-muted-foreground">{record.projectSize}</span>
-                      <Button type="button" variant="ghost" size="icon-sm" disabled={busy} aria-label={`删除项目 ${record.recordName}`} onClick={() => void deleteRecord(record.id)}>
+                      <Button type="button" variant="ghost" size="icon-sm" className="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/80" disabled={busy} aria-label={`删除项目 ${record.recordName}`} onClick={() => void deleteRecord(record.id)}>
                         <Trash2 />
                       </Button>
                     </div>
@@ -1094,32 +1026,21 @@ export default function LottiePreviewTool() {
           </section>
         </div>
         <div className="full-lottie-params-footer">
-          {(error || Boolean(project?.warnings.length)) && (
+          {messageCount > 0 && (
             <details
-              key={error ?? project?.warnings.join('\n')}
+              key={project?.warnings.join('\n')}
               ref={messagesRef}
-              open={Boolean(error)}
-              data-error={Boolean(error)}
               className="full-lottie-messages"
               aria-label="素材消息"
               aria-live="polite"
             >
               <summary className="full-lottie-message-toggle">
                 <TriangleAlert size={13} />
-                <span>{error ? '处理失败' : '素材消息'}</span>
+                <span>素材消息</span>
                 <span className="full-lottie-message-count">{messageCount}</span>
                 <ChevronDown size={13} />
               </summary>
               <div className="full-lottie-message-body">
-                {error && (
-                  <div className="flex gap-3 rounded-md border p-4" data-tone="error" role="alert">
-                    <TriangleAlert className="mt-0.5 size-5 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-semibold">处理失败</p>
-                      <p className="mt-1 text-sm font-bold">{error}</p>
-                    </div>
-                  </div>
-                )}
                 {Boolean(project?.warnings.length) && (
                   <div className="flex gap-3 rounded-md border p-4" data-tone="warning" role="status">
                     <TriangleAlert className="mt-0.5 size-5 shrink-0" />
@@ -1139,18 +1060,29 @@ export default function LottiePreviewTool() {
               </div>
             </details>
           )}
-          {resourceResult}
+          <Button type="button" className="w-full" onClick={() => void exportProject()} disabled={!optimized || busy || optimizing}>
+            <Download />
+            导出
+          </Button>
         </div>
       </aside>
-      <section id="lottie-atlas-preview" className="full-lottie-atlas" aria-label="独立图集预览">
-        <div className="full-lottie-atlas-heading">
-          <h2>图集预览</h2>
-          <span title={optimized ? atlasDimensions : undefined}>{optimized ? `${optimized.atlases.length} 张 · ${atlasDimensions}` : optimizing ? '生成中' : '暂无图集'}</span>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="收起图集预览" title="收起图集预览" onClick={() => setAtlasOpen(false)}><X /></Button>
-        </div>
+      <CanvasFloatingHud
+        className="full-lottie-atlas"
+        title="图集预览"
+        workspaceSelector=".lottie-workspace"
+        toolbarSelector=".full-lottie-title"
+        otherHudSelector=".full-lottie-resources-hud"
+        topPriority
+        boundsBottomSelector=".full-lottie-playback"
+        mobileTopInset={94}
+        controls={(
+          <span className="full-lottie-atlas-info" title={optimized ? atlasDimensions : undefined}>
+            {optimized ? `${optimized.atlases.length} 张 · ${atlasDimensions}` : optimizing ? '生成中' : '暂无图集'}
+          </span>
+        )}
+      >
         <div className="full-lottie-atlas-body">
-          <div className="space-y-1.5">
-
+          <div className="full-lottie-atlas-stage-wrap">
             <div
               ref={atlasStageRef}
               data-testid="lottie-atlas-stage"
@@ -1190,7 +1122,7 @@ export default function LottiePreviewTool() {
                               <div
                                 aria-hidden="true"
                                 data-testid="lottie-atlas-boundary"
-                                className={cn('pointer-events-none absolute inset-0', STAGE_BOUNDARY_CLASS)}
+                                className={cn('pointer-events-none absolute inset-0', STAGE_BOUNDARY_CLASS, 'outline-1 -outline-offset-1')}
                               />
                             )}
                           </div>
@@ -1225,9 +1157,20 @@ export default function LottiePreviewTool() {
               )}
             </div>
           </div>
-
         </div>
-      </section>
+      </CanvasFloatingHud>
+      <CanvasFloatingHud
+        className="full-lottie-resources-hud"
+        title="资源结果"
+        workspaceSelector=".lottie-workspace"
+        toolbarSelector=".full-lottie-title"
+        otherHudSelector=".full-lottie-atlas"
+        topPriority={false}
+        boundsBottomSelector=".full-lottie-playback"
+        mobileTopInset={94}
+      >
+        {resourceResult}
+      </CanvasFloatingHud>
       <div className="full-lottie-playback">
         <Button type="button" size="icon" variant="outline" aria-label={playing ? '暂停' : '播放'} onClick={() => setPlaying(value => !value)} disabled={!activeAnimation}>
           {playing ? <Pause /> : <Play />}

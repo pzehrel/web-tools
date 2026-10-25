@@ -59,6 +59,6 @@ Preserving capabilities does not require reproducing known defects or obsolete c
 
 ## Design boundary
 
-The separate [design map](../../.scratch/web-ui-redesign/map.md) tracks visual decisions. The user's requests for compact controls, visible canvases, floating parameters/preview and complete UI redesign remain active; F's exact palette and component choices are still proposals. The added flat “parsed results” panel is excluded, while the URL tree and its interactions remain protected. Removing promotional claims about device/local data does not remove data handling or compatibility capabilities.
+The [design decision record](design-decisions.md) summarizes the reviewed direction. The remaining paragraph describes the earlier audit boundary. The user's requests for compact controls, visible canvases, floating parameters/preview and complete UI redesign remain active; F's exact palette and component choices are still proposals. The added flat “parsed results” panel is excluded, while the URL tree and its interactions remain protected. Removing promotional claims about device/local data does not remove data handling or compatibility capabilities.
 
 This baseline is a repository document. This inventory task does not modify product UI, expand prototype functionality, publish a site or treat the overall redesign as approved.

@@ -1,5 +1,7 @@
 # 当前完整功能 F 原型
 
+> **历史原型记录：**本页描述已移除的设计原型，不是当前产品的操作指南。原型路由与文件名仅作历史标识；已确认方向见[设计决策](design-decisions.zh-CN.md)，生产验证见[验收记录](../ui-redesign-acceptance.zh-CN.md)。
+
 [English](prototype-current.md) · [功能保留基线](README.zh-CN.md) · [机器可读映射](prototype-current.json)
 
 六个重新设计的工具现已为基线中的 **119 组工具功能**提供界面与操作入口，并接通共享导航、主题和画布控件。这是设计原型，不是正式产品实现或完整回归验收。解析、渲染、优化与导出继续复用原有引擎。本布局提案不删除既有能力。
@@ -8,18 +10,18 @@
 
 ## 如何评审
 
-已发布面向首页、共享界面与四个公开工具的[正式实施规格](../../.scratch/web-ui-redesign-implementation/spec.zh-CN.md)。下方隐藏工具条目继续作为保留／参考资料，其重设计暂缓。
+已发布面向首页、共享界面与四个公开工具的[正式实施规格](implementation-spec.zh-CN.md)。下方隐藏工具条目继续作为保留／参考资料，其重设计暂缓。
 
-运行 `pnpm dev` 后打开对应路由。桌面画布工具默认直接展示完整画布，控件浮动其上。手机通过各工具的画布／素材／预览／参数标签访问同一组控件；低频参数位于可展开的高级区。首页继续只显示四个工具；CSS 扫光和字体工具箱在首页与工具页切换菜单中均不显示入口，既有直达路由保留。
+评审时，桌面画布工具默认直接展示完整画布，控件浮动其上。手机通过各工具的画布／素材／预览／参数标签访问同一组控件，低频参数位于可展开的高级区。首页只显示四个工具；CSS 扫光和字体工具箱在首页与工具页切换菜单中均不显示入口，既有直达路由保留。下表中的原型路由不再是可运行原型的入口。
 
-| 工具        | 原型                                                          | 主要组织方式                                                 |
-| ----------- | ------------------------------------------------------------- | ------------------------------------------------------------ |
-| URL／二维码 | [打开](http://127.0.0.1:1420/tools/url-qrcode?variant=F)      | 输入工具行、递归可编辑树、二维码与记录；没有平面解析结果摘要 |
-| 帧动画      | [打开](http://127.0.0.1:1420/tools/frame-animation?variant=F) | 窄左侧参数、右侧画布、统一工具条、底部素材及其上方短播放条   |
-| 点九图      | [打开](http://127.0.0.1:1420/tools/nine-patch?variant=F)      | 源图画布、独立浮动八向缩边预览，参数／CSS／记录              |
-| Lottie      | [打开](http://127.0.0.1:1420/tools/lottie-preview?variant=F)  | 主画布、独立图集、浮动播放条、三个任务标签与常驻对比／导出   |
-| CSS 扫光    | [打开](http://127.0.0.1:1420/tools/css-shine?variant=F)       | 预览与代码搭配紧凑参数区                                     |
-| 字体工具箱  | [打开](http://127.0.0.1:1420/tools/font-toolkit?variant=F)    | 已导入文件工具行、四个任务标签、主体搭配紧凑参数区           |
+| 工具        | 原型                               | 主要组织方式                                                 |
+| ----------- | ---------------------------------- | ------------------------------------------------------------ |
+| URL／二维码 | `/tools/url-qrcode?variant=F`      | 输入工具行、递归可编辑树、二维码与记录；没有平面解析结果摘要 |
+| 帧动画      | `/tools/frame-animation?variant=F` | 窄左侧参数、右侧画布、统一工具条、底部素材及其上方短播放条   |
+| 点九图      | `/tools/nine-patch?variant=F`      | 源图画布、独立浮动八向缩边预览，参数／CSS／记录              |
+| Lottie      | `/tools/lottie-preview?variant=F`  | 主画布、独立图集、浮动播放条、三个任务标签与常驻对比／导出   |
+| CSS 扫光    | `/tools/css-shine?variant=F`       | 预览与代码搭配紧凑参数区                                     |
+| 字体工具箱  | `/tools/font-toolkit?variant=F`    | 已导入文件工具行、四个任务标签、主体搭配紧凑参数区           |
 
 首页和六个工具原型中的纯图标操作统一去掉描边，包括共享主题控件、画布按钮、HUD 控件、记录操作与树操作。主题控件同时去掉外框和内部按钮分隔线。悬停填充、选中填充、禁用状态与键盘焦点提示保留。此规则覆盖图标尺寸的 Button 和明确标注的原生图标操作；表单输入、色板、文字操作及面板边界保留现有边框。窄屏下收为图标的工具条导入操作采用同一规则。
 
@@ -73,7 +75,7 @@ URL、帧动画、点九图和 Lottie 使用独立 IndexedDB 数据库 **`web-to
 | [U24](features/url.zh-CN.md) | 输入区：hash 恢复与防抖分享更新                    | `interface-wired` |
 | [U25](features/url.zh-CN.md) | 输入、树和二维码空态；主动示例入口                 | `interface-wired` |
 
-[界面源码](../../apps/web/src/ui-redesign-url.prototype.tsx)
+界面源码 (`ui-redesign-url.prototype.tsx`)
 
 ### 帧动画
 
@@ -100,7 +102,7 @@ URL、帧动画、点九图和 Lottie 使用独立 IndexedDB 数据库 **`web-to
 | [F19](features/motion.zh-CN.md) | 导入工具行：清空素材                             | `interface-wired` |
 | [F20](features/motion.zh-CN.md) | 画布、素材条、裁剪与输出：错误、空白与忙碌状态   | `interface-wired` |
 
-[界面源码](../../apps/web/src/ui-redesign-frames-full.prototype.tsx)
+界面源码 (`ui-redesign-frames-full.prototype.tsx`)
 
 帧动画桌面工作区采用 240px 左侧面板，保留播放／精灵图／代码／项目标签与常驻 PNG 导出。导入、示例、清空、重置、边界和背景合为右侧画布上方的同一工具条。序列横跨工作区底部全宽，延伸到左侧面板下方，短播放条紧邻其上方。左侧面板止于序列上方，空间不足时内部滚动。序列保留勾选、拖排、裁剪和排序；缩略图直接显示源尺寸与字节数。画布适配在预览下方为序列实测高度及播放控件留出空间，播放条保持在右侧工作区居中。短进度条随播放更新，可用指针或键盘在入选帧中定位；定位会暂停播放，不改变已配置的播放／导出范围。无帧或单帧时禁用进度定位。手机继续通过画布／素材／设置视图访问同一组控件；素材视图中的播放条也位于序列上方。按用户要求，缩略图不再跟随或高亮正在播放的帧；当前帧由进度控件反馈，点击缩略图仍会暂停并定位。此要求明确替代 F06 历史基线中的自动高亮要求，其余 F01–F20 能力仍须保留。
 
@@ -138,7 +140,7 @@ URL、帧动画、点九图和 Lottie 使用独立 IndexedDB 数据库 **`web-to
 | [N28](features/nine.zh-CN.md) | 记录标签：名称、字节数与图片／设置恢复           | `interface-wired` |
 | [N29](features/nine.zh-CN.md) | 记录标签：删除与刷新                             | `interface-wired` |
 
-[界面源码](../../apps/web/src/ui-redesign-nine-full.prototype.tsx)
+界面源码 (`ui-redesign-nine-full.prototype.tsx`)
 
 调整后的点九图工作区采用 240px 左侧面板，按切片、中心裁剪、渲染的顺序分组。边框宽度、外扩、填充与横纵重复保持展开；CSS 和记录保留独立标签。复制 CSS、保存与裁剪 PNG 下载常驻面板底部。顶部统一工具条包含图片操作、源图信息、源图视图重置及共用背景／边界控件。拉伸预览为覆盖在画布上的 HUD，初始位于右下方。拖动标题栏移动位置，拖动外框边缘／角点调整 HUD 大小；输入框和按钮不会启动拖动。HUD 几何受可用画布边界约束，视口变化后重新收敛，并提供独立的布局重置按钮。聚焦标题拖动柄或右下外框手柄后，方向键每次移动或调整 8px，Shift 为 32px。源图画布不再为 HUD 预留固定栏位。内部拉伸逻辑尺寸保持独立：数字输入（96–720 × 64–480）、内容八向缩边、角点键盘操作、内部平移／缩放和视图重置均保留。手机继续使用编辑／预览／参数与输出视图，HUD 移动和大小限制在预览区域内。HUD 位置与大小属于查看状态，不写入编辑记录。现有处理和存储逻辑不变。本次调整仅完成编译与源码检查；自动浏览器访问受策略限制，尚未重新进行浏览器交互和视觉验证。
 
@@ -167,7 +169,7 @@ URL、帧动画、点九图和 Lottie 使用独立 IndexedDB 数据库 **`web-to
 | [L19](features/motion.zh-CN.md) | 面板底部消息折叠区与手机直达入口；保留忙碌和优化状态         | `interface-wired` |
 | [L20](features/motion.zh-CN.md) | 手机画布／图集／参数导航；手势保留                           | `interface-wired` |
 
-[界面源码](../../apps/web/src/ui-redesign-lottie-full.prototype.tsx)
+界面源码 (`ui-redesign-lottie-full.prototype.tsx`)
 
 ### CSS 扫光
 
@@ -183,7 +185,7 @@ URL、帧动画、点九图和 Lottie 使用独立 IndexedDB 数据库 **`web-to
 | [C08](features/hidden.zh-CN.md) | 代码工具行：复制与成功／失败反馈     | `interface-wired` |
 | [C09](features/hidden.zh-CN.md) | 预览与生成 CSS：减少动态效果行为     | `interface-wired` |
 
-[界面源码](../../apps/web/src/ui-redesign-shine-full.prototype.tsx)
+界面源码 (`ui-redesign-shine-full.prototype.tsx`)
 
 ### 字体工具箱
 
@@ -206,7 +208,7 @@ URL、帧动画、点九图和 Lottie 使用独立 IndexedDB 数据库 **`web-to
 | [T15](features/hidden.zh-CN.md) | 结果区：体积、字形数、下载与 font-face 代码    | `interface-wired` |
 | [T16](features/hidden.zh-CN.md) | 上传／导出：忙碌、禁用与错误状态               | `interface-wired` |
 
-[界面源码](../../apps/web/src/ui-redesign-font-full.prototype.tsx)
+界面源码 (`ui-redesign-font-full.prototype.tsx`)
 
 ### 共享行为
 
@@ -222,7 +224,7 @@ URL、帧动画、点九图和 Lottie 使用独立 IndexedDB 数据库 **`web-to
 | [G08](features/shared.zh-CN.md) | 开发原型 Seo；生产 SSG 保持，待正式实现验收新布局             | `product-acceptance-deferred` |
 | [G09](features/shared.zh-CN.md) | 保留 manifest 与 standalone 元数据；Safari 独立模式检查待验收 | `product-acceptance-deferred` |
 
-[界面源码](../../apps/web/src/ui-redesign-workspace.prototype.tsx)
+界面源码 (`ui-redesign-workspace.prototype.tsx`)
 
 ## 已执行检查
 
@@ -235,9 +237,9 @@ URL、帧动画、点九图和 Lottie 使用独立 IndexedDB 数据库 **`web-to
 - 字体：TTF 导入、四个标签、Unicode 搜索／详情／自定义子集、真实 TTF 和 WOFF2 子集下载、全量转换、体检与文字预览。WOFF2 使用真实 WASM 路径。其他输入／输出组合仍需系统检查。
 - 本轮不认证真实设备触屏／捏合、每种图片／字体格式、多张大型图集、动态素材／复杂动画视觉保真、Safari 独立模式或正式旧记录迁移。原引擎对应操作路径继续保留，这些检查仍须在正式验收前完成。
 
-截图与导出样本位于[设计临时目录](../../.scratch/web-ui-redesign)。临时浏览器检查脚本位于已忽略的 `.playwright-cli/` 目录。最终仓库检查与源码保留对照见[验证结果](prototype-validation.json)。
+临时截图、导出样本和原型源码不再保留。上方原型文件名标识历史产物，不是当前仓库路径。已记录的检查见带日期的[验证结果](prototype-validation.json)，保留资料见[设计决策](design-decisions.zh-CN.md)。仅靠这些文档无法复现历史运行。
 
-[视觉方向票](../../.scratch/web-ui-redesign/issues/03-visual-direction.md)继续等待用户评审；本次交付不代表视觉方案已获认可或开始产品部署。
+视觉评审于 2026-10-20 完成，已确认范围汇总于[设计决策](design-decisions.zh-CN.md)。本页早期条目保留各自时点的评审状态。设计认可本身不授权部署，生产验证单独记录于[验收说明](../ui-redesign-acceptance.zh-CN.md)。
 
 ## Lottie 任务面板评审
 

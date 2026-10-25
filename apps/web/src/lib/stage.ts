@@ -46,6 +46,7 @@ export function calculateUnobstructedStageFit(
   contentHeight: number,
   inset = 8,
   gap = 8,
+  selection: 'scale' | 'area' = 'scale',
 ): { scale: number, offset: { x: number, y: number } } {
   if (contentWidth <= 0 || contentHeight <= 0)
     return { scale: 1, offset: { x: 0, y: 0 } }
@@ -71,7 +72,7 @@ export function calculateUnobstructedStageFit(
           const height = rect.bottom - rect.top
           const scale = calculateStageFitScale(width, height, contentWidth, contentHeight, inset)
           const area = width * height
-          if (!best || scale > best.scale || (scale === best.scale && area > best.area))
+          if (!best || (selection === 'area' ? area > best.area : scale > best.scale || (scale === best.scale && area > best.area)))
             best = { rect, scale, area }
         }
       }
@@ -96,12 +97,86 @@ export function measureUnobstructedStageFit(
   contentWidth: number,
   contentHeight: number,
   inset = 8,
+  selection: 'scale' | 'area' = 'scale',
 ) {
   const visibleRects = [...overlays].filter((node) => {
     const style = getComputedStyle(node)
     return style.display !== 'none' && style.visibility !== 'hidden'
   }).map(node => node.getBoundingClientRect())
-  return calculateUnobstructedStageFit(area.getBoundingClientRect(), visibleRects, contentWidth, contentHeight, inset)
+  return calculateUnobstructedStageFit(area.getBoundingClientRect(), visibleRects, contentWidth, contentHeight, inset, 8, selection)
+}
+
+export function calculateAnchoredStageFit(
+  viewport: StageRect,
+  overlays: StageRect[],
+  contentWidth: number,
+  contentHeight: number,
+  anchor: { x: number, y: number },
+  inset = 8,
+  gap = 8,
+): { scale: number, center: { x: number, y: number } } {
+  if (contentWidth <= 0 || contentHeight <= 0)
+    return { scale: 1, center: anchor }
+
+  const fits = (scale: number) => {
+    const halfWidth = contentWidth * scale / 2 + inset
+    const halfHeight = contentHeight * scale / 2 + inset
+    const rect = { left: anchor.x - halfWidth, right: anchor.x + halfWidth, top: anchor.y - halfHeight, bottom: anchor.y + halfHeight }
+    return rect.left >= viewport.left && rect.right <= viewport.right && rect.top >= viewport.top && rect.bottom <= viewport.bottom
+      && overlays.every(hud => rect.right <= hud.left - gap || rect.left >= hud.right + gap || rect.bottom <= hud.top - gap || rect.top >= hud.bottom + gap)
+  }
+  const maxScale = Math.max(0, Math.min(
+    2 * (anchor.x - viewport.left - inset) / contentWidth,
+    2 * (viewport.right - anchor.x - inset) / contentWidth,
+    2 * (anchor.y - viewport.top - inset) / contentHeight,
+    2 * (viewport.bottom - anchor.y - inset) / contentHeight,
+  ))
+  if (!fits(0) || maxScale === 0) {
+    const fallback = calculateUnobstructedStageFit(viewport, overlays, contentWidth, contentHeight, inset, gap, 'area')
+    return {
+      scale: fallback.scale,
+      center: {
+        x: (viewport.left + viewport.right) / 2 + fallback.offset.x,
+        y: (viewport.top + viewport.bottom) / 2 + fallback.offset.y,
+      },
+    }
+  }
+
+  let low = 0
+  let high = maxScale
+  for (let i = 0; i < 24; i++) {
+    const middle = (low + high) / 2
+    if (fits(middle))
+      low = middle
+    else
+      high = middle
+  }
+  return { scale: low, center: anchor }
+}
+
+export function measureAnchoredStageFit(
+  area: HTMLElement,
+  anchor: HTMLElement,
+  overlays: Iterable<HTMLElement>,
+  contentWidth: number,
+  contentHeight: number,
+  inset = 8,
+  topInset = 0,
+) {
+  const areaRect = area.getBoundingClientRect()
+  const anchorRect = anchor.getBoundingClientRect()
+  const visibleRects = [...overlays].filter((node) => {
+    const style = getComputedStyle(node)
+    return style.display !== 'none' && style.visibility !== 'hidden'
+  }).map(node => node.getBoundingClientRect())
+  return calculateAnchoredStageFit(
+    { left: areaRect.left, right: areaRect.right, top: areaRect.top + topInset, bottom: areaRect.bottom },
+    visibleRects,
+    contentWidth,
+    contentHeight,
+    { x: (anchorRect.left + anchorRect.right) / 2, y: (anchorRect.top + anchorRect.bottom) / 2 },
+    inset,
+  )
 }
 
 /** 监听舞台尺寸，为一个或多个内容的联合矩形计算“适配 = 100%”基础比例。 */

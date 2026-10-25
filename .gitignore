@@ -206,6 +206,7 @@ dist
 .env*
 !apps/server/.env.example
 .playwright-cli/
+.scratch/
 
 # server 本地数据卷与 env
 apps/server/data/
