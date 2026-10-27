@@ -1,4 +1,5 @@
 import type { ChangeEvent, DragEvent, ReactNode, SetStateAction } from 'react'
+import type { JsonContainer, JsonValue } from './json-value'
 import type { UrlRecord, UrlTab, UrlWorkspaceSnapshot } from './url-records'
 import type { UrlNode, UrlTree } from './url-tree'
 import { Bookmark, Check, Copy, Download, GitBranch, Link2, LoaderCircle, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
@@ -12,6 +13,7 @@ import { PopConfirm } from '@/components/ui/pop-confirm'
 import { readHashParam, writeHashParam } from '@/lib/hash-param'
 import { cn } from '@/lib/utils'
 import { DEMO_URL } from '../demos/url-qrcode'
+import { parseJsonContainer, parseJsonField, replaceJsonField } from './json-value'
 import { decodeQr, encodeQr } from './qr-codec'
 import { renderQrParameterPreview } from './qr-preview-image'
 import { generateCode, resolveUrlVariables } from './url-code'
@@ -37,6 +39,7 @@ function EditableText({
   autoSize,
   editSignal = 0,
   title = '点击编辑',
+  displayText,
   onCommit,
 }: {
   text: string
@@ -47,6 +50,7 @@ function EditableText({
   /** 外部触发的编辑信号（每次 +1）：重解析会复用组件实例，不能靠挂载初始态 */
   editSignal?: number
   title?: string
+  displayText?: string
   onCommit: (next: string) => void
 }) {
   const [draft, setDraft] = useState<string | null>(null)
@@ -116,7 +120,7 @@ function EditableText({
         className,
       )}
     >
-      {text || <span className="text-muted-foreground">（空）</span>}
+      {displayText ?? (text || <span className="text-muted-foreground">（空）</span>)}
     </button>
   )
 }
@@ -133,6 +137,63 @@ function TreePrefix({ lastFlags, isLast }: { lastFlags: boolean[], isLast: boole
       {/* eslint-enable react/no-array-index-key */}
       <i className={isLast ? 'branch is-last' : 'branch'} />
     </span>
+  )
+}
+
+/** JSON 字符串按原文编辑，数字、布尔和 null 按 JSON 字面量编辑。 */
+function JsonFields({ value, depth, lastFlags, onChange }: {
+  value: JsonContainer
+  depth: number
+  lastFlags: boolean[]
+  onChange?: (value: JsonContainer) => void
+}) {
+  const [errorKey, setErrorKey] = useState<string | null>(null)
+  const entries = Object.entries(value)
+  return (
+    <div>
+      {entries.map(([key, item], index) => {
+        const isLast = index === entries.length - 1
+        const container = item !== null && typeof item === 'object' && depth < 8
+        const text = typeof item === 'string' ? item : JSON.stringify(item)
+        const change = (next: JsonValue) => onChange?.(replaceJsonField(value, key, next))
+        return (
+          <div key={key}>
+            <div className="url-node-row flex items-start gap-0.5 rounded-sm pr-1 leading-5">
+              <TreePrefix lastFlags={lastFlags} isLast={isLast} />
+              <span className={cn('shrink-0 px-1 font-mono text-sm font-bold', DEPTH_COLORS[depth % DEPTH_COLORS.length])}>
+                {Array.isArray(value) ? `[${key}]` : key || '（空）'}
+              </span>
+              <span className="shrink-0 font-mono text-muted-foreground">:</span>
+              {container
+                ? <span className="px-1 font-mono text-sm text-muted-foreground">{Array.isArray(item) ? '[]' : '{}'}</span>
+                : onChange
+                  ? (
+                      <EditableText
+                        text={text}
+                        mono
+                        className="flex-1"
+                        title={typeof item === 'string' ? '点击编辑字符串' : '点击编辑 JSON 值'}
+                        onCommit={(next) => {
+                          try {
+                            change(parseJsonField(next, item))
+                            setErrorKey(null)
+                          }
+                          catch {
+                            setErrorKey(key)
+                          }
+                        }}
+                      />
+                    )
+                  : <span className="min-w-0 flex-1 px-1 font-mono text-sm break-all">{text || '（空）'}</span>}
+            </div>
+            {errorKey === key && <p role="alert" className="px-1 text-xs text-destructive">请输入有效的 JSON 值，例如 123、true 或 null。</p>}
+            {container && (
+              <JsonFields value={item} depth={depth + 1} lastFlags={[...lastFlags, isLast]} onChange={onChange ? change : undefined} />
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -184,6 +245,7 @@ function ParamRow({
   const color = DEPTH_COLORS[depth % DEPTH_COLORS.length]
   // 嵌套 URL 的颜色与它下面的子级字段一致
   const childColor = DEPTH_COLORS[(depth + 1) % DEPTH_COLORS.length]
+  const json = node.children === null ? parseJsonContainer(node.value) : null
   const expandable = node.children !== null && hasParams(node.children)
   // 值是变量标记（$$name）时高亮展示
   const isVar = !expandable && variableName(node.value) !== null
@@ -278,8 +340,9 @@ function ParamRow({
                 )}
                 <EditableText
                   text={node.value}
+                  displayText={json !== null ? (Array.isArray(json) ? '[]' : '{}') : undefined}
                   mono
-                  title={isVar ? `变量 ${variableName(node.value)}` : undefined}
+                  title={json !== null ? '点击编辑完整 JSON' : isVar ? `变量 ${variableName(node.value)}` : undefined}
                   className={cn('flex-1', isVar && 'font-bold text-chart-5')}
                   onCommit={next => onEditValue(node.id, next)}
                 />
@@ -317,6 +380,9 @@ function ParamRow({
         />
       </div>
 
+      {json !== null && (
+        <JsonFields value={json} depth={depth + 1} lastFlags={[...lastFlags, isLast]} onChange={next => onEditValue(node.id, JSON.stringify(next))} />
+      )}
       {expandable && (
         <ParamTree
           tree={node.children!}
@@ -446,6 +512,7 @@ function StaticRow({ node, depth, isLast, lastFlags }: { node: UrlNode, depth: n
   const color = DEPTH_COLORS[depth % DEPTH_COLORS.length]
   // 嵌套 URL 的颜色与它下面的子级字段一致
   const childColor = DEPTH_COLORS[(depth + 1) % DEPTH_COLORS.length]
+  const json = node.children === null ? parseJsonContainer(node.value) : null
   const expandable = node.children !== null && hasParams(node.children)
   // 值是变量标记（$$name）时高亮展示
   const isVar = !expandable && variableName(node.value) !== null
@@ -476,11 +543,12 @@ function StaticRow({ node, depth, isLast, lastFlags }: { node: UrlNode, depth: n
                   <span className="shrink-0 font-mono text-muted-foreground select-none">=</span>
                 )}
                 <span className={cn('flex-1 font-mono text-sm break-all', isVar && 'font-bold text-chart-5')}>
-                  {node.value || '（空）'}
+                  {json !== null ? (Array.isArray(json) ? '[]' : '{}') : node.value || '（空）'}
                 </span>
               </>
             )}
       </div>
+      {json !== null && <JsonFields value={json} depth={depth + 1} lastFlags={[...lastFlags, isLast]} />}
       {expandable && (
         <StaticTree tree={node.children!} depth={depth + 1} lastFlags={[...lastFlags, isLast]} />
       )}
