@@ -90,6 +90,14 @@ describe('resolveUrlVariables', () => {
 })
 
 describe('generateCode', () => {
+  it('编码 JSON 内的 URL 和百分号保持原文，代码与序列化结果一致', () => {
+    const json = JSON.stringify({ token: 'demo%2Bpart%2F', redirect: 'https://example.org/?a=1&b=2', literal: '$$value' })
+    const tree = parseUrl(`demoapp://example.com/open?data=${encodeURIComponent(json)}&id=$$id`)
+    const expected = `demoapp://example.com/open?data=${encodeURIComponent(json)}&id=42`
+    expect(runInNewContext(generateCode(tree).code, { id: '42' })).toBe(expected)
+    expect(resolveUrlVariables(tree, { id: '42' })).toEqual({ names: ['id'], missing: [], text: expected })
+  })
+
   it('保持普通变量的上一版 JS 模板', () => {
     const tree = parseUrl('/pages/aaa?b=$$x')
     expect(generateCode(tree).code).toBe('`/pages/aaa?b=${x}`')

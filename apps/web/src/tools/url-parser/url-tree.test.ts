@@ -128,6 +128,63 @@ describe('parseUrl / serializeUrl', () => {
   })
 })
 
+describe('编码 JSON 参数', () => {
+  const payload = {
+    token: 'sample%2Bvalue%2Fpart%3D',
+    enabled: true,
+    count: 3,
+    empty: null,
+    nested: { name: '测试', items: [1, false, 'a&b=c'] },
+    redirect: 'https://example.org/view?x=1&y=2',
+  }
+  const json = JSON.stringify(payload)
+
+  it('自定义协议中的 JSON 解码后保留内部编码和类型', () => {
+    const input = `demoapp://example.com/open?screen=detail&data=${encodeURIComponent(json)}`
+    const tree = parseUrl(input)
+    const data = tree.nodes.find(node => node.label === 'data')!
+    expect(data.value).toBe(json)
+    expect(data.children).toBeNull()
+    expect(JSON.parse(data.value)).toEqual(payload)
+    expect(serializeUrl(tree)).toBe(input)
+  })
+
+  it('多层编码停在完整 JSON，不继续解码字符串字段', () => {
+    const tree = parseUrl(`/open?data=${encodeURIComponent(encodeURIComponent(json))}`)
+    expect(tree.nodes.find(node => node.label === 'data')!.value).toBe(json)
+    expect(serializeUrl(tree)).toBe(`/open?data=${encodeURIComponent(json)}`)
+  })
+
+  it('对象和数组中的 URL、查询串不会误展开为 URL 子树', () => {
+    for (const value of [json, JSON.stringify(['https://example.org/?x=1&y=2', 'a&b=c'])]) {
+      expect(looksLikeUrl(value)).toBe(false)
+      expect(looksLikeUrl(encodeURIComponent(value))).toBe(false)
+      const tree = parseUrl(`/open?data=${encodeURIComponent(value)}`)
+      const data = tree.nodes.find(node => node.label === 'data')!
+      const next = setNodeValue(tree, data.id, value)
+      expect(next.nodes.find(node => node.label === 'data')!.children).toBeNull()
+      expect(serializeUrl(next)).toBe(`/open?data=${encodeURIComponent(value)}`)
+    }
+  })
+
+  it('编辑 JSON 后重新编码，特殊字符不泄漏到外层参数', () => {
+    const tree = parseUrl(`/open?data=${encodeURIComponent(json)}&keep=1`)
+    const data = tree.nodes.find(node => node.label === 'data')!
+    const edited = { ...payload, token: '中文&x=1#fragment%2F' }
+    const out = serializeUrl(setNodeValue(tree, data.id, JSON.stringify(edited)))
+    const params = new URL(out, 'https://example.com').searchParams
+    expect([...params.keys()]).toEqual(['data', 'keep'])
+    expect(JSON.parse(params.get('data')!)).toEqual(edited)
+  })
+
+  it('hash 中 JSON 保留为完整值', () => {
+    const tree = parseUrl(`/open#${encodeURIComponent(json)}`)
+    const hash = tree.nodes.find(node => node.kind === 'hash')!
+    expect(hash.value).toBe(json)
+    expect(hash.children).toBeNull()
+  })
+})
+
 describe('looksLikeUrl / variableName', () => {
   it('识别 URL / 路径 / 裸查询', () => {
     expect(looksLikeUrl('https://a.com')).toBe(true)

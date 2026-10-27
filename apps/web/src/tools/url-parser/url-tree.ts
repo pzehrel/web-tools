@@ -4,6 +4,8 @@
  * 参数值（或路径段）本身是另一个 URL / 路径时递归解析为子树。
  */
 
+import { parseJsonContainer } from './json-value'
+
 export type UrlNodeKind = 'protocol' | 'host' | 'port' | 'segment' | 'param' | 'hash'
 
 export interface UrlNode {
@@ -61,7 +63,7 @@ function safeDecode(s: string): string {
 /** 判断一段文本是否像另一个 URL 或路径（原始结构判断，不做解码） */
 function looksLikeUrlRaw(raw: string): boolean {
   const s = raw.trim()
-  if (!s)
+  if (!s || parseJsonContainer(s) !== null)
     return false
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) // scheme://…
     return true
@@ -84,6 +86,8 @@ function looksLikeUrlRaw(raw: string): boolean {
 export function looksLikeUrl(raw: string): boolean {
   let s = raw.trim()
   for (let i = 0; i <= MAX_DEPTH; i++) {
+    if (parseJsonContainer(s) !== null)
+      return false
     if (looksLikeUrlRaw(s))
       return true
     const next = safeDecode(s)
@@ -102,7 +106,7 @@ function decodeToDisplay(raw: string): string {
   const first = safeDecode(raw)
   let s = first
   for (let i = 0; i < MAX_DEPTH; i++) {
-    if (looksLikeUrlRaw(s))
+    if (parseJsonContainer(s) !== null || looksLikeUrlRaw(s))
       return s
     const next = safeDecode(s)
     if (next === s)
@@ -206,7 +210,7 @@ function parseAny(raw: string, depth: number): UrlTree {
   let hashChildren: UrlTree | null = null
   if (hashStr !== null) {
     const hashValue = decodeToDisplay(hashStr)
-    if (depth < MAX_DEPTH
+    if (depth < MAX_DEPTH && parseJsonContainer(hashValue) === null
       && (hashValue.startsWith('/') || hashValue.includes('?') || hashValue.includes('='))) {
       hashChildren = parseAny(hashValue, depth + 1)
     }
