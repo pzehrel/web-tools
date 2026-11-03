@@ -329,18 +329,30 @@ export function suffixOfTree(tree: UrlTree): string {
 }
 
 /**
- * 编辑 base 后拼接回参数后缀：
- * - `?query` 剥离（参数已展开成行，避免与后缀重复）
- * - 手动输入的 `#hash` 视为用户显式指定的新 hash，替换旧 hash（否则永远无法手动加 hash 路由）
+ * Merge a base edit with its existing query and hash suffix.
+ * Manually entered parameters replace existing parameters with the same decoded name;
+ * preserve unrelated parameters, repeated manual values and raw encoding.
+ * A manually entered hash replaces the old hash; otherwise preserve it.
+ *
+ * 合并地址编辑内容与已有查询参数、hash 后缀。
+ * 手动输入的参数替换解码后同名的旧参数；保留其他参数、手动输入的重复值及原始编码。
+ * 手动输入的 hash 替换旧 hash；未输入时保留旧 hash。
  */
 export function mergeBaseEdit(nextBase: string, suffix: string): string {
   const hashIdx = nextBase.indexOf('#')
   const manualHash = hashIdx >= 0 ? nextBase.slice(hashIdx + 1) : null
-  const cleanBase = (hashIdx >= 0 ? nextBase.slice(0, hashIdx) : nextBase).split('?')[0]
+  const beforeHash = hashIdx >= 0 ? nextBase.slice(0, hashIdx) : nextBase
+  const queryIdx = beforeHash.indexOf('?')
+  const cleanBase = queryIdx >= 0 ? beforeHash.slice(0, queryIdx) : beforeHash
+  const manualParams = queryIdx >= 0 ? beforeHash.slice(queryIdx + 1).split('&').filter(Boolean) : []
   const suffixHashIdx = suffix.indexOf('#')
   const querySuffix = suffixHashIdx >= 0 ? suffix.slice(0, suffixHashIdx) : suffix
   const oldHash = suffixHashIdx >= 0 ? suffix.slice(suffixHashIdx) : ''
-  return cleanBase + querySuffix + (manualHash !== null ? `#${manualHash}` : oldHash)
+  const keyOf = (pair: string) => safeDecode(pair.split('=', 1)[0])
+  const manualKeys = new Set(manualParams.map(keyOf))
+  const oldParams = querySuffix.slice(1).split('&').filter(pair => pair && !manualKeys.has(keyOf(pair)))
+  const query = queryIdx >= 0 || querySuffix ? `?${[...oldParams, ...manualParams].join('&')}` : ''
+  return cleanBase + query + (manualHash !== null ? `#${manualHash}` : oldHash)
 }
 
 /**

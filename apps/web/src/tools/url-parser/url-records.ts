@@ -83,9 +83,9 @@ function toUrlRecord(item: StoreItem | StoreItemSummary): UrlRecord | null {
   }
 }
 
-/** 「URL 与二维码」工具的记录：主动保存，选中后可同步更新 */
+/** 「URL 与二维码」工具的记录：整组保存，选中后可同步更新 */
 export function useUrlRecords() {
-  const { items, save, remove, refresh } = useToolStore(TOOL_ID)
+  const { items, loading, save, remove, refresh } = useToolStore(TOOL_ID)
   const pendingRef = useRef(new Map<string, StoreItem | null>())
   const writesRef = useRef(new Map<string, Promise<void>>())
   const pendingCountRef = useRef(0)
@@ -153,15 +153,15 @@ export function useUrlRecords() {
   const update = useCallback((id: string, patch: Partial<Pick<UrlRecord, 'name' | 'snapshot'>>) => {
     const current = pendingRef.current.has(id) ? pendingRef.current.get(id) : items.find(item => item.id === id)
     if (!current || typeof current.payload !== 'string')
-      return
+      return false
     if (patch.snapshot && (!isSnapshot(patch.snapshot) || !patch.snapshot.tabs.some(tab => tab.text.trim())))
-      return
+      return true
     const currentName = typeof current.meta.name === 'string' ? current.meta.name : ''
     const nextName = patch.name ?? currentName
     const nextPayload = patch.snapshot ? serializeSnapshot(patch.snapshot) : current.payload
     if (nextName === currentName && (nextPayload === current.payload
       || (patch.snapshot && serializeSnapshot(readSnapshot(current.payload, id)) === nextPayload))) {
-      return
+      return true
     }
     // 显式重建写入项，不携带列表中的 size / hasBlob 等派生字段。
     const item: StoreItem = {
@@ -174,6 +174,7 @@ export function useUrlRecords() {
     }
     pendingRef.current.set(id, item)
     enqueue(id, () => save(item))
+    return true
   }, [items, save, enqueue])
 
   const removeRecord = useCallback((id: string) => {
@@ -187,5 +188,5 @@ export function useUrlRecords() {
       removeRecord(id)
   }, [items, removeRecord])
 
-  return { items: records, add, update, remove: removeRecord, clear, refresh, writeStatus }
+  return { items: records, loading, add, update, remove: removeRecord, clear, refresh, writeStatus }
 }

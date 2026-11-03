@@ -99,19 +99,22 @@
       &:focus-visible { outline-offset: -3px; }
     }
   }
-  .url-source-label { display: flex; align-items: center; gap: 7px; color: var(--muted-foreground); font-size: 12px; font-weight: 500; }
+  .url-section-heading {
+    display: flex; align-items: center; gap: 8px; color: var(--foreground);
+    font-family: var(--font-mono); font-size: 13px; font-weight: 600; line-height: 20px; letter-spacing: -0.025em;
+    svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--primary); }
+  }
+  .url-source-label { display: flex; align-items: center; gap: inherit; }
   .url-source-actions {
     align-items: center;
     min-height: 30px;
     gap: 6px;
-    > button { height: 26px; min-height: 26px; padding-inline: 7px; border: 0; background: transparent; font-size: 12px; &:hover { background: var(--secondary); } }
-    > button:first-child { width: 30px; border-radius: 0; }
-    > button[data-variant='default'] { color: var(--primary-foreground); background: var(--primary); }
+    [data-slot='button'] { height: 26px; min-height: 26px; padding-inline: 7px; border: 0; background: transparent; font-size: 12px; &:hover { background: var(--secondary); } }
+    [data-size='icon-sm'] { width: 30px; }
   }
-  .url-source-note { margin-left: auto; padding-right: 6px; color: var(--muted-foreground); font-family: var(--font-mono); font-size: 11px; }
+  .url-source-secondary-actions { display: flex; flex-shrink: 0; align-items: center; gap: 6px; margin-left: auto; }
   .url-record-write-status {
     color: var(--muted-foreground); font-size: 11px;
-    &[data-status='saved'] { color: var(--success-muted-foreground); }
     &[data-status='error'] { color: var(--destructive); }
   }
   .url-variable-inputs {
@@ -142,8 +145,6 @@
     pre { margin: 4px; padding: 12px; border: 0; border-radius: 6px; background: var(--muted); font-size: 12px; line-height: 1.8; }
   }
   .url-tree-heading {
-    display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
-    > svg { color: var(--primary); }
     > span { margin-left: 3px; padding: 1px 6px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); font-size: 10px; font-weight: 400; }
   }
   .url-workspace-tree-content { overflow-x: auto; }
@@ -177,20 +178,22 @@
 
   .url-workspace-qr {
     grid-column: 2; grid-row: 2; align-self: stretch; padding: 8px 10px 10px;
-    > section { display: grid; height: 100%; grid-template-rows: 28px minmax(188px, 1fr) 30px; gap: 8px; }
-    [aria-label='上传二维码图片识别'] { justify-self: center; width: 188px; height: 100%; min-height: 188px; padding: 8px; aspect-ratio: auto; border: 0; border-radius: 6px; background: var(--muted); }
+    > section { display: grid; height: 100%; grid-template-rows: 28px minmax(188px, 1fr); gap: 8px; }
+    [aria-label='上传二维码图片识别'] {
+      position: relative; justify-self: center; height: 100%; min-height: 188px; padding: 8px; aspect-ratio: auto; border: 0; border-radius: 6px; background: var(--muted);
+      &[data-has-qr='true'] { padding: 0; background: transparent; }
+      // Keep the image from changing the grid row's intrinsic height.
+      // 避免图片固有尺寸改变网格行高。
+      > img { position: absolute; inset: 0; }
+    }
   }
   .url-qr-heading {
     display: flex; align-items: center; justify-content: space-between;
-    h2 { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
-    h2 > svg { color: var(--primary); }
-    > button { width: 26px; height: 28px; }
   }
-  .url-qr-download { height: 30px; border-radius: 5px; font-size: 12px; }
+  .url-qr-actions { display: flex; align-items: center; gap: 2px; > button { width: 26px; height: 28px; } }
   .url-workspace-records {
     grid-column: 1 / -1; grid-row: 4; padding: 10px;
     section > div:first-child { min-height: 24px; padding-bottom: 6px; }
-    h2 { font-size: 13px; }
     p { font-size: 11px; line-height: 1.7; }
     li { padding-block: 8px; &:last-child { border-bottom: 0; } }
   }
@@ -201,10 +204,8 @@
     display: flex; flex-direction: column; padding: 10px 12px 100px;
     > section, > div, > aside { width: 100%; }
     .url-workspace-source { grid-template-rows: 28px minmax(140px, 1fr) auto; textarea { min-height: 140px; font-size: 13px; } }
-    .url-source-label { font-size: 11px; }
     .url-variable-fields input, .url-tab-rename input { font-size: 16px; }
     .url-source-actions { gap: 2px; }
-    .url-source-note { font-size: 10px; }
     .url-workspace-tree > div:first-child { padding: 10px 12px; }
     .url-workspace-tree-content { min-width: 34rem; }
     .url-node-row > button[aria-label], .url-node-row > .relative > button { opacity: 1; }

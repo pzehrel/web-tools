@@ -2,7 +2,7 @@ import type { ChangeEvent, DragEvent, ReactNode, SetStateAction } from 'react'
 import type { JsonContainer, JsonValue } from './json-value'
 import type { UrlRecord, UrlTab, UrlWorkspaceSnapshot } from './url-records'
 import type { UrlNode, UrlTree } from './url-tree'
-import { Bookmark, Check, Copy, Download, GitBranch, Link2, LoaderCircle, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
+import { Check, Copy, Download, FolderPlus, GitBranch, History, Link2, LoaderCircle, Pencil, Plus, QrCode, Save, Sparkles, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ClientOnly } from 'vite-react-ssg'
 
@@ -19,6 +19,7 @@ import { renderQrParameterPreview } from './qr-preview-image'
 import { generateCode, resolveUrlVariables } from './url-code'
 import { useUrlRecords } from './url-records'
 import { addParam, baseOfTree, canMoveNode, deleteNode, findInsertedId, hasParams, insertParamBelow, looksLikeUrl, mergeBaseEdit, moveNode, paramNodes, parseUrl, serializeUrl, setNodeValue, suffixOfTree, updateNode, variableName } from './url-tree'
+import { useUrlAutosave } from './use-url-autosave'
 import './url-workspace.scss'
 
 /** 层级文字颜色轮换：橙 → 黄 → 绿，暖色系相邻过渡（chart 令牌，随主题联动） */
@@ -626,7 +627,10 @@ function RecordPreviewContent({ snapshot }: { snapshot: UrlWorkspaceSnapshot }) 
   )
 }
 
-/** 是否小屏（移动端）：预览从悬停 tooltip 切换为点击弹窗 */
+/**
+ * Detect small screens for the record preview dialog.
+ * 检测小屏，用于记录预览弹窗。
+ */
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
@@ -640,16 +644,12 @@ function useIsMobile() {
 }
 
 /**
- * 记录预览的交互壳：
- * - 桌面端：悬停时在光标上方弹出只读 tooltip（优先右上、放不下换左上、再放不下居中）
- * - 移动端：点击同样的内容（二维码 / 名称）打开弹窗展示预览
+ * On small screens, record clicks open a preview; larger screens restore directly.
+ * 小屏点击记录打开预览；大屏点击记录直接恢复。
  */
-function RecordPreviewTip({ snapshot, wide, onSelect, children }: { snapshot: UrlWorkspaceSnapshot, wide?: boolean, onSelect?: () => void, children: ReactNode }) {
+function RecordMobilePreview({ snapshot, onSelect, children }: { snapshot: UrlWorkspaceSnapshot, onSelect?: () => void, children: ReactNode }) {
   const isMobile = useIsMobile()
-  const [anchor, setAnchor] = useState<{ x: number, y: number } | null>(null)
-  const [pos, setPos] = useState<{ left: number, top: number } | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const tipRef = useRef<HTMLDivElement>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   // 弹窗开合（原生 <dialog>）
@@ -666,54 +666,10 @@ function RecordPreviewTip({ snapshot, wide, onSelect, children }: { snapshot: Ur
     }
   }, [dialogOpen])
 
-  // 内容渲染完成后按实际尺寸定位（树可能很高，必须先量再摆）
-
-  useLayoutEffect(() => {
-    if (!anchor || !tipRef.current)
-      return
-    const el = tipRef.current
-    const w = el.offsetWidth
-    const h = el.offsetHeight
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    // 优先右上：光标右上方留 14px 偏移
-    let left = anchor.x + 14
-    let top = anchor.y - h - 14
-    // 右侧放不下 → 左上
-    if (left + w > vw - 8)
-      left = anchor.x - w - 14
-    // 左侧也放不下 → 中上
-    if (left < 8)
-      left = anchor.x - w / 2
-    // 上方放不下 → 落到光标下方
-    if (top < 8)
-      top = anchor.y + 18
-    left = Math.max(8, Math.min(left, vw - w - 8))
-    top = Math.max(8, Math.min(top, vh - h - 8))
-    setPos(prev => (prev && prev.left === left && prev.top === top ? prev : { left, top }))
-  }, [anchor])
-
-  // 滚动 / Esc 时关闭（内容较高时跟随滚动会跑偏，直接收起更稳）
-  useEffect(() => {
-    if (!anchor)
-      return
-    const hide = () => setAnchor(null)
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape')
-        hide()
-    }
-    window.addEventListener('scroll', hide, true)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('scroll', hide, true)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [anchor])
-
   return (
     <>
       <span
-        title={isMobile ? '点击查看预览' : '悬停查看预览'}
+        title={isMobile ? '点击查看预览' : undefined}
         {...(isMobile
           ? {
               // 移动端：点击打开弹窗；捕获阶段拦截，避免触发内部按钮（如二维码的切换选中）
@@ -722,31 +678,11 @@ function RecordPreviewTip({ snapshot, wide, onSelect, children }: { snapshot: Ur
                 setDialogOpen(true)
               },
             }
-          : {
-              onMouseEnter: (e: { clientX: number, clientY: number }) => setAnchor({ x: e.clientX, y: e.clientY }),
-              onMouseLeave: () => setAnchor(null),
-            })}
-        className={cn(
-          'flex min-w-0 cursor-pointer',
-          wide && 'max-w-full',
-        )}
+          : {})}
+        className="flex min-w-0 max-w-full cursor-pointer"
       >
         {children}
       </span>
-      {/* 桌面端悬停 tooltip */}
-      {anchor && !isMobile && (
-        <div
-          ref={tipRef}
-          role="tooltip"
-          style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? 'visible' : 'hidden' }}
-          className={cn(
-            'pointer-events-none fixed z-50 max-h-[60vh] overflow-auto rounded-md border border-border bg-popover px-3 py-2 text-popover-foreground',
-            wide ? 'w-[min(40rem,calc(100vw-1rem))]' : 'max-w-[min(28rem,calc(100vw-1rem))]',
-          )}
-        >
-          <RecordPreviewContent snapshot={snapshot} />
-        </div>
-      )}
       {/* 移动端预览弹窗 */}
       <dialog
         ref={dialogRef}
@@ -787,6 +723,11 @@ function defaultName(input: string): string {
   return [...base].slice(0, 24).join('') || '未命名记录'
 }
 
+function workspaceName(snapshot: UrlWorkspaceSnapshot): string {
+  const activeTab = snapshot.tabs.find(tab => tab.id === snapshot.activeTabId) ?? snapshot.tabs[0]!
+  return snapshot.tabs.length === 1 ? defaultName(activeTab.text) : `${activeTab.name} 等 ${snapshot.tabs.length} 个链接`
+}
+
 function UrlParserTool() {
   // 固定首屏内容，随机 id 与分享内容均在用户操作或挂载后产生。
   const [snapshot, setSnapshot] = useState<UrlWorkspaceSnapshot>({
@@ -797,6 +738,7 @@ function UrlParserTool() {
   const [session, setSession] = useState(0)
   const qrCache = useRef(new Map<string, { text: string, url: string }>()).current
   const recordStore = useUrlRecords()
+  const autosave = useUrlAutosave(snapshot, selectedId, setSelectedId, recordStore, workspaceName)
   const activeTab = snapshot.tabs.find(tab => tab.id === snapshot.activeTabId) ?? snapshot.tabs[0]!
   const restore = useCallback((next: UrlWorkspaceSnapshot) => {
     qrCache.clear()
@@ -805,20 +747,49 @@ function UrlParserTool() {
   }, [qrCache])
 
   // 挂载后读取分享链接，兼容旧二维码工具的 #text=...。
+  // 优先恢复匹配的整组记录；没有分享内容时继续最近一次保存的工作。
+  const initializedRef = useRef(false)
   useEffect(() => {
+    if (recordStore.loading || initializedRef.current)
+      return
     const timer = setTimeout(() => {
+      if (initializedRef.current)
+        return
+      initializedRef.current = true
+      // 首次读取期间已经开始输入时，保留正在编辑的内容。
+      if (snapshot.tabs.some(tab => tab.text.trim()))
+        return
       const hash = window.location.hash.slice(1)
       const text = hash.startsWith('text=') ? readHashParam('text') : readHashParam('url')
-      if (text)
+      const record = text
+        ? recordStore.items.find(item => item.snapshot.tabs.find(tab => tab.id === item.snapshot.activeTabId)?.text === text)
+        : recordStore.items[0]
+      if (record) {
+        setSelectedId(record.id)
+        restore(record.snapshot)
+      }
+      else if (text) {
         setSnapshot(prev => ({ ...prev, tabs: [{ ...prev.tabs[0]!, text }] }))
+      }
     }, 0)
     return () => clearTimeout(timer)
-  }, [])
+  }, [recordStore.loading, recordStore.items, snapshot, restore])
 
   useEffect(() => {
+    if (recordStore.loading)
+      return
     const timer = setTimeout(writeHashParam, 400, 'url', activeTab.text)
     return () => clearTimeout(timer)
-  }, [activeTab.text])
+  }, [activeTab.text, recordStore.loading])
+
+  const createGroup = () => {
+    initializedRef.current = true
+    autosave.flush()
+    setSelectedId(null)
+    const id = crypto.randomUUID()
+    restore({ tabs: [{ id, name: '链接 1', text: '', variables: {} }], activeTabId: id })
+    requestAnimationFrame(() => document.getElementById('url-workspace-input')?.focus())
+  }
 
   return (
     <UrlWorkspace
@@ -829,19 +800,23 @@ function UrlParserTool() {
       selectedId={selectedId}
       setSelectedId={setSelectedId}
       recordStore={recordStore}
+      autosave={autosave}
       qrCache={qrCache}
+      onCreateGroup={createGroup}
     />
   )
 }
 
-function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedId, recordStore, qrCache }: {
+function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedId, recordStore, autosave, qrCache, onCreateGroup }: {
   snapshot: UrlWorkspaceSnapshot
   setSnapshot: (value: SetStateAction<UrlWorkspaceSnapshot>) => void
   restore: (snapshot: UrlWorkspaceSnapshot) => void
   selectedId: string | null
   setSelectedId: (id: string | null) => void
   recordStore: ReturnType<typeof useUrlRecords>
+  autosave: ReturnType<typeof useUrlAutosave>
   qrCache: Map<string, { text: string, url: string }>
+  onCreateGroup: () => void
 }) {
   const activeTab = snapshot.tabs.find(tab => tab.id === snapshot.activeTabId) ?? snapshot.tabs[0]!
   const input = activeTab.text
@@ -904,7 +879,8 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
     changeInput(prev => serializeUrl(setNodeValue(parseUrl(prev), id, value)))
   }, [changeInput])
 
-  // 编辑嵌套 URL 的 base（协议/域名/路径）：剥离误贴的 query，但保留手动输入的 hash（视为显式替换）
+  // Merge manual query/hash edits into the nested URL before rebuilding its subtree.
+  // 将手动输入的查询参数、hash 合并到嵌套 URL，再重新解析其子树。
   const handleEditBase = useCallback((node: UrlNode, nextBase: string) => {
     const suffix = node.children ? suffixOfTree(node.children) : ''
     changeInput(prev => serializeUrl(setNodeValue(parseUrl(prev), node.id, mergeBaseEdit(nextBase, suffix))))
@@ -1166,15 +1142,15 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
     })
   }, [codeGen.code, variableDeclaration])
 
-  // 记录：主动保存；记录是稳定快照，点击切换内容，不再静默回写
+  // 整组内容自动保存，仍可主动另存为新记录。
   const { items: records, add: addRecord, update: updateRecord, remove: removeRecord, clear: clearRecords, writeStatus } = recordStore
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState('')
-  const canUpdate = selectedId !== null && records.some(record => record.id === selectedId)
 
   /** 保存为新记录：无论当前是否选中，都新增一条并选中进入重命名 */
   const handleSave = useCallback(() => {
-    const name = snapshot.tabs.length === 1 ? defaultName(input) : `${activeTab.name} 等 ${snapshot.tabs.length} 个链接`
+    autosave.cancel()
+    const name = workspaceName(snapshot)
     const id = addRecord(snapshot, name)
     if (id) {
       // 保存后选中并直接进入重命名（预填默认名），方便立刻起一个名字
@@ -1182,13 +1158,7 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
       setNameDraft(name)
       setRenamingId(id)
     }
-  }, [snapshot, activeTab.name, input, addRecord, setSelectedId])
-
-  /** 更新：把当前内容回写到选中的记录（名称保持不变） */
-  const handleUpdate = useCallback(() => {
-    if (canUpdate && selectedId)
-      updateRecord(selectedId, { snapshot })
-  }, [canUpdate, snapshot, selectedId, updateRecord])
+  }, [snapshot, addRecord, setSelectedId, autosave])
 
   const invalidate = useCallback(() => {
     recognitionRequestRef.current += 1
@@ -1197,11 +1167,14 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
   }, [])
 
   const toggleSelect = useCallback((item: UrlRecord) => {
-    invalidate()
-    setSelectedId(item.id)
-    restore(item.snapshot)
+    autosave.flush()
+    if (item.id !== selectedId) {
+      invalidate()
+      setSelectedId(item.id)
+      restore(item.snapshot)
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [invalidate, restore, setSelectedId])
+  }, [autosave, selectedId, invalidate, restore, setSelectedId])
 
   const [renamingTab, setRenamingTab] = useState(false)
   const [tabName, setTabName] = useState(activeTab.name)
@@ -1325,6 +1298,19 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
           ))}
         </div>
         <div className="url-tabs-actions">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="新建分组"
+            aria-label="新建分组"
+            disabled={recordStore.loading}
+            onClick={() => {
+              invalidate()
+              onCreateGroup()
+            }}
+          >
+            <FolderPlus className="size-3.5" />
+          </Button>
           <Button variant="ghost" size="icon-sm" title="新增链接" aria-label="新增链接" onClick={addTab}><Plus className="size-3.5" /></Button>
           <Button
             ref={renameTabTriggerRef}
@@ -1372,10 +1358,12 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
         </form>
       </dialog>
       <section id="url-active-content" role="tabpanel" aria-labelledby={`url-tab-${activeTab.id}`} className="url-workspace-source">
-        <label htmlFor="url-workspace-input" className="url-source-label">
-          <Link2 size={14} />
-          链接内容
-        </label>
+        <h2 className="url-section-heading">
+          <label htmlFor="url-workspace-input" className="url-source-label">
+            <Link2 size={16} />
+            链接内容
+          </label>
+        </h2>
         <textarea
           id="url-workspace-input"
           value={input}
@@ -1414,52 +1402,43 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
           </p>
         )}
         <div className="url-source-actions flex flex-wrap gap-2">
-          <Button variant="outline" size="icon-sm" disabled={!input} title="复制" aria-label="复制" onClick={copy}>
-            {copied ? <Check data-feedback="success" /> : <Copy />}
-          </Button>
-          {/* 选中记录时提供「更新」回写该记录；「保存」始终新增一条记录 */}
-          {canUpdate && (
-            <Button
-              variant="default"
-              size="sm"
-              disabled={!canSave || writeStatus === 'saving'}
-              title="把当前内容回写到选中的记录"
-              onClick={handleUpdate}
-            >
-              <Save />
-              更新整组
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!canSave || writeStatus === 'saving'}
-            title="保存为新记录"
-            onClick={handleSave}
-          >
-            <Bookmark />
-            保存为新记录
-          </Button>
           <Button variant="outline" size="sm" onClick={() => changeInput(DEMO_URL)}>
             <Sparkles />
             试试示例
           </Button>
-          {writeStatus !== 'idle' && (
+          {(writeStatus === 'saving' || writeStatus === 'error') && (
             <span className="url-record-write-status" data-status={writeStatus} role={writeStatus === 'error' ? 'alert' : 'status'}>
-              {writeStatus === 'saving' ? '正在保存，请稍候' : writeStatus === 'saved' ? '记录已保存' : '记录保存失败，请重试'}
+              {writeStatus === 'saving' ? '正在保存，请稍候' : '记录保存失败，请重试'}
             </span>
           )}
-          <span className="url-source-note">{isUrl ? 'URL / 路径' : input.trim() ? '文本' : '等待输入'}</span>
+          <div className="url-source-secondary-actions">
+            <Button variant="outline" size="icon-sm" disabled={!input} title="复制" aria-label="复制" onClick={copy}>
+              {copied ? <Check data-feedback="success" /> : <Copy />}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canSave || writeStatus === 'saving'}
+              title="保存为新记录"
+              onClick={handleSave}
+            >
+              <Save />
+              保存为新记录
+            </Button>
+          </div>
         </div>
       </section>
       <div className="url-workspace-qr w-full">
         <section className="flex min-w-0 flex-col gap-3">
           <div className="url-qr-heading">
-            <h2>
+            <h2 className="url-section-heading">
               {recognizing ? <LoaderCircle size={16} className="animate-spin" /> : <QrCode size={16} />}
               {recognizing ? '正在识别…' : '二维码'}
             </h2>
-            <Button variant="ghost" size="icon-sm" aria-label="选择二维码图片识别" title="选择二维码图片识别" onClick={() => fileInputRef.current?.click()}><Plus size={16} /></Button>
+            <div className="url-qr-actions">
+              <Button variant="ghost" size="icon-sm" aria-label="选择二维码图片识别" title="选择二维码图片识别" onClick={() => fileInputRef.current?.click()}><Plus size={16} /></Button>
+              <Button variant="ghost" size="icon-sm" aria-label="下载二维码" title="下载二维码" disabled={!qr} onClick={downloadQr}><Download size={16} /></Button>
+            </div>
           </div>
           <div
             role="button"
@@ -1467,6 +1446,7 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
             title="点击选择 / 拖拽 / 粘贴二维码图片识别"
             aria-label="上传二维码图片识别"
             aria-busy={recognizing}
+            data-has-qr={Boolean(qr)}
             onClick={() => fileInputRef.current?.click()}
             onKeyDown={e => e.key === 'Enter' && fileInputRef.current?.click()}
             onDragOver={(e) => {
@@ -1512,22 +1492,12 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
               onChange={onFileChange}
             />
           </div>
-          <Button
-            variant="default"
-            size="sm"
-            disabled={!qr}
-            onClick={downloadQr}
-            className="url-qr-download w-full shrink-0"
-          >
-            <Download />
-            下载二维码
-          </Button>
         </section>
       </div>
       <section className="url-workspace-tree min-w-0">
         <div className="flex min-h-8 items-start justify-between gap-4 pb-3">
           <div>
-            <h2 className="url-tree-heading">
+            <h2 className="url-section-heading url-tree-heading">
               <GitBranch size={16} />
               参数树
               <span>
@@ -1662,24 +1632,25 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
               )}
         </div>
       </section>
-      <aside aria-label="保存的记录" className="url-workspace-records min-w-0">
+      <aside aria-label="历史" className="url-workspace-records min-w-0">
         <ClientOnly>
           {() => (
             <section>
               <div className="flex min-h-8 items-center justify-between gap-2 pb-3">
-                <h2 className="flex items-center gap-2 font-mono text-sm font-semibold tracking-tight">
-                  <Bookmark className="size-4" />
-                  记录
+                <h2 className="url-section-heading">
+                  <History size={16} />
+                  历史
                 </h2>
                 {records.length > 0 && (
                   <PopConfirm
                     trigger={<Trash2 className="size-3.5" />}
-                    triggerAriaLabel="清空全部记录"
+                    triggerAriaLabel="清空历史"
                     triggerClassName={buttonVariants({ variant: 'ghost', size: 'sm' })}
-                    title="清空全部记录？"
-                    description="所有保存的记录都会被删除，且无法恢复。"
+                    title="清空历史？"
+                    description="所有历史记录都会被删除，且无法恢复。"
                     confirmLabel="清空"
                     onConfirm={() => {
+                      autosave.cancel()
                       setSelectedId(null)
                       clearRecords()
                     }}
@@ -1690,7 +1661,7 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
                 {records.length === 0
                   ? (
                       <p className="py-3 text-xs leading-5 text-muted-foreground">
-                        还没有保存的记录，点击「保存为新记录」保存整组链接与变量值
+                        输入后自动保存整组链接与变量值，点击历史记录可继续编辑。
                       </p>
                     )
                   : (
@@ -1722,7 +1693,7 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
                                     />
                                   )
                                 : (
-                                    <RecordPreviewTip snapshot={item.snapshot} wide onSelect={() => toggleSelect(item)}>
+                                    <RecordMobilePreview snapshot={item.snapshot} onSelect={() => toggleSelect(item)}>
                                       <button
                                         type="button"
                                         title="恢复整组链接"
@@ -1740,7 +1711,7 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
                                           <span className="shrink-0 font-mono text-xs text-primary">编辑中</span>
                                         )}
                                       </button>
-                                    </RecordPreviewTip>
+                                    </RecordMobilePreview>
                                   )}
                             </div>
                             <div className="flex shrink-0 items-center gap-0.5">
@@ -1772,8 +1743,10 @@ function UrlWorkspace({ snapshot, setSnapshot, restore, selectedId, setSelectedI
                                 title="删除这条记录？"
                                 description="这条记录会被删除，且无法恢复。"
                                 onConfirm={() => {
-                                  if (selectedId === item.id)
+                                  if (selectedId === item.id) {
+                                    autosave.cancel()
                                     setSelectedId(null)
+                                  }
                                   removeRecord(item.id)
                                 }}
                               />
