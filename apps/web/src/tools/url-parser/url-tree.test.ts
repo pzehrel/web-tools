@@ -231,12 +231,47 @@ describe('mergeBaseEdit', () => {
     expect(mergeBaseEdit('https://a.com/p#/route?x=1', '?keep=1#/old')).toBe('https://a.com/p?keep=1#/route?x=1')
   })
 
-  it('手动粘贴的 query 剥离（参数已展开为行，避免重复）', () => {
-    expect(mergeBaseEdit('https://a.com/p?drop=2', '?keep=1#/old')).toBe('https://a.com/p?keep=1#/old')
+  it('手动输入的 query 与已有参数合并，保留旧 hash', () => {
+    expect(mergeBaseEdit('https://a.com/p?added=2', '?keep=1#/old')).toBe('https://a.com/p?keep=1&added=2#/old')
+  })
+
+  it('粘贴完整 URL 时同名参数采用新值，不重复已有参数', () => {
+    expect(mergeBaseEdit('https://b.com/q?keep=2&added=3', '?keep=1&other=4'))
+      .toBe('https://b.com/q?other=4&keep=2&added=3')
+  })
+
+  it('按解码后的名称替换同名参数，保留本次输入的重复值', () => {
+    expect(mergeBaseEdit('/p?%74ag=new&tag=next', '?tag=old&tag=older&keep=1'))
+      .toBe('/p?keep=1&%74ag=new&tag=next')
+  })
+
+  it('合并 query 时保留无值参数、空值和编码，不让 hash 内的 query 泄漏', () => {
+    expect(mergeBaseEdit('/p?flag&empty=&value=a%26b%3Dc%2B%252F#/new?tab=2', '?keep=a+b#/old?tab=1'))
+      .toBe('/p?keep=a+b&flag&empty=&value=a%26b%3Dc%2B%252F#/new?tab=2')
+  })
+
+  it('原本没有参数的地址也接受手动输入的 query', () => {
+    expect(mergeBaseEdit('/p?added=2', '')).toBe('/p?added=2')
   })
 })
 
 describe('setNodeValue', () => {
+  it.each(['https://b.com/ok', '/detail', 'detail/view'])('编辑嵌套 URL/path %s 时，手动追加参数会重新展开', (base) => {
+    const tree = parseUrl(`https://a.com/cb?redirect=${encodeURIComponent(`${base}?keep=1`)}&outer=2`)
+    const redirect = tree.nodes.find(node => node.label === 'redirect')!
+    const nextValue = mergeBaseEdit(`${base}?added=3`, suffixOfTree(redirect.children!))
+    const output = serializeUrl(setNodeValue(tree, redirect.id, nextValue))
+    const after = parseUrl(output)
+    const nested = after.nodes.find(node => node.label === 'redirect')!.children!
+
+    expect(nested.nodes.filter(node => node.kind === 'param').map(node => [node.label, node.value])).toEqual([
+      ['keep', '1'],
+      ['added', '3'],
+    ])
+    expect(after.nodes.filter(node => node.kind === 'param').map(node => node.label)).toEqual(['redirect', 'outer'])
+    expect(new URL(output).searchParams.get('redirect')).toBe(`${base}?keep=1&added=3`)
+  })
+
   it('普通值编辑后不残留旧子树', () => {
     const tree = parseUrl('https://a.com/cb?redirect=https://b.com/ok?x=1')
     const redirect = tree.nodes.find(n => n.label === 'redirect')!
